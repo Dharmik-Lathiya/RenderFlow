@@ -23,6 +23,25 @@ export const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   WEB_BASE_URL: z.string().url().default('http://localhost:3000'),
 
+  // --- auth (further validated by loadAuthConfig) ---
+  JWT_ACCESS_SECRET: z.string().min(1, 'JWT_ACCESS_SECRET is required'),
+  JWT_REFRESH_SECRET: z.string().min(1, 'JWT_REFRESH_SECRET is required'),
+  JWT_ACCESS_TTL: z.string().min(1).default('15m'),
+  JWT_REFRESH_TTL: z.string().min(1).default('7d'),
+  TOKEN_ENCRYPTION_KEY: z.string().default(''),
+  /** Free credits granted at signup: the only source of the 50 (AGENTS.md rule 6). */
+  SIGNUP_BONUS_CREDITS: z.coerce.number().int().nonnegative().default(50),
+
+  // --- auth test seam: cheap argon2 params for test/CI only ---
+  ARGON2_MEMORY_COST: z.coerce.number().int().positive().optional(),
+  ARGON2_TIME_COST: z.coerce.number().int().positive().optional(),
+
+  // --- cookies / CSRF ---
+  CSRF_EXEMPT_PATHS: z.string().default(''),
+
+  // --- database logging ---
+  DB_LOG_LEVELS: z.string().default('warn,error'),
+
   /** 0 disables /metrics. */
   METRICS_ENABLED: z
     .union([z.boolean(), z.string()])

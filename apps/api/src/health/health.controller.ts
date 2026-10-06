@@ -1,5 +1,6 @@
 import { Controller, Get, Header, HttpCode, HttpStatus } from '@nestjs/common';
 
+import { Public } from '../auth/auth.guard';
 // HealthService must stay a VALUE import: Nest's `emitDecoratorMetadata` reads
 // `design:paramtypes` at runtime, and a type-only import makes it emit `Object`,
 // which silently breaks dependency injection.
@@ -10,6 +11,7 @@ import { HealthService, type ReadinessReport } from './health.service';
  * load balancers need no knowledge of the API version.
  */
 @Controller()
+@Public()
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 

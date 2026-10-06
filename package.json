@@ -15,7 +15,7 @@
     "typecheck": "turbo run typecheck",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "test:int": "turbo run test:int",
+    "test:int": "turbo run build && jest --config jest.integration.config.js",
     "test:e2e": "turbo run test:e2e",
     "test:chaos": "tests/chaos/run.sh",
     "clean": "turbo run clean && rm -rf node_modules",
@@ -27,7 +27,8 @@
     "gen:api-client": "turbo run gen:api-client",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:int:coverage": "turbo run build && jest --config jest.integration.config.js --coverage"
   },
   "lint-staged": {
     "*.ts": [

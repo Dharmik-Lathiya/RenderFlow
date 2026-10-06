@@ -6,6 +6,7 @@ import type { Response } from 'express';
 
 import type { RenderFlowMetrics } from '@renderflow/observability';
 
+import { Public } from '../auth/auth.guard';
 import { METRICS } from './metrics.tokens';
 
 /**
@@ -14,6 +15,7 @@ import { METRICS } from './metrics.tokens';
  * Un-versioned and un-cached so Prometheus always sees live values.
  */
 @Controller('metrics')
+@Public()
 export class MetricsController {
   constructor(@Inject(METRICS) private readonly metrics: RenderFlowMetrics) {}
 

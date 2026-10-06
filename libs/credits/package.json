@@ -1,0 +1,29 @@
+{
+  "name": "@renderflow/credits",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Credit ledger logic - the ONLY place allowed to write wallets/credit_ledger",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@renderflow/common": "workspace:*",
+    "@renderflow/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

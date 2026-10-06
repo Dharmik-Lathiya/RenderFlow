@@ -2,11 +2,16 @@ import 'reflect-metadata';
 
 import { createGracefulShutdown } from '@renderflow/common';
 import { createLogger, toShutdownLogger } from '@renderflow/observability';
+import cookieParser from 'cookie-parser';
+
+import { configureAuthLogger } from './auth/auth.service';
+import { configureExceptionLogger } from './common/all-exceptions.filter';
 import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
 import { assertCorsIsExplicit, corsOrigins, loadEnv } from './config/env';
+import { loadAuthConfig } from './auth/auth.config';
 import { createNestLoggerAdapter } from './logger/nest-logger';
 
 /** Routes served at the root, not under /api/v1 (orchestrator + Prometheus). */
@@ -19,8 +24,13 @@ const UNVERSIONED_ROUTES = [
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
   assertCorsIsExplicit(env);
+  // Validates secret strength and TTL formats before the server accepts traffic.
+  loadAuthConfig(process.env);
 
   const logger = createLogger({ service: 'api', level: env.LOG_LEVEL });
+  configureExceptionLogger(logger);
+  configureAuthLogger(logger);
+
   const shutdown = createGracefulShutdown({ name: 'api', logger: toShutdownLogger(logger) });
   shutdown.install();
 
@@ -29,8 +39,11 @@ async function bootstrap(): Promise<void> {
   });
 
   app.setGlobalPrefix('api/v1', { exclude: UNVERSIONED_ROUTES });
+  // Required for the httpOnly auth cookies to be readable by AuthGuard.
+  app.use(cookieParser());
   app.enableCors({
     origin: corsOrigins(env),
+    // Required for cookies; browsers reject credentialed requests with a wildcard.
     credentials: true,
   });
 

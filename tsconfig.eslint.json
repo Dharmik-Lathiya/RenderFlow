@@ -8,7 +8,13 @@
     "incremental": false,
     "jsx": "react-jsx",
     "allowJs": true,
-    "types": ["node", "jest"]
+    "types": ["node", "jest"],
+    // The integration helpers import NestJS modules, whose dependency injection
+    // relies on decorator metadata emitted at compile time. Without these flags
+    // the type-aware ESLint rules see `any` in place of those classes.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "useDefineForClassFields": false
   },
   "include": ["apps/**/*.ts", "apps/**/*.tsx", "libs/**/*.ts", "packages/**/*.ts", "tests/**/*.ts"]
 }

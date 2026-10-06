@@ -17,6 +17,7 @@ export default tseslint.config(
       // so type-aware parsing cannot resolve it. `prettier --check` still runs
       // on them in CI.
       'jest.config.js',
+      'jest.integration.config.js',
       'eslint.config.mjs',
     ],
   },
@@ -65,12 +66,22 @@ export default tseslint.config(
     // Tests intentionally stub console output and use partial mocks. Async mock
     // factories must return a Promise even when they never await, so
     // `require-await` does not apply here.
+    //
+    // The `no-unsafe-*` family is also relaxed: an integration suite asserts on
+    // live HTTP and database responses, so `res.body.foo` and Prisma results are
+    // genuinely untyped at the point of assertion. The production code these
+    // tests exercise is still fully type-checked and linted.
     files: ['**/*.spec.ts', '**/*.test.ts', 'tests/**/*.ts'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/unbound-method': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
       '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
     },
   },
   {
