@@ -51,3 +51,4 @@ apps/web/next-env.d.ts
 # coverage reports
 coverage
 coverage-integration
+.vercel
