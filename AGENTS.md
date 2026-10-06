@@ -37,7 +37,7 @@ apps/analytics-worker   metrics sync
 apps/outbox-relay       outbox → BullMQ
 apps/reaper             stuck job recovery + reconciliation
 libs/common             DTOs, enums, event contracts, zod schemas, queue names
-libs/db                 Prisma schema, client, migrations
+libs/db                 Drizzle schema, client, migrations
 libs/credits            the ONLY code allowed to modify wallets/ledger
 libs/queue              BullMQ factories, retry presets
 libs/storage            S3 abstraction
@@ -63,7 +63,7 @@ Dependency rules:
 ```bash
 pnpm install
 docker compose up -d postgres redis minio mailhog     # infra only
-pnpm db:migrate         # prisma migrate dev
+pnpm db:migrate         # drizzle-kit migrate
 pnpm db:seed
 pnpm dev                # all apps via turbo
 pnpm build
@@ -133,9 +133,10 @@ These are the highest priority rules. Violating them is a bug even if tests pass
 
 **Database**
 
-- All schema changes via Prisma migrations. Never edit the DB by hand.
+- All schema changes via Drizzle migrations. Never edit the DB by hand.
 - Add indexes with the query that needs them. Use `FOR UPDATE SKIP LOCKED` for queue-like table polling.
-- Use raw SQL (`$executeRaw`) inside `$transaction` for credit-critical statements.
+- Use tagged `sql` templates inside `db.transaction()` for credit-critical statements.
+- CHECK constraints and partial/unique indexes belong in `libs/db/src/schema.ts`, not in hand-written SQL. They are the credit guarantees; a constraint the migration tool cannot diff is one it can silently drop.
 
 **Logging and errors**
 

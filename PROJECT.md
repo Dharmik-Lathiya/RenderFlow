@@ -105,7 +105,7 @@ renderflow/
 │   └── reaper/
 ├── libs/
 │   ├── common/                  # DTOs, enums, event contracts, queue names, zod schemas
-│   ├── db/                      # Prisma client + migrations
+│   ├── db/                      # Drizzle schema, client, migrations
 │   ├── credits/                 # ledger logic (the ONLY place that touches wallets)
 │   ├── queue/                   # BullMQ factories, retry presets
 │   ├── storage/                 # S3 abstraction
@@ -152,7 +152,7 @@ Rules that keep this honest:
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Frontend      | Next.js (App Router), TypeScript, Tailwind, shadcn/ui, TanStack Query, FullCalendar or dnd-kit, SSE                                                     |
 | API           | NestJS, TypeScript (strict), class-validator or zod, Swagger/OpenAPI                                                                                    |
-| DB            | PostgreSQL 16, Prisma (raw SQL for credit-critical statements)                                                                                          |
+| DB            | PostgreSQL 16, Drizzle ORM (raw SQL for credit-critical statements)                                                                                     |
 | Queue         | Redis 7 + BullMQ (flows, delayed jobs, rate limiters)                                                                                                   |
 | Storage       | S3 (MinIO locally)                                                                                                                                      |
 | AI            | LLM: Claude or OpenAI (structured JSON, Zod validated). Images: Replicate/fal.ai. TTS: ElevenLabs/OpenAI. **All behind interfaces with a MockProvider** |
@@ -485,7 +485,37 @@ volumes: { pgdata: {} }
 - **ESLint + Prettier + Husky + lint-staged**; commit messages follow Conventional Commits.
 - **Turbo** pipeline: `build`, `lint`, `test`, `test:e2e`.
 - **CI (GitHub Actions):** install → lint → typecheck → unit → integration (Testcontainers) → build images → e2e (compose up) → upload reports.
-- **Prisma:** migrations in `libs/db/prisma/migrations`; credit-critical queries use `$queryRaw`/`$executeRaw` inside `$transaction`.
+- **Drizzle ORM:** schema in `libs/db/src/schema.ts` (TypeScript, type-checked); migrations in `libs/db/drizzle/`; credit-critical statements use tagged `sql` templates inside `db.transaction()`. Partial and unique indexes are declared in the schema, so the credit invariants are version-controlled alongside every other constraint.
+
+### 11.4 Data layer: Drizzle ORM (decision record)
+
+**Decision:** replace Prisma with Drizzle ORM.
+
+**Why.** The two guarantees the credit system depends on are a partial unique
+index (`user_id WHERE entry_type = 'SIGNUP_BONOS'` ... `SIGNUP_BONUS`) and a partial
+unique index on `(reference_type, reference_id, entry_type)`. Prisma's schema
+language cannot express partial unique indexes, so under Prisma these had to be
+hand-written migration SQL that the migration tool cannot diff, cannot carry
+forward, and can drop without complaint. A constraint that invisible is a poor
+place to keep a money invariant.
+
+Drizzle declares them in TypeScript, so they are type-checked and diffed like
+every other constraint. It also drops the native query-engine binary (smaller
+images, no platform-specific build step) and avoids the Prisma 7 migration, which
+removed `url` from datasource blocks and requires `prisma.config.ts` plus a
+driver adapter.
+
+**What does not change.** The credit engine is raw SQL either way (section 5
+requires guarded `UPDATE ... WHERE available >= :cost`), so this swap alters no
+credit behaviour. The integration suite asserts behaviour, not ORM calls, and
+therefore proves equivalence.
+
+**Cost.** Rewrite `libs/db`, both migrations, the credit SQL, and the test
+helpers. The suites that gate this (`tests/integration`) run against a real
+Postgres and must stay green throughout.
+
+**Status.** Decision recorded; the code change lands separately. `libs/db` and
+`libs/credits` still use Prisma at the commit that records this decision.
 
 ---
 

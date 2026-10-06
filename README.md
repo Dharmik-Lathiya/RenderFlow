@@ -92,7 +92,7 @@ apps/
   reaper/               stuck-job recovery + reconciliation
 libs/
   common/               DTOs, enums, event contracts, zod schemas, queue names
-  db/                   Prisma client + migrations
+  db/                   Drizzle schema, client, migrations
   queue/                BullMQ factories, retry presets
   storage/              S3 abstraction
   observability/        pino logger, prometheus metrics, process lifecycle
