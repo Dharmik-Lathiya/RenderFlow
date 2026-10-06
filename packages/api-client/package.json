@@ -1,0 +1,23 @@
+{
+  "name": "@renderflow/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Typed SDK generated from the API OpenAPI document (web + future mobile)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

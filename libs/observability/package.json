@@ -1,0 +1,27 @@
+{
+  "name": "@renderflow/observability",
+  "version": "0.1.0",
+  "private": true,
+  "description": "pino logger, prometheus metrics, lifecycle helpers",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
+  },
+  "dependencies": {
+    "pino": "^10.4.0",
+    "prom-client": "^15.1.3",
+    "@renderflow/common": "workspace:*"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@renderflow/queue",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BullMQ queue factories and retry presets",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
+  },
+  "dependencies": {
+    "bullmq": "^6.3.11",
+    "ioredis": "^5.8.2",
+    "@renderflow/common": "workspace:*"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

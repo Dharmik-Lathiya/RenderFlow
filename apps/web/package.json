@@ -1,0 +1,27 @@
+{
+  "name": "@renderflow/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Next.js dashboard (App Router)",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev -p 3000",
+    "start": "next start -p 3000",
+    "clean": "rm -rf .next .turbo tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@renderflow/api-client": "workspace:*",
+    "next": "^16.3.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "@types/react": "19.3.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

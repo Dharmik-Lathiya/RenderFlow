@@ -1,0 +1,29 @@
+{
+  "name": "@renderflow/media-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Media worker: image generation, TTS, FFmpeg render",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "dev": "node --watch src/main.ts",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@renderflow/common": "workspace:*",
+    "@renderflow/queue": "workspace:*",
+    "@renderflow/observability": "workspace:*",
+    "@renderflow/db": "workspace:*"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

@@ -1,0 +1,23 @@
+// RenderFlow database schema.
+//
+// PHASE 0 SCOPE: this file intentionally declares no domain models yet.
+// AGENTS.md forbids editing a migration that has already been merged, so the full
+// data model from PROJECT.md section 6 is added incrementally, each phase adding
+// its own migration alongside the logic that needs it:
+//
+//   Phase 1  users, wallets, credit_ledger, pricing_rules
+//   Phase 3  workspaces, brands, campaigns, posts, assets
+//   Phase 4  generation_jobs, job_checkpoints, outbox_events
+//   Phase 7  social_accounts, publish_jobs, post_metrics
+//
+// Keeping it empty for now means the Phase 0 migration is a no-op and locks in
+// no schema decisions that later phases would have to work around.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

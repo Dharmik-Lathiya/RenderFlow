@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+# Enforces Conventional Commits (AGENTS.md section 2.5).
+#   feat(credits): add reserve and capture
+#   fix(publisher): do not double-post on retry
+#   test(chaos): cover R9 publisher kill
+commit_msg=$(cat "$1")
+
+pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9._/-]+\))?!?: .{1,}$'
+
+if ! printf '%s' "$commit_msg" | grep -Eq "$pattern"; then
+  echo ""
+  echo "Commit message does not follow Conventional Commits."
+  echo ""
+  echo "Expected: <type>(<optional scope>): <subject>"
+  echo "Types:    build chore ci docs feat fix perf refactor revert style test"
+  echo ""
+  echo "Received:"
+  printf '%s\n' "$commit_msg"
+  echo ""
+  exit 1
+fi

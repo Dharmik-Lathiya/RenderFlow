@@ -1,0 +1,26 @@
+# pnpm workspace definition. `packages` lists the workspace globs; every app,
+# lib and package directory is picked up automatically.
+packages:
+  - 'apps/*'
+  - 'libs/*'
+  - 'packages/*'
+
+# Isolated (the pnpm default) means packages only see the deps they declare.
+# This is what makes the `libs/* must not import apps/*` rule enforceable.
+nodeLinker: isolated
+
+# Never auto-install peers: an unmet peer dep should fail loudly at install
+# time instead of being silently patched in.
+autoInstallPeers: false
+
+# Fail the install when the local Node version is outside engines.node.
+engineStrict: true
+
+# pnpm >=10 blocks dependency lifecycle scripts by default. These need to run
+# their install step: Prisma downloads and extracts its query engines, and
+# msgpackr-extract is BullMQ's native (de)serialiser.
+allowBuilds:
+  prisma: true
+  '@prisma/client': true
+  '@prisma/engines': true
+  msgpackr-extract: true

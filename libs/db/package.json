@@ -1,0 +1,36 @@
+{
+  "name": "@renderflow/db",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prisma client and migrations",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput",
+    "generate": "prisma generate",
+    "prebuild": "prisma generate",
+    "pretypecheck": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:reset": "prisma migrate reset --force",
+    "studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@renderflow/common": "workspace:*"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3",
+    "@types/node": "^24.19.1"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

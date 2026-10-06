@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# AGENTS.md section 2.5: small, focused Conventional Commits.
+# Fails fast on staged problems instead of after a 5-minute CI run.
+npx --no-install lint-staged

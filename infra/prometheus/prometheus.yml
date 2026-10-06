@@ -1,0 +1,20 @@
+# RenderFlow - Prometheus scrape configuration.
+#
+# Application targets (/metrics) are wired in as their services are added to
+# docker-compose.yml (Phase 4+). Scraping the queue/infra now keeps the
+# observability profile usable from Phase 0.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    stack: renderflow
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: redis
+    static_configs:
+      - targets: ['redis:6379']

@@ -1,0 +1,60 @@
+/**
+ * Stable machine-readable error codes.
+ *
+ * AGENTS.md section 7: "Throw typed errors with stable `code` values."
+ * These strings are part of the public API contract consumed by apps/web and by
+ * any future mobile client, so they must never be renamed - only added to.
+ */
+export const ERROR_CODES = {
+  // --- generic request failures ---
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  RATE_LIMITED: 'RATE_LIMITED',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+
+  // --- auth ---
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  EMAIL_ALREADY_REGISTERED: 'EMAIL_ALREADY_REGISTERED',
+  CSRF_TOKEN_INVALID: 'CSRF_TOKEN_INVALID',
+
+  // --- tenancy ---
+  WORKSPACE_ACCESS_DENIED: 'WORKSPACE_ACCESS_DENIED',
+  INSUFFICIENT_ROLE: 'INSUFFICIENT_ROLE',
+
+  // --- credits (PROJECT.md section 10) ---
+  INSUFFICIENT_CREDITS: 'INSUFFICIENT_CREDITS',
+  MODERATION_REJECTED: 'MODERATION_REJECTED',
+  IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
+  LEDGER_DRIFT: 'LEDGER_DRIFT',
+
+  // --- social publishing (PROJECT.md section 10) ---
+  ACCOUNT_TOKEN_EXPIRED: 'ACCOUNT_TOKEN_EXPIRED',
+  ACCOUNT_NOT_CONNECTED: 'ACCOUNT_NOT_CONNECTED',
+  ACCOUNT_NEEDS_REAUTH: 'ACCOUNT_NEEDS_REAUTH',
+  PUBLISH_REJECTED: 'PUBLISH_REJECTED',
+  DUPLICATE_POST: 'DUPLICATE_POST',
+
+  // --- jobs / assets ---
+  JOB_NOT_FOUND: 'JOB_NOT_FOUND',
+  JOB_ALREADY_TERMINAL: 'JOB_ALREADY_TERMINAL',
+  ASSET_TOO_LARGE: 'ASSET_TOO_LARGE',
+  UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
+  SSRF_BLOCKED: 'SSRF_BLOCKED',
+
+  // --- providers ---
+  PROVIDER_TIMEOUT: 'PROVIDER_TIMEOUT',
+  PROVIDER_TRANSIENT_ERROR: 'PROVIDER_TRANSIENT_ERROR',
+  PROVIDER_PERMANENT_ERROR: 'PROVIDER_PERMANENT_ERROR',
+  PROVIDER_INVALID_OUTPUT: 'PROVIDER_INVALID_OUTPUT',
+  PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
+} as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
+export function isErrorCode(value: unknown): value is ErrorCode {
+  return typeof value === 'string' && (Object.values(ERROR_CODES) as string[]).includes(value);
+}

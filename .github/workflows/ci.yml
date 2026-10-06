@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same branch to save runner minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow
+  REDIS_URL: redis://localhost:6379
+  # Mocks everywhere: CI must never call a real AI or social API.
+  AI_PROVIDER: mock
+  IMAGE_PROVIDER: mock
+  TTS_PROVIDER: mock
+  SOCIAL_PROVIDER: mock
+
+jobs:
+  lint-typecheck-test:
+    name: lint, typecheck, unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: lint
+        run: pnpm lint
+
+      - name: typecheck
+        run: pnpm typecheck
+
+      - name: unit tests with coverage gate
+        run: pnpm test:coverage
+
+      - name: prettier check
+        run: pnpm format:check
+
+  integration:
+    name: integration (Testcontainers)
+    runs-on: ubuntu-latest
+    # Real Postgres + Redis per the testing matrix in PROJECT.md section 13.1.
+    # Starts empty in Phase 0 and gains the credit/queue suites as they land.
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: integration tests
+        run: pnpm test:int
+
+  build:
+    name: build images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: build all packages
+        run: |
+          pnpm/action-setup@v4
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/node-app.Dockerfile
+          build-args: |
+            APP_DIR=apps/api
+            APP_NAME=@renderflow/api
+          push: false
+
+      - name: build web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          push: false
+
+  e2e:
+    name: e2e (compose + Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: start infra
+        run: docker compose up -d postgres redis minio minio-init mailhog
+
+      - name: wait for infra
+        run: |
+          docker compose exec -T postgres pg_isready -U renderflow -d renderflow
+          docker compose exec -T redis redis-cli ping
+
+      - name: apply migrations
+        env:
+          DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow
+        run: pnpm db:migrate:deploy
+
+      - name: start application
+        run: docker compose up -d api web
+
+      - name: install Playwright
+        run: |
+          pnpm/action-setup@v4
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Playwright
+        run: pnpm test:e2e
+
+      - name: logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=200
+
+      - name: tear down
+        if: always()
+        run: docker compose down -v
