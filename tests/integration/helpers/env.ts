@@ -24,6 +24,23 @@ export const TEST_ENV: NodeJS.ProcessEnv = {
   ARGON2_MEMORY_COST: '8',
   ARGON2_TIME_COST: '1',
   METRICS_ENABLED: 'false',
+
+  /**
+   * Rate limits, relaxed for the suite.
+   *
+   * The shipped defaults are deliberately tight (5 registrations per hour per
+   * IP), and this suite makes ~30 registrations from one address - it would be
+   * testing the limiter, not the code. `rate-limit.spec.ts` covers the limits
+   * themselves by booting apps with explicit low values, and asserts separately
+   * that the shipped defaults still admit a realistic burst.
+   *
+   * Set generously rather than to a round number so an accidental interaction
+   * with a limit still shows up as a failure instead of being masked.
+   */
+  RATE_LIMIT_LOGIN_IP: '1000/15m',
+  RATE_LIMIT_LOGIN_ACCOUNT: '1000/1h',
+  RATE_LIMIT_REGISTER_IP: '1000/1h',
+  RATE_LIMIT_REFRESH_IP: '1000/15m',
 };
 
 export const UNIQUE_PASSWORD = 'IntegrationPass123';

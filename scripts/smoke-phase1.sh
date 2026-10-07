@@ -36,12 +36,21 @@ check() {
 echo "=== starting API on :${PORT} ==="
 (
   cd "$API_DIR"
+  # The rate limits below are raised on purpose: this script drives ~10 requests
+  # from one address, which the shipped defaults (5 registrations/hour) would
+  # correctly refuse. The point here is the auth flow; 429 behaviour is covered
+  # by tests/integration/rate-limit.spec.ts.
   NODE_ENV=development \
   LOG_LEVEL=warn \
   API_PORT="$PORT" \
   DATABASE_URL="${TEST_DATABASE_URL:?set TEST_DATABASE_URL}" \
   JWT_ACCESS_SECRET='smoke-access-secret-long-enough-000000001' \
   JWT_REFRESH_SECRET='smoke-refresh-secret-long-enough-000000002' \
+  SIGNUP_BONUS_CREDITS=50 \
+  RATE_LIMIT_LOGIN_IP=100/15m \
+  RATE_LIMIT_LOGIN_ACCOUNT=100/1h \
+  RATE_LIMIT_REGISTER_IP=100/1h \
+  RATE_LIMIT_REFRESH_IP=100/15m \
   node dist/main.js
 ) >"$LOG" 2>&1 &
 API_PID=$!

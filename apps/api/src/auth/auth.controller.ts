@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { ValidationFailedError } from '@renderflow/common';
 
+import { RATE_LIMIT_RULES, RateLimit } from '../ratelimit/rate-limit.guard';
 import { CSRF_COOKIE, REFRESH_TOKEN_COOKIE } from './auth.config';
 import { loginSchema, registerSchema, type AuthResponse, type RegisterDto } from './auth.dto';
 import { AuthService, type IssuedSession, type SessionMetadata } from './auth.service';
@@ -22,6 +23,12 @@ import {
  * All `@Public()` because there is no session yet. CSRF still applies to
  * `refresh` and `logout`, which are state-changing; only login/register are
  * exempt (see CsrfGuard).
+ *
+ * Every endpoint that can be reached without a session is rate limited, keyed
+ * on the source IP. Login additionally gets a per-submitted-email limit:
+ * IP-only would not slow a credential-stuffing run spread across many hosts but
+ * aimed at one account. See `rate-limit.config.ts` for why that second limit is
+ * deliberately generous.
  */
 @Controller('auth')
 @Public()
@@ -31,6 +38,10 @@ export class AuthController {
   /** POST /api/v1/auth/register - creates the user and grants the signup bonus. */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  // Tightest limit here: each accepted call mints a user AND grants credits, so
+  // unbounded registration is both an abuse vector and a way to drain the bonus
+  // pool across throwaway accounts.
+  @RateLimit({ name: RATE_LIMIT_RULES.REGISTER_IP, scope: 'ip' })
   async register(
     @Body() body: unknown,
     @Req() request: RequestWithAuth,
@@ -48,6 +59,12 @@ export class AuthController {
   /** POST /api/v1/auth/login */
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @RateLimit(
+    { name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' },
+    // Second, independent limit keyed on the submitted address, so the pair
+    // stops both a single-host flood and a distributed attack on one account.
+    { name: RATE_LIMIT_RULES.LOGIN_ACCOUNT, scope: 'email' },
+  )
   async login(
     @Body() body: unknown,
     @Req() request: RequestWithAuth,
@@ -62,6 +79,7 @@ export class AuthController {
   /** POST /api/v1/auth/refresh - rotates the refresh token. */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ name: RATE_LIMIT_RULES.REFRESH_IP, scope: 'ip' })
   async refresh(
     @Req() request: RequestWithAuth,
     @Res({ passthrough: true }) response: ResponseWithCookies,

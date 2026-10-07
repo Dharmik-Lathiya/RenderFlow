@@ -351,7 +351,40 @@ SCHEDULED ─► QUEUED (delayed job fires) ─► PUBLISHING ─► PUBLISHED
 8. **Graceful shutdown:** on SIGTERM stop consuming, finish or release the current job back to the queue.
 9. **Reconciliation job (hourly):** `wallet.available + reserved == SUM(ledger)`; alert on drift.
 10. **Rate limiting:** per-user API limits; per-platform publish limiter.
-11. **Token safety:** social tokens encrypted at rest (AES-256-GCM), refresh before expiry.
+
+**Rate limiting — Phase 1 slice (shipped).** `apps/api/src/ratelimit` provides a
+global `RateLimitGuard` registered _ahead of_ CSRF and auth, so a refused request
+never reaches argon2 (roughly 50ms of CPU per login — the actual denial-of-service
+surface). Routes opt in with `@RateLimit({ name, scope })`; scopes are `ip`,
+`user` and `email`. Auth endpoints are limited as follows, all configurable via
+`RATE_LIMIT_*` (`<count>/<window>`, `0` disables):
+
+| Route                 | Key                  | Default           |
+| --------------------- | -------------------- | ----------------- |
+| `POST /auth/register` | IP                   | `5/1h`            |
+| `POST /auth/login`    | IP + submitted email | `10/15m`, `30/1h` |
+| `POST /auth/refresh`  | IP                   | `60/15m`          |
+
+Three deliberate design decisions:
+
+- **The store is in-memory and per-process, behind `RATE_LIMIT_STORE`.** With N
+  API instances the effective ceiling is N× the configured limit — a weakening,
+  not a hole. Redis is already available (`REDIS_URL`), but making the API's boot
+  path depend on it would turn a resilience mechanism into a startup dependency.
+  Adding a shared store touches one provider and no call sites. Revisit before
+  the first horizontal scale-out.
+- **Login carries a per-account limit as well as per-IP.** IP-only cannot stop a
+  credential-stuffing run spread across many hosts but aimed at one account. The
+  per-account limit is generous on purpose: a tight one is a lockout tool against
+  any known address. The right refinement is to count only _failed_ attempts; that
+  needs failure-aware accounting, which is not built yet.
+- **Fixed window, not sliding.** A caller can burst 2× at a window boundary. Sliding
+  windows cost per-key timestamp lists; the trade was judged acceptable for
+  credential endpoints and is recorded here rather than left implicit.
+
+Known gap: a body with no usable email falls back to the IP key, so malformed
+login requests share one counter. That bounds memory (the point of the fallback)
+but means a client sending garbage is charged against its IP's account budget. 11. **Token safety:** social tokens encrypted at rest (AES-256-GCM), refresh before expiry.
 
 ---
 

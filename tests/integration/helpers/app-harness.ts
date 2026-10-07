@@ -4,6 +4,15 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import type { Response } from 'supertest';
 
+import {
+  RATE_LIMIT_CONFIG,
+  RATE_LIMIT_STORE,
+} from '../../../apps/api/src/ratelimit/rate-limit.guard';
+import { loadRateLimitConfig } from '../../../apps/api/src/ratelimit/rate-limit.config';
+import {
+  InMemoryRateLimitStore,
+  type RateLimitStore,
+} from '../../../apps/api/src/ratelimit/rate-limit.store';
 import { resetDbForTests } from '@renderflow/db';
 
 // `./env` applies the test environment as an import side effect and MUST stay
@@ -36,10 +45,34 @@ export interface TestApp {
   app: INestApplication;
   http: () => request.Agent;
   auth: AuthService;
+  /** The rate limit counters backing this app instance. */
+  rateLimits: InMemoryRateLimitStore;
   close: () => Promise<void>;
 }
 
-export async function createTestApp(env: NodeJS.ProcessEnv = TEST_ENV): Promise<TestApp> {
+export interface TestAppOptions {
+  /**
+   * Environment overrides for this instance, layered on top of `TEST_ENV`.
+   *
+   * Applied by overriding the `RATE_LIMIT_CONFIG` token, NOT by assigning
+   * `process.env`. `ConfigModule.forRoot({ validate })` runs once when
+   * `app.module.ts` is first imported and snapshots its result, so a later
+   * `process.env` change - or an `overrideProvider(ConfigService)`, which does
+   * not bind against the internal token `forRoot` registers - silently has no
+   * effect. Overriding the module's own token is the seam that actually works.
+   */
+  env?: Record<string, string>;
+  /**
+   * Replaces the rate limit store. Each instance gets a fresh store regardless;
+   * pass one explicitly only to reach into the counters.
+   */
+  rateLimitStore?: RateLimitStore;
+}
+
+export async function createTestApp(options: TestAppOptions = {}): Promise<TestApp> {
+  const env = { ...TEST_ENV, ...options.env } as Record<string, string>;
+  // Ambient env is still updated: `envSchema` validates `process.env` at import
+  // time, so a missing key has to exist before AppModule is evaluated.
   Object.assign(process.env, env);
 
   // Keep the app's logging consistent with LOG_LEVEL after the harness has set
@@ -49,7 +82,28 @@ export async function createTestApp(env: NodeJS.ProcessEnv = TEST_ENV): Promise<
 
   resetDbForTests();
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const rateLimits = new InMemoryRateLimitStore();
+
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+
+  // Per-instance rate limit config, so `options.env` actually reaches the guard
+  // instead of being frozen at AppModule's first import.
+  if (options.env !== undefined) {
+    builder
+      .overrideProvider(RATE_LIMIT_CONFIG)
+      .useValue(
+        loadRateLimitConfig({ get: <T>(key: string): T | undefined => env[key] as T | undefined }),
+      );
+  }
+
+  if (options.rateLimitStore !== undefined) {
+    builder.overrideProvider(RATE_LIMIT_STORE).useValue(options.rateLimitStore);
+  } else {
+    // A fresh store per app: counters are per-instance state, and leaking them
+    // between suites would make one suite's traffic change another's outcome.
+    builder.overrideProvider(RATE_LIMIT_STORE).useValue(rateLimits);
+  }
+  const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication({ logger: false });
   // Resolve the HTTP server once. A fresh `request(app.getHttpServer())` per
@@ -73,6 +127,7 @@ export async function createTestApp(env: NodeJS.ProcessEnv = TEST_ENV): Promise<
     app,
     http: () => request(httpServer),
     auth,
+    rateLimits: (options.rateLimitStore as InMemoryRateLimitStore | undefined) ?? rateLimits,
     close: async () => {
       await app.close();
       resetDbForTests();

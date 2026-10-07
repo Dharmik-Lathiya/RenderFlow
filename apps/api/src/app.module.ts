@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
 import { envSchema } from './config/env';
+import { RateLimitGuard } from './ratelimit/rate-limit.guard';
+import { RateLimitModule } from './ratelimit/rate-limit.module';
 import { AuthGuard, RolesGuard } from './auth/auth.guard';
 import { CSRF_OPTIONS, CsrfGuard } from './auth/csrf.guard';
 import { AuthModule } from './auth/auth.module';
@@ -31,6 +33,7 @@ import { UsersModule } from './users/users.module';
       // Fail at boot on a bad config rather than at first request.
       validate: (config: Record<string, unknown>) => envSchema.parse(config),
     }),
+    RateLimitModule,
     AuthModule,
     UsersModule,
     CreditsModule,
@@ -46,6 +49,11 @@ import { UsersModule } from './users/users.module';
       provide: CSRF_OPTIONS,
       useValue: { exemptPaths: ['/auth/login', '/auth/register'] } as const,
     },
+    // RateLimitGuard runs FIRST, ahead of CSRF and authentication: the work it
+    // protects is ~50ms of argon2 per login, which has already been spent by the
+    // time any handler runs. Limiting after the hash would bound the database
+    // but not the CPU, which is the actual denial-of-service surface here.
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { rateLimitSpecSchema } from '../ratelimit/rate-limit.config';
+
 /**
  * Validated process configuration.
  *
@@ -38,6 +40,23 @@ export const envSchema = z.object({
 
   // --- cookies / CSRF ---
   CSRF_EXEMPT_PATHS: z.string().default(''),
+
+  // --- rate limiting (PROJECT.md section 14.10, section 15) ---
+  /**
+   * Spec format is `<count>/<window>`, e.g. `10/15m`. `0` disables one rule.
+   *
+   * Validated as a string rather than as numbers so a typo such as
+   * `RATE_LIMIT_LOGIN_IP=10/15minutes` or a half-configured pair cannot leave an
+   * endpoint silently unlimited.
+   */
+  RATE_LIMIT_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .default(true)
+    .transform((value) => (typeof value === 'boolean' ? value : value !== 'false')),
+  RATE_LIMIT_LOGIN_IP: rateLimitSpecSchema.default('10/15m'),
+  RATE_LIMIT_LOGIN_ACCOUNT: rateLimitSpecSchema.default('30/1h'),
+  RATE_LIMIT_REGISTER_IP: rateLimitSpecSchema.default('5/1h'),
+  RATE_LIMIT_REFRESH_IP: rateLimitSpecSchema.default('60/15m'),
 
   // --- database logging ---
   DB_LOG_LEVELS: z.string().default('warn,error'),

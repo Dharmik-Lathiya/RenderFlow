@@ -66,6 +66,11 @@ module.exports = {
     'apps/api/src/auth/auth.guard.ts',
     'apps/api/src/auth/csrf.guard.ts',
     'apps/api/src/auth/token.service.ts',
+    // Rate limiting is only meaningful at the HTTP layer: the guard has to run
+    // AHEAD of the other guards (that is the whole point - refusing before
+    // argon2), surface a real 429 through the exception filter, and write
+    // headers the client sees. None of that is observable in a unit test.
+    'apps/api/src/ratelimit/rate-limit.guard.ts',
     'libs/credits/src/**/*.ts',
 
     // Excluded because the unit suite covers them with real assertions, not
