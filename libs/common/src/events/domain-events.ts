@@ -26,7 +26,7 @@ export const DOMAIN_EVENT_TYPES = [
 
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
 
-/** Primary keys are uuid() (Prisma default) everywhere in this system. */
+/** Primary keys are database-generated uuids (gen_random_uuid()) everywhere. */
 export const idSchema = z.uuid();
 
 /** Credits are integers only. AGENTS.md section 7. */

@@ -1,4 +1,4 @@
-import { CreditError, assertIntegerCredits, signupBonusCredits } from './types';
+import { CreditError, assertIntegerCredits, signupBonusCredits } from './signup-bonus';
 
 /**
  * Pure unit tests for the credit rules that need no database
@@ -62,16 +62,5 @@ describe('signupBonusCredits', () => {
   it('never returns a hardcoded 50 from logic', () => {
     // The literal must come from config (AGENTS.md rule 6).
     expect(signupBonusCredits({ SIGNUP_BONUS_CREDITS: '7' })).toBe(7);
-  });
-});
-
-describe('isUniqueViolation', () => {
-  it('recognises Prisma P2002', async () => {
-    const { isUniqueViolation } = await import('./signup-bonus');
-    expect(isUniqueViolation({ code: 'P2002' })).toBe(true);
-    expect(isUniqueViolation({ code: 'P2003' })).toBe(false);
-    expect(isUniqueViolation(new Error('boom'))).toBe(false);
-    expect(isUniqueViolation(null)).toBe(false);
-    expect(isUniqueViolation('P2002')).toBe(false);
   });
 });

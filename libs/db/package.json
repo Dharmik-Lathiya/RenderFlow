@@ -2,7 +2,7 @@
   "name": "@renderflow/db",
   "version": "0.1.0",
   "private": true,
-  "description": "Prisma client and migrations",
+  "description": "Drizzle schema, client, migrations",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
@@ -14,21 +14,21 @@
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput",
-    "generate": "prisma generate",
-    "prebuild": "prisma generate",
-    "pretypecheck": "prisma generate",
-    "migrate:dev": "prisma migrate dev",
-    "migrate:deploy": "prisma migrate deploy",
-    "migrate:reset": "prisma migrate reset --force",
-    "studio": "prisma studio"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:check": "drizzle-kit check"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
-    "@renderflow/common": "workspace:*"
+    "@renderflow/common": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
-    "prisma": "^6.19.3",
-    "@types/node": "^24.19.1"
+    "@types/node": "^24.19.1",
+    "drizzle-kit": "^0.31.11",
+    "@types/pg": "^8.15.6"
   },
   "engines": {
     "node": ">=22.18.0"

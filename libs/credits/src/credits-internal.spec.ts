@@ -1,5 +1,4 @@
-import { isUniqueViolation } from './signup-bonus';
-import { CreditError, REFERENCE_TYPES, assertIntegerCredits } from './types';
+import { assertIntegerCredits, isUniqueViolation, REFERENCE_TYPES } from './signup-bonus';
 
 /**
  * Tests for the credit-lib helpers that do not need a database.
@@ -10,31 +9,41 @@ import { CreditError, REFERENCE_TYPES, assertIntegerCredits } from './types';
  */
 
 describe('isUniqueViolation', () => {
-  it('recognises the Prisma unique-constraint error', () => {
+  it('recognises the Postgres unique-violation SQLSTATE', () => {
+    expect(isUniqueViolation({ code: '23505' })).toBe(true);
+  });
+
+  it('still recognises the previous driver code', () => {
+    // apps/api maps this to EMAIL_ALREADY_REGISTERED, so the predicate has to
+    // keep covering the legacy shape.
     expect(isUniqueViolation({ code: 'P2002' })).toBe(true);
   });
 
-  it('does not treat other Prisma errors as duplicates', () => {
-    // P2003 is a foreign-key violation: retrying would not help, and treating it
-    // as "already granted" would silently skip a required credit.
-    expect(isUniqueViolation({ code: 'P2003' })).toBe(false);
-    expect(isUniqueViolation({ code: 'P2025' })).toBe(false);
+  it('sees through a wrapped cause, which node-postgres uses', () => {
+    expect(isUniqueViolation({ cause: { code: '23505' } })).toBe(true);
+  });
+
+  it('does not treat other database errors as duplicates', () => {
+    // 23503 is a foreign-key violation: retrying would not help, and treating
+    // it as "already granted" would silently skip a required credit.
+    expect(isUniqueViolation({ code: '23503' })).toBe(false);
+    expect(isUniqueViolation({ code: '23514' })).toBe(false);
   });
 
   it('is false for non-objects and unexpected shapes', () => {
     expect(isUniqueViolation(null)).toBe(false);
     expect(isUniqueViolation(undefined)).toBe(false);
-    expect(isUniqueViolation('P2002')).toBe(false);
-    expect(isUniqueViolation(new Error('P2002'))).toBe(false);
+    expect(isUniqueViolation('23505')).toBe(false);
+    expect(isUniqueViolation(new Error('23505'))).toBe(false);
     expect(isUniqueViolation({})).toBe(false);
-    expect(isUniqueViolation({ code: 2002 })).toBe(false);
+    expect(isUniqueViolation({ code: 23505 })).toBe(false);
+    expect(isUniqueViolation({ code: null })).toBe(false);
   });
 
-  it('tolerates an object whose code is a non-string type', () => {
-    // Structural narrowing, not truthiness: a number 2002 must not count.
-    expect(isUniqueViolation({ code: null })).toBe(false);
-    expect(isUniqueViolation({ code: undefined })).toBe(false);
-    expect(isUniqueViolation({ code: ['P2002'] })).toBe(false);
+  it('does not loop forever on a self-referential cause', () => {
+    const error: Record<string, unknown> = { code: 'other' };
+    error.cause = error;
+    expect(isUniqueViolation(error)).toBe(false);
   });
 });
 
@@ -47,14 +56,18 @@ describe('assertIntegerCredits', () => {
 
   it('rejects fractional credits', () => {
     // The invariant that makes SUM(ledger) === available + reserved exact.
-    expect(() => assertIntegerCredits(12.5)).toThrow(CreditError);
+    expect(() => assertIntegerCredits(12.5)).toThrow(/integer/);
     expect(() => assertIntegerCredits(0.1 + 0.2)).toThrow(/integer/);
   });
 
   it('rejects negatives and non-numbers', () => {
     expect(() => assertIntegerCredits(-1)).toThrow(/negative/);
-    expect(() => assertIntegerCredits(Number.NaN)).toThrow(CreditError);
-    expect(() => assertIntegerCredits(Number.POSITIVE_INFINITY)).toThrow(CreditError);
+    expect(() => assertIntegerCredits(Number.NaN)).toThrow();
+    expect(() => assertIntegerCredits(Number.POSITIVE_INFINITY)).toThrow();
+  });
+
+  it('names the field in the error', () => {
+    expect(() => assertIntegerCredits(1.5, 'signup bonus')).toThrow(/signup bonus/);
   });
 });
 

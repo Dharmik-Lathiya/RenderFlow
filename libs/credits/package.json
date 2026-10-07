@@ -16,9 +16,9 @@
     "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
     "@renderflow/common": "workspace:*",
-    "@renderflow/db": "workspace:*"
+    "@renderflow/db": "workspace:*",
+    "drizzle-orm": "^0.45.3"
   },
   "devDependencies": {
     "@types/node": "^24.19.1"

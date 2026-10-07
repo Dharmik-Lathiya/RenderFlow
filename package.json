@@ -19,16 +19,16 @@
     "test:e2e": "turbo run test:e2e",
     "test:chaos": "tests/chaos/run.sh",
     "clean": "turbo run clean && rm -rf node_modules",
-    "db:generate": "pnpm --filter @renderflow/db generate",
-    "db:migrate": "pnpm --filter @renderflow/db migrate:dev",
-    "db:migrate:deploy": "pnpm --filter @renderflow/db migrate:deploy",
-    "db:reset": "pnpm --filter @renderflow/db migrate:reset",
-    "db:studio": "pnpm --filter @renderflow/db studio",
+    "db:generate": "pnpm --filter @renderflow/db db:generate",
+    "db:migrate": "pnpm --filter @renderflow/db db:migrate",
+    "db:migrate:deploy": "pnpm --filter @renderflow/db db:migrate",
+    "db:studio": "pnpm --filter @renderflow/db db:studio",
     "gen:api-client": "turbo run gen:api-client",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "test:int:coverage": "turbo run build && jest --config jest.integration.config.js --coverage"
+    "test:int:coverage": "turbo run build && jest --config jest.integration.config.js --coverage",
+    "db:push": "pnpm --filter @renderflow/db db:push"
   },
   "lint-staged": {
     "*.ts": [

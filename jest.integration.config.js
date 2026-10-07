@@ -68,17 +68,14 @@ module.exports = {
     'apps/api/src/auth/token.service.ts',
     'libs/credits/src/**/*.ts',
 
-    // Excluded because the unit suite covers them properly with stubs, and
-    // counting them here would double-count while reporting a *lower* figure for
-    // code that is in fact well covered:
-    //   - health.service.ts   dependency probes are not wired in Phase 1
-    //   - all-exceptions.filter.ts  mapping table is unit-tested directly
+    // Excluded because the unit suite covers them with real assertions, not
+    // hand-rolled fakes; counting them here would double-count while reporting a
+    // *lower* figure for code that is in fact well covered:
+    //   - health.service.ts          dependency probes are not wired in Phase 1
+    //   - all-exceptions.filter.ts   status -> code mapping is unit-tested
     '!apps/api/src/health/health.service.ts',
     '!apps/api/src/common/all-exceptions.filter.ts',
     '!**/*.spec.ts',
-    // Unit-tested with a stub; these are not integration-covered.
-    '!apps/api/src/credits/credits.service.spec.ts',
-    '!apps/api/src/users/users.service.spec.ts',
     '!**/*.d.ts',
     // Barrels are pure re-exports.
     '!**/index.ts',

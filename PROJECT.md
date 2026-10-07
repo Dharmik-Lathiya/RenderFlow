@@ -514,8 +514,32 @@ therefore proves equivalence.
 helpers. The suites that gate this (`tests/integration`) run against a real
 Postgres and must stay green throughout.
 
-**Status.** Decision recorded; the code change lands separately. `libs/db` and
-`libs/credits` still use Prisma at the commit that records this decision.
+**Status.** Implemented. `libs/db` and `libs/credits` now run on Drizzle; the
+Prisma schema, client and migrations are removed.
+
+**Migration cutover.** The two data layers are _not_ schema-compatible, because
+`users.id` and `users.updated_at` have no database default under Prisma (the
+Prisma client generated both values) while Drizzle relies on `gen_random_uuid()`
+and `now()`. An existing database therefore cannot be adopted by running
+`pnpm db:migrate`: the Drizzle migration would try to `CREATE TABLE` over tables
+that already exist.
+
+Two supported paths:
+
+- **Empty database** (CI, a new developer machine): drop, recreate, then
+  `pnpm db:migrate`. This is what the local development database did.
+- **Database holding data**: write a Drizzle _baseline_ migration that matches
+  the Prisma schema as-is, record it as applied, then generate a follow-up
+  migration that adds the missing column defaults. This is required before any
+  deployment that has real users.
+
+**Also changed by the swap**
+
+- `refresh_sessions.token_hash` is `varchar(64)`, not `char(64)`: a fixed-width
+  CHAR is blank-padded, which changes comparison semantics for no benefit.
+- `updated_at` uses `$onUpdate`, the equivalent of Prisma's `@updatedAt`. It is
+  applied in the application layer, so raw SQL must still set it explicitly -
+  noted at each column.
 
 ---
 

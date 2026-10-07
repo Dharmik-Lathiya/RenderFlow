@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import { eq, sql } from 'drizzle-orm';
 
 import {
   CreditError,
@@ -7,40 +7,62 @@ import {
   reconcileUser,
   signupBonusCredits,
 } from '@renderflow/credits';
+import { creditLedger, users } from '@renderflow/db';
 
 import { FAST_ARGON2_OPTIONS, hashPassword } from '../../apps/api/src/auth/password';
-import { createUserWithBonus, ledgerOf, uniqueEmail, walletOf } from './helpers/auth-fixtures';
-import { setupTestDatabase, teardownTestDatabase } from './helpers/test-database';
+import {
+  createUserWithBonus,
+  ledgerOf,
+  signupBonusRows,
+  uniqueEmail,
+  walletOf,
+} from './helpers/auth-fixtures';
+import {
+  pgErrorCode,
+  pgErrorText,
+  setupTestDatabase,
+  teardownTestDatabase,
+  type TestDb,
+} from './helpers/test-database';
+
+/** Postgres unique_violation, surfaced through Drizzle's error wrapper. */
+const UNIQUE_VIOLATION = '23505';
 
 /**
  * PROJECT.md section 13.2 credit tests C1, C2 and C12, plus the signup-bonus
- * invariants from section 5.1. These run against a real Postgres because the
- * guarantees (unique index, transaction) are enforced by the database itself.
+ * invariants from section 5.1.
+ *
+ * These run against a real Postgres because the guarantees are enforced by the
+ * database itself: the partial unique index that makes the bonus once-only, the
+ * CHECK constraints that refuse a negative balance, and transaction rollback.
+ * A mocked database would assert nothing.
  */
 describe('signup bonus (C1, C2)', () => {
-  let prisma: PrismaClient;
+  let db: TestDb;
   const BONUS = 50;
 
   beforeAll(async () => {
-    prisma = await setupTestDatabase();
+    db = await setupTestDatabase();
   });
 
   afterAll(async () => {
-    await teardownTestDatabase(prisma);
+    await teardownTestDatabase(db);
   });
 
   describe('C1: a new user receives exactly the configured bonus', () => {
     it('grants 50 credits and exactly one SIGNUP_BONUS ledger row', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      const wallet = await walletOf(prisma, user.id);
-      expect(wallet).toEqual({ available: BONUS, reserved: 0 });
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: BONUS, reserved: 0 });
 
-      const ledger = await ledgerOf(prisma, user.id);
-      const bonusRows = ledger.filter((entry) => entry.entryType === 'SIGNUP_BONUS');
-      expect(bonusRows).toHaveLength(1);
-      expect(bonusRows[0]?.amount).toBe(BONUS);
-      expect(bonusRows[0]?.referenceType).toBe('SYSTEM');
+      await expect(signupBonusRows(db, user.id)).resolves.toBe(1);
+
+      const ledger = await ledgerOf(db, user.id);
+      expect(ledger[0]).toMatchObject({
+        entryType: 'SIGNUP_BONUS',
+        amount: BONUS,
+        referenceType: 'SYSTEM',
+      });
     });
 
     it('reads the amount from config, never from a literal', () => {
@@ -57,23 +79,28 @@ describe('signup bonus (C1, C2)', () => {
     });
 
     it('honours a non-default configured amount end to end', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: 12 });
-      await expect(walletOf(prisma, user.id)).resolves.toEqual({ available: 12, reserved: 0 });
+      const user = await createUserWithBonus(db, { bonus: 12 });
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: 12, reserved: 0 });
     });
 
     it('creates the wallet in the same transaction as the user', async () => {
       const email = uniqueEmail('atomic');
       const passwordHash = await hashPassword('AtomicityCheck123', FAST_ARGON2_OPTIONS);
-      const systemRowsBefore = await prisma.creditLedger.count({
-        where: { referenceType: 'SYSTEM' },
-      });
+      const systemRowsBefore = await db
+        .select({ id: creditLedger.id })
+        .from(creditLedger)
+        .where(eq(creditLedger.referenceType, 'SYSTEM'));
 
-      await prisma
-        .$transaction(async (tx) => {
-          const created = await tx.user.create({
-            data: { email, passwordHash, name: 'Atomic' },
-            select: { id: true },
-          });
+      await db
+        .transaction(async (tx) => {
+          const [created] = await tx
+            .insert(users)
+            .values({ email, passwordHash, name: 'Atomic' })
+            .returning({ id: users.id });
+
+          if (created === undefined) {
+            throw new Error('no user row');
+          }
           await grantSignupBonus(tx, { userId: created.id, amount: 50 });
 
           // Force the transaction to abort after the bonus was written.
@@ -81,36 +108,36 @@ describe('signup bonus (C1, C2)', () => {
         })
         .catch(() => undefined);
 
-      // Nothing may survive the rollback: not the user, not the wallet, and not
-      // the ledger row. This is what proves the bonus is atomic with the
-      // user insert rather than written by a separate, unguarded step.
-      const survivors = await prisma.user.findMany({ where: { email } });
+      // Nothing may survive: not the user, not the wallet, not the ledger row.
+      const survivors = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
       expect(survivors).toHaveLength(0);
-      await expect(prisma.creditLedger.count({ where: { referenceType: 'SYSTEM' } })).resolves.toBe(
-        systemRowsBefore,
-      );
+
+      const systemRowsAfter = await db
+        .select({ id: creditLedger.id })
+        .from(creditLedger)
+        .where(eq(creditLedger.referenceType, 'SYSTEM'));
+      expect(systemRowsAfter).toHaveLength(systemRowsBefore.length);
     });
   });
 
   describe('C2: registering the same email twice grants the bonus once', () => {
     it('creates exactly one user and one bonus for a duplicate email', async () => {
       const email = uniqueEmail('dupe');
+      const first = await createUserWithBonus(db, { email, bonus: BONUS });
 
-      const first = await createUserWithBonus(prisma, { email, bonus: BONUS });
+      // A second insert must collide with the unique index on users.email.
+      const duplicate = db
+        .insert(users)
+        .values({ email, passwordHash: 'x', name: 'Impostor' })
+        .catch((error: unknown) => error);
+      expect(pgErrorCode(await duplicate)).toBe(UNIQUE_VIOLATION);
 
-      await expect(
-        prisma.user.create({
-          data: { email, passwordHash: 'x', name: 'Impostor' },
-        }),
-      ).rejects.toMatchObject({ code: 'P2002' });
+      const all = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+      expect(all).toHaveLength(1);
+      expect(all[0]?.id).toBe(first.id);
 
-      const users = await prisma.user.findMany({ where: { email } });
-      expect(users).toHaveLength(1);
-      expect(users[0]?.id).toBe(first.id);
-
-      const ledger = await ledgerOf(prisma, first.id);
-      expect(ledger.filter((e) => e.entryType === 'SIGNUP_BONUS')).toHaveLength(1);
-      await expect(walletOf(prisma, first.id)).resolves.toEqual({ available: BONUS, reserved: 0 });
+      await expect(signupBonusRows(db, first.id)).resolves.toBe(1);
+      await expect(walletOf(db, first.id)).resolves.toEqual({ available: BONUS, reserved: 0 });
     });
 
     it('rejects 20 concurrent registrations of one email, granting the bonus once', async () => {
@@ -119,11 +146,14 @@ describe('signup bonus (C1, C2)', () => {
 
       const attempts = await Promise.allSettled(
         Array.from({ length: 20 }, async () =>
-          prisma.$transaction(async (tx) => {
-            const created = await tx.user.create({
-              data: { email, passwordHash, name: 'Racer' },
-              select: { id: true },
-            });
+          db.transaction(async (tx) => {
+            const [created] = await tx
+              .insert(users)
+              .values({ email, passwordHash, name: 'Racer' })
+              .returning({ id: users.id });
+            if (created === undefined) {
+              throw new Error('no user row');
+            }
             await grantSignupBonus(tx, { userId: created.id, amount: BONUS });
             return created.id;
           }),
@@ -137,59 +167,60 @@ describe('signup bonus (C1, C2)', () => {
       expect(failed).toHaveLength(19);
       // Every rejection is the unique-email violation, not a crash.
       for (const failure of failed) {
-        expect(failure.reason).toMatchObject({ code: 'P2002' });
+        expect(pgErrorCode(failure.reason)).toBe(UNIQUE_VIOLATION);
       }
 
-      const users = await prisma.user.findMany({ where: { email } });
-      expect(users).toHaveLength(1);
+      const all = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+      expect(all).toHaveLength(1);
 
-      const userId = users[0]?.id as string;
-      const ledger = await ledgerOf(prisma, userId);
-      expect(ledger.filter((e) => e.entryType === 'SIGNUP_BONUS')).toHaveLength(1);
-      await expect(walletOf(prisma, userId)).resolves.toEqual({ available: BONUS, reserved: 0 });
+      const userId = all[0]?.id as string;
+      // The invariant that matters: exactly one grant of 50 credits.
+      await expect(walletOf(db, userId)).resolves.toEqual({ available: BONUS, reserved: 0 });
+      await expect(signupBonusRows(db, userId)).resolves.toBe(1);
     });
 
     it('grants the bonus once even if grantSignupBonus is called twice', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      await grantSignupBonus(prisma, { userId: user.id, amount: BONUS });
+      // Idempotent: the partial unique index makes the second grant a no-op.
+      await grantSignupBonus(db, { userId: user.id, amount: BONUS });
 
-      // Idempotent: the unique index makes the second grant a no-op.
-      const ledger = await ledgerOf(prisma, user.id);
-      expect(ledger.filter((e) => e.entryType === 'SIGNUP_BONUS')).toHaveLength(1);
-      await expect(walletOf(prisma, user.id)).resolves.toEqual({ available: BONUS, reserved: 0 });
+      await expect(signupBonusRows(db, user.id)).resolves.toBe(1);
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: BONUS, reserved: 0 });
     });
   });
 
   describe('database-level invariants', () => {
     it('rejects a negative balance at the database level', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      await expect(
-        prisma.$executeRaw`UPDATE wallets SET available = -1 WHERE user_id = ${user.id}::uuid`,
-      ).rejects.toThrow(/wallets_available_non_negative/);
+      const failure = db
+        .execute(sql`UPDATE wallets SET available = -1 WHERE user_id = ${user.id}::uuid`)
+        .catch((error: unknown) => error);
+      expect(pgErrorText(await failure)).toMatch(/wallets_available_non_negative/);
     });
 
     it('rejects a negative reserved balance', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      await expect(
-        prisma.$executeRaw`UPDATE wallets SET reserved = -1 WHERE user_id = ${user.id}::uuid`,
-      ).rejects.toThrow(/wallets_reserved_non_negative/);
+      const failure = db
+        .execute(sql`UPDATE wallets SET reserved = -1 WHERE user_id = ${user.id}::uuid`)
+        .catch((error: unknown) => error);
+      expect(pgErrorText(await failure)).toMatch(/wallets_reserved_non_negative/);
     });
 
     it('rejects a second SIGNUP_BONUS row for the same user', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      await expect(
-        prisma.creditLedger.create({
-          data: { userId: user.id, entryType: 'SIGNUP_BONUS', amount: 10 },
-        }),
-      ).rejects.toMatchObject({ code: 'P2002' });
+      const duplicate = db
+        .insert(creditLedger)
+        .values({ userId: user.id, entryType: 'SIGNUP_BONUS', amount: 10 })
+        .catch((error: unknown) => error);
+      expect(pgErrorCode(await duplicate)).toBe(UNIQUE_VIOLATION);
     });
 
     it('rejects duplicate ledger idempotency keys', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
       const entry = {
         userId: user.id,
@@ -199,20 +230,47 @@ describe('signup bonus (C1, C2)', () => {
         referenceId: 'job-dup-1',
       };
 
-      await prisma.creditLedger.create({ data: entry });
+      await db.insert(creditLedger).values(entry);
 
       // Same (reference_type, reference_id, entry_type) must collide.
-      await expect(prisma.creditLedger.create({ data: entry })).rejects.toMatchObject({
-        code: 'P2002',
+      const duplicate = db
+        .insert(creditLedger)
+        .values(entry)
+        .catch((error: unknown) => error);
+      expect(pgErrorCode(await duplicate)).toBe(UNIQUE_VIOLATION);
+    });
+
+    it('allows many ledger rows for the same user without a reference', async () => {
+      // SYSTEM entries have no reference_type, so the partial index must not
+      // collide them; only the entry type scopes uniqueness.
+      const user = await createUserWithBonus(db, { bonus: 10 });
+
+      await db.insert(creditLedger).values({
+        userId: user.id,
+        entryType: 'ADJUSTMENT',
+        amount: 5,
+        referenceType: null,
+        referenceId: null,
       });
+
+      await db.insert(creditLedger).values({
+        userId: user.id,
+        entryType: 'ADJUSTMENT',
+        amount: 5,
+        referenceType: null,
+        referenceId: null,
+      });
+
+      const rows = await ledgerOf(db, user.id);
+      expect(rows.filter((r) => r.entryType === 'ADJUSTMENT')).toHaveLength(2);
     });
   });
 
   describe('C12: reconciliation', () => {
     it('reports zero drift for a freshly registered user', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      const report = await reconcileUser(prisma, user.id);
+      const report = await reconcileUser(db, user.id);
 
       expect(report).not.toBeNull();
       expect(report?.drifted).toBe(false);
@@ -221,26 +279,28 @@ describe('signup bonus (C1, C2)', () => {
     });
 
     it('detects drift when a wallet is edited outside libs/credits', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: BONUS });
+      const user = await createUserWithBonus(db, { bonus: BONUS });
 
       // Simulate the exact corruption reconciliation exists to catch.
-      await prisma.$executeRaw`UPDATE wallets SET available = available + 7 WHERE user_id = ${user.id}::uuid`;
+      await db.execute(
+        sql`UPDATE wallets SET available = available + 7 WHERE user_id = ${user.id}::uuid`,
+      );
 
-      const report = await reconcileUser(prisma, user.id);
+      const report = await reconcileUser(db, user.id);
       expect(report?.drifted).toBe(true);
       expect(report?.walletTotal).toBe(BONUS + 7);
       expect(report?.ledgerTotal).toBe(BONUS);
     });
 
     it('reports zero drift across every user in the suite', async () => {
-      const users = await Promise.all([
-        createUserWithBonus(prisma, { bonus: 50 }),
-        createUserWithBonus(prisma, { bonus: 20 }),
-        createUserWithBonus(prisma, { bonus: 0 }),
+      const created = await Promise.all([
+        createUserWithBonus(db, { bonus: 50 }),
+        createUserWithBonus(db, { bonus: 20 }),
+        createUserWithBonus(db, { bonus: 0 }),
       ]);
 
-      for (const user of users) {
-        const report = await reconcileUser(prisma, user.id);
+      for (const user of created) {
+        const report = await reconcileUser(db, user.id);
         expect(report?.drifted).toBe(false);
       }
     });
@@ -248,8 +308,8 @@ describe('signup bonus (C1, C2)', () => {
 
   describe('getBalance', () => {
     it('returns the balance with a computed total', async () => {
-      const user = await createUserWithBonus(prisma, { bonus: 50 });
-      await expect(getBalance(prisma, user.id)).resolves.toEqual({
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      await expect(getBalance(db, user.id)).resolves.toEqual({
         userId: user.id,
         available: 50,
         reserved: 0,
@@ -258,16 +318,22 @@ describe('signup bonus (C1, C2)', () => {
     });
 
     it('throws WALLET_NOT_FOUND for a user with no wallet', async () => {
-      const user = await prisma.user.create({
-        data: {
-          email: uniqueEmail('nowallet'),
-          passwordHash: await hashPassword('NoWalletUser123', FAST_ARGON2_OPTIONS),
-          name: 'No Wallet',
-        },
-        select: { id: true },
+      const email = uniqueEmail('nowallet');
+      await db.insert(users).values({
+        email,
+        passwordHash: await hashPassword('NoWalletUser123', FAST_ARGON2_OPTIONS),
+        name: 'No Wallet',
       });
 
-      await expect(getBalance(prisma, user.id)).rejects.toMatchObject({
+      const created = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+      expect(created).toHaveLength(1);
+
+      const userId = created[0]?.id;
+      if (userId === undefined) {
+        throw new Error('user insert returned no row');
+      }
+
+      await expect(getBalance(db, userId)).rejects.toMatchObject({
         code: 'WALLET_NOT_FOUND',
       });
     });

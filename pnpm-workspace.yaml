@@ -32,3 +32,5 @@ allowBuilds:
   # Native/transitive deps of testcontainers and its drivers.
   protobufjs: true
   ssh2: true
+  # esbuild ships a platform binary; drizzle-kit depends on it.
+  esbuild: true

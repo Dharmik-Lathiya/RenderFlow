@@ -1,6 +1,7 @@
+import { count, eq } from 'drizzle-orm';
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { getBalance, listLedger, type LedgerEntry, type WalletBalance } from '@renderflow/credits';
-import { getPrismaClient, type PrismaClient } from '@renderflow/db';
+import { creditLedger, getDb, type Database } from '@renderflow/db';
 
 export interface CreditsResponse {
   wallet: WalletBalance;
@@ -20,23 +21,23 @@ export interface CreditsResponse {
  */
 @Injectable()
 export class CreditsService implements OnModuleInit {
-  private prisma!: PrismaClient;
+  private db!: Database;
 
   onModuleInit(): void {
-    this.prisma = getPrismaClient();
+    this.db = getDb();
   }
 
   async getCredits(userId: string, page: number, pageSize: number): Promise<CreditsResponse> {
-    const [wallet, ledger, total] = await Promise.all([
-      getBalance(this.prisma, userId),
-      listLedger(this.prisma, userId, pageSize),
-      this.prisma.creditLedger.count({ where: { userId } }),
+    const [wallet, ledger, totalRows] = await Promise.all([
+      getBalance(this.db, userId),
+      listLedger(this.db, userId, pageSize),
+      this.db.select({ value: count() }).from(creditLedger).where(eq(creditLedger.userId, userId)),
     ]);
 
     return {
       wallet,
       ledger,
-      pagination: { total, page, pageSize },
+      pagination: { total: totalRows[0]?.value ?? 0, page, pageSize },
     };
   }
 }

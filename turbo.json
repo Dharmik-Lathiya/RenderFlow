@@ -5,12 +5,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "prisma/**", "package.json", "tsconfig*.json"],
+      "inputs": ["src/**", "drizzle.config.ts", "drizzle/**", "package.json", "tsconfig*.json"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "prisma/**", "package.json", "tsconfig*.json"],
+      "inputs": ["src/**", "drizzle.config.ts", "drizzle/**", "package.json", "tsconfig*.json"],
       "outputs": []
     },
     "lint": {

@@ -7,12 +7,14 @@
 export interface DbConfig {
   url: string;
   /**
-   * Prisma log levels. `query` is noisy and must never be enabled in production
-   * because bind parameters can contain customer data.
+   * Retained from the previous data layer so a misconfigured value still fails
+   * fast rather than being silently ignored.
    */
   logLevels: Array<'query' | 'info' | 'warn' | 'error'>;
   /** Statement timeout, so one runaway query cannot exhaust the pool. */
   statementTimeoutMs: number;
+  /** Maximum pooled connections. */
+  poolMax: number;
 }
 
 export class DbConfigError extends Error {
@@ -26,6 +28,7 @@ const VALID_LOG_LEVELS = ['query', 'info', 'warn', 'error'] as const;
 type LogLevel = (typeof VALID_LOG_LEVELS)[number];
 
 const DEFAULT_STATEMENT_TIMEOUT_MS = 15_000;
+const DEFAULT_POOL_MAX = 10;
 
 function parseLogLevels(raw: string | undefined): DbConfig['logLevels'] {
   if (!raw || raw.trim() === '') {
@@ -44,8 +47,19 @@ function parseLogLevels(raw: string | undefined): DbConfig['logLevels'] {
   return levels;
 }
 
-export function loadDbConfig(env: NodeJS.ProcessEnv = process.env): DbConfig {
-  const url = env.DATABASE_URL?.trim() ?? '';
+function parsePositiveInt(raw: string | undefined, name: string, fallback: number): number {
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new DbConfigError(`${name} must be a positive integer, received "${raw}"`);
+  }
+  return value;
+}
+
+export function loadDbConfig(source: NodeJS.ProcessEnv = process.env): DbConfig {
+  const url = source.DATABASE_URL?.trim() ?? '';
 
   if (url === '') {
     throw new DbConfigError('DATABASE_URL is required');
@@ -62,21 +76,14 @@ export function loadDbConfig(env: NodeJS.ProcessEnv = process.env): DbConfig {
     throw new DbConfigError(`DATABASE_URL must be a postgres URL, received protocol "${protocol}"`);
   }
 
-  const rawTimeout = env.DB_STATEMENT_TIMEOUT_MS?.trim();
-  let statementTimeoutMs = DEFAULT_STATEMENT_TIMEOUT_MS;
-  if (rawTimeout) {
-    const parsed = Number(rawTimeout);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      throw new DbConfigError(
-        `DB_STATEMENT_TIMEOUT_MS must be a positive integer, received "${rawTimeout}"`,
-      );
-    }
-    statementTimeoutMs = parsed;
-  }
-
   return {
     url,
-    logLevels: parseLogLevels(env.DB_LOG_LEVELS),
-    statementTimeoutMs,
+    logLevels: parseLogLevels(source.DB_LOG_LEVELS),
+    statementTimeoutMs: parsePositiveInt(
+      source.DB_STATEMENT_TIMEOUT_MS,
+      'DB_STATEMENT_TIMEOUT_MS',
+      DEFAULT_STATEMENT_TIMEOUT_MS,
+    ),
+    poolMax: parsePositiveInt(source.DB_POOL_MAX, 'DB_POOL_MAX', DEFAULT_POOL_MAX),
   };
 }

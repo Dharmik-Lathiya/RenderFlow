@@ -25,10 +25,6 @@ blob-report/
 .env.*
 !.env.example
 
-# prisma local dev artifacts
-libs/db/prisma/*.db
-libs/db/prisma/*.db-journal
-
 # logs
 *.log
 npm-debug.log*

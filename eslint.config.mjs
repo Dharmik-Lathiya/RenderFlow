@@ -68,7 +68,7 @@ export default tseslint.config(
     // `require-await` does not apply here.
     //
     // The `no-unsafe-*` family is also relaxed: an integration suite asserts on
-    // live HTTP and database responses, so `res.body.foo` and Prisma results are
+    // live HTTP and database responses, so `res.body.foo` and query results are
     // genuinely untyped at the point of assertion. The production code these
     // tests exercise is still fully type-checked and linted.
     files: ['**/*.spec.ts', '**/*.test.ts', 'tests/**/*.ts'],

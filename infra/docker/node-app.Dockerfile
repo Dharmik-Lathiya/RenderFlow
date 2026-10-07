@@ -29,8 +29,8 @@ COPY libs/db/package.json libs/db/
 COPY libs/queue/package.json libs/queue/
 COPY libs/storage/package.json libs/storage/
 COPY libs/observability/package.json libs/observability/
-# `pnpm install --ignore-scripts` here; Prisma's engine download runs in `build`
-# after the schema is available.
+# `pnpm install --ignore-scripts` here; argon2's native binding is built during
+# the build stage, once the workspace is fully present.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts
 
@@ -42,8 +42,6 @@ COPY tsconfig.base.json ./
 COPY libs ./libs
 COPY apps ./apps
 COPY packages ./packages
-# Prisma client generation is required before tsc for @renderflow/db.
-RUN pnpm --filter @renderflow/db generate
 RUN pnpm turbo run build --filter="${APP_NAME}..."
 # Prune dev dependencies but keep the pruned store for the runtime stage.
 RUN pnpm --filter "${APP_NAME}..." deploy --prod /out

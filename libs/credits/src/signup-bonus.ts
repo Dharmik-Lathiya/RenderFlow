@@ -1,9 +1,7 @@
-import type { Prisma, PrismaClient } from '@prisma/client';
+import { eq, sql } from 'drizzle-orm';
 
-import { REFERENCE_TYPES, assertIntegerCredits, type LedgerEntry } from './types';
-
-/** The client handed to a `prisma.$transaction` callback. */
-export type TransactionClient = Prisma.TransactionClient;
+import { CREDIT_ENTRY_TYPES, type CreditEntryType } from '@renderflow/common';
+import { creditLedger, type Database, type DbTransaction } from '@renderflow/db';
 
 /**
  * Signup bonus.
@@ -14,15 +12,23 @@ export type TransactionClient = Prisma.TransactionClient;
  *
  * Design notes:
  *
- * - The bonus is inserted FIRST and its unique violation is what proves "once".
- *   We catch P2002 on the signup-bonus index and treat it as success, so a
- *   retried registration of the same user is idempotent rather than a 500.
- * - The wallet upsert is a single INSERT ... ON CONFLICT DO UPDATE, so we never
- *   read-then-write a balance (AGENTS.md rule 2).
- * - This function runs inside the caller's transaction (the user-creation one),
- *   so a rollback anywhere removes the user AND the bonus together. A user can
- *   never exist with no bonus, or a bonus with no user.
+ * - The bonus row is inserted FIRST and its unique violation is what proves
+ *   "once". The violation aborts the statement before the wallet is touched, so
+ *   a duplicate grant can never inflate `available`.
+ * - The wallet upsert is a single INSERT ... ON CONFLICT DO UPDATE, so a balance
+ *   is never read-then-written in application code (AGENTS.md rule 2).
+ * - This runs inside the caller's transaction, so a rollback anywhere removes
+ *   the user AND the bonus together. A user can never exist with no bonus.
  */
+
+/**
+ * Transaction-capable handle.
+ *
+ * Accepts a full `Database` or the transaction-scoped handle from
+ * `db.transaction()`, because a credit write must be able to join the caller's
+ * transaction (AGENTS.md rule 9).
+ */
+export type CreditTransaction = Database | DbTransaction;
 
 export interface GrantSignupBonusInput {
   userId: string;
@@ -33,17 +39,34 @@ export interface GrantSignupBonusInput {
 
 const SIGNUP_BONUS_NOTE = 'Signup bonus';
 
-const UNIQUE_VIOLATION = 'P2002';
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION = '23505';
 
 /**
- * Transaction-capable client.
+ * Prisma's unique-constraint error code.
  *
- * Accepts either a full `PrismaClient` or the interactive-transaction client a
- * `prisma.$transaction` callback receives. Credit writes must be able to join the
- * caller's transaction (AGENTS.md rule 9), and forcing callers to unwrap a
- * `Prisma.TransactionClient` would push transaction management onto them.
+ * Retained because callers in apps/api map it to EMAIL_ALREADY_REGISTERED, and
+ * because keeping the predicate here means one place defines "this was a
+ * duplicate" rather than each call site guessing.
  */
-export type CreditTransaction = PrismaClient | TransactionClient;
+const LEGACY_UNIQUE_CODE = 'P2002';
+
+/**
+ * Structural check for a unique violation, covering both drivers: node-postgres
+ * surfaces the SQLSTATE (`23505`), while the previous Prisma client surfaced a
+ * `code` of `P2002`.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  if (code === UNIQUE_VIOLATION || code === LEGACY_UNIQUE_CODE) {
+    return true;
+  }
+  const cause = (error as { cause?: unknown }).cause;
+  return cause !== undefined && cause !== error && isUniqueViolation(cause);
+}
 
 export async function grantSignupBonus(
   tx: CreditTransaction,
@@ -52,49 +75,34 @@ export async function grantSignupBonus(
   const { userId, amount } = input;
   assertIntegerCredits(amount, 'signup bonus');
 
-  // Ledger first: if the bonus already exists we abort before touching the wallet,
-  // so a duplicate grant can never inflate `available`.
+  // Ledger first: if the bonus already exists we abort before touching the wallet.
   try {
-    await tx.creditLedger.create({
-      data: {
-        userId,
-        entryType: 'SIGNUP_BONUS',
-        amount,
-        referenceType: REFERENCE_TYPES.SYSTEM,
-        referenceId: null,
-        note: input.note ?? SIGNUP_BONUS_NOTE,
-      },
-      select: { id: true },
+    await tx.insert(creditLedger).values({
+      userId,
+      entryType: 'SIGNUP_BONUS',
+      amount,
+      referenceType: 'SYSTEM',
+      referenceId: null,
+      note: input.note ?? SIGNUP_BONUS_NOTE,
     });
   } catch (error) {
     if (isUniqueViolation(error)) {
-      // Already granted (retry of the same registration). Nothing to do.
+      // Already granted (a retried registration). Nothing to do.
       return;
     }
     throw error;
   }
 
   // Ledger row is in place, so apply the matching wallet movement atomically.
-  await tx.$executeRaw`
+  // `updated_at` is set explicitly because raw SQL bypasses the schema's
+  // `$onUpdate` hook.
+  await tx.execute(sql`
     INSERT INTO wallets (user_id, available, reserved, created_at, updated_at)
     VALUES (${userId}::uuid, ${amount}, 0, now(), now())
     ON CONFLICT (user_id) DO UPDATE
       SET available = wallets.available + ${amount},
           updated_at = now()
-  `;
-}
-
-/**
- * Prisma's unique-constraint error code. Narrowed structurally rather than with
- * `any`, per AGENTS.md section 7.
- */
-export function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === UNIQUE_VIOLATION
-  );
+  `);
 }
 
 /**
@@ -115,25 +123,22 @@ export async function addCredits(
   const { userId, amount, entryType } = input;
   assertIntegerCredits(amount, 'credit amount');
 
-  await tx.creditLedger.create({
-    data: {
-      userId,
-      entryType,
-      amount,
-      referenceType: input.referenceType ?? null,
-      referenceId: input.referenceId ?? null,
-      note: input.note ?? null,
-    },
-    select: { id: true },
+  await tx.insert(creditLedger).values({
+    userId,
+    entryType,
+    amount,
+    referenceType: input.referenceType ?? null,
+    referenceId: input.referenceId ?? null,
+    note: input.note ?? null,
   });
 
-  await tx.$executeRaw`
+  await tx.execute(sql`
     INSERT INTO wallets (user_id, available, reserved, created_at, updated_at)
     VALUES (${userId}::uuid, ${amount}, 0, now(), now())
     ON CONFLICT (user_id) DO UPDATE
       SET available = wallets.available + ${amount},
           updated_at = now()
-  `;
+  `);
 }
 
 /** Test/seed helper: the ledger rows for a user, newest first. */
@@ -142,9 +147,80 @@ export async function listLedger(
   userId: string,
   limit = 50,
 ): Promise<LedgerEntry[]> {
-  return tx.creditLedger.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-  });
+  const rows = await tx
+    .select()
+    .from(creditLedger)
+    .where(eq(creditLedger.userId, userId))
+    .orderBy(sql`${creditLedger.createdAt} DESC`)
+    .limit(limit);
+
+  return rows;
 }
+
+/** Reference kinds used in the `(reference_type, reference_id, entry_type)` key. */
+export const REFERENCE_TYPES = {
+  SYSTEM: 'SYSTEM',
+  JOB: 'JOB',
+  PURCHASE: 'PURCHASE',
+  ADMIN: 'ADMIN',
+} as const;
+
+export type ReferenceType = (typeof REFERENCE_TYPES)[keyof typeof REFERENCE_TYPES];
+
+export interface LedgerEntry {
+  id: string;
+  userId: string;
+  entryType: CreditEntryType;
+  amount: number;
+  referenceType: string | null;
+  referenceId: string | null;
+  note: string | null;
+  createdAt: Date;
+}
+
+export class CreditError extends Error {
+  constructor(
+    message: string,
+    readonly code: 'WALLET_NOT_FOUND' | 'INVALID_AMOUNT' | 'UNKNOWN_ACTION' | 'PRICING_UNAVAILABLE',
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = 'CreditError';
+  }
+}
+
+/**
+ * Credits are integers. Rejecting non-integers at the boundary is what keeps
+ * `SUM(ledger) == available + reserved` exact rather than approximately true.
+ */
+export function assertIntegerCredits(amount: number, label = 'amount'): void {
+  if (!Number.isInteger(amount)) {
+    throw new CreditError(`${label} must be an integer, received ${amount}`, 'INVALID_AMOUNT');
+  }
+  if (amount < 0) {
+    throw new CreditError(`${label} must not be negative, received ${amount}`, 'INVALID_AMOUNT');
+  }
+  if (!Number.isSafeInteger(amount)) {
+    throw new CreditError(`${label} exceeds the safe integer range`, 'INVALID_AMOUNT');
+  }
+}
+
+/** Signup bonus amount from config. Never a literal in logic (AGENTS.md rule 6). */
+export function signupBonusCredits(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.SIGNUP_BONUS_CREDITS;
+  if (raw === undefined || raw.trim() === '') {
+    // Fail loudly: silently granting 0 would look like a bug in the credit engine.
+    throw new CreditError('SIGNUP_BONUS_CREDITS is not configured', 'INVALID_AMOUNT');
+  }
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new CreditError(
+      `SIGNUP_BONUS_CREDITS must be a non-negative integer, received "${raw}"`,
+      'INVALID_AMOUNT',
+    );
+  }
+  return value;
+}
+
+export { CREDIT_ENTRY_TYPES };
+export type { CreditEntryType };

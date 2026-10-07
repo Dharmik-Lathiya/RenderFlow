@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import type { Response } from 'supertest';
 
-import { getPrismaClient, resetPrismaClientForTests } from '@renderflow/db';
+import { resetDbForTests } from '@renderflow/db';
 
 // `./env` applies the test environment as an import side effect and MUST stay
 // above the AppModule import, which validates process.env at module scope.
@@ -47,7 +47,7 @@ export async function createTestApp(env: NodeJS.ProcessEnv = TEST_ENV): Promise<
   configureExceptionLogger(createLogger({ service: 'api', level: env.LOG_LEVEL ?? 'silent' }));
   configureAuthLogger(createLogger({ service: 'auth', level: env.LOG_LEVEL ?? 'silent' }));
 
-  resetPrismaClientForTests();
+  resetDbForTests();
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
@@ -75,8 +75,7 @@ export async function createTestApp(env: NodeJS.ProcessEnv = TEST_ENV): Promise<
     auth,
     close: async () => {
       await app.close();
-      await getPrismaClient().$disconnect();
-      resetPrismaClientForTests();
+      resetDbForTests();
     },
   };
 }

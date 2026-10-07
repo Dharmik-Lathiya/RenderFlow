@@ -1,8 +1,9 @@
+import { and, eq, isNull } from 'drizzle-orm';
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppError, ERROR_CODES } from '@renderflow/common';
-import { grantSignupBonus, type TransactionClient } from '@renderflow/credits';
-import { getPrismaClient, type PrismaClient } from '@renderflow/db';
+import { grantSignupBonus, isUniqueViolation } from '@renderflow/credits';
+import { getDb, refreshSessions, users, type Database, type DbTransaction } from '@renderflow/db';
 import { createLogger } from '@renderflow/observability';
 
 import type { Env } from '../config/env';
@@ -63,7 +64,7 @@ export interface SessionMetadata {
  * Registration, login, refresh and logout.
  *
  * The signup bonus is granted by `libs/credits` inside THIS transaction, so a
- * user can never exist without their 50 credits and the ledger row is written
+ * user can never exist without their credits and the ledger row is written
  * atomically with the user row (PROJECT.md section 5.1 rule 1).
  *
  * `libs/credits` is the only module that writes `wallets` / `credit_ledger`
@@ -71,14 +72,14 @@ export interface SessionMetadata {
  */
 @Injectable()
 export class AuthService implements OnModuleInit {
-  private prisma!: PrismaClient;
+  private db!: Database;
   private config!: AuthConfig;
   private argon2Options: Argon2Options = DEFAULT_ARGON2_OPTIONS;
 
   constructor(private readonly configService: ConfigService<Env, true>) {}
 
   onModuleInit(): void {
-    this.prisma = getPrismaClient();
+    this.db = getDb();
     this.config = loadAuthConfigFrom(this.configService);
   }
 
@@ -95,7 +96,7 @@ export class AuthService implements OnModuleInit {
    *
    * Concurrency: two simultaneous registrations of the same email produce one
    * user. The loser hits the unique index on `users.email` and gets
-   * `EMAIL_ALREADY_REGISTERED` - it must never create a second wallet, because
+   * `EMAIL_ALREADY_REGISTERED`; it must never create a second wallet, because
    * the insert is inside the transaction that rolled back.
    */
   async register(input: CreateUserInput, meta: SessionMetadata = {}): Promise<IssuedSession> {
@@ -103,26 +104,37 @@ export class AuthService implements OnModuleInit {
     const passwordHash = await hashPassword(input.password, this.argon2Options);
     const signupBonus = this.config.SIGNUP_BONUS_CREDITS;
 
-    const created = await this.prisma.$transaction(async (tx: TransactionClient) => {
-      try {
-        const user = await tx.user.create({
-          data: { email: input.email, passwordHash, name: input.name },
-          select: { id: true, email: true, name: true, role: true },
-        });
+    let created: { id: string; email: string; name: string; role: string };
+
+    try {
+      created = await this.db.transaction(async (tx: DbTransaction) => {
+        const [user] = await tx
+          .insert(users)
+          .values({ email: input.email, passwordHash, name: input.name })
+          .returning({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+            role: users.role,
+          });
+
+        if (user === undefined) {
+          throw new AppError(ERROR_CODES.INTERNAL_ERROR, 'User insert returned no row');
+        }
 
         // Same transaction as the user insert (AGENTS.md rule 6).
         await grantSignupBonus(tx, { userId: user.id, amount: signupBonus });
 
         return user;
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new AppError(ERROR_CODES.EMAIL_ALREADY_REGISTERED, undefined, {
-            details: { email: input.email },
-          });
-        }
-        throw error;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new AppError(ERROR_CODES.EMAIL_ALREADY_REGISTERED, undefined, {
+          details: { email: input.email },
+        });
       }
-    });
+      throw error;
+    }
 
     log().info({ userId: created.id, signupBonus }, 'user registered with signup bonus');
 
@@ -136,12 +148,21 @@ export class AuthService implements OnModuleInit {
    * so the endpoint cannot be used to enumerate registered addresses.
    */
   async login(email: string, password: string, meta: SessionMetadata = {}): Promise<IssuedSession> {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
-      select: { id: true, email: true, name: true, role: true, passwordHash: true },
-    });
+    const rows = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        passwordHash: users.passwordHash,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
 
-    if (user === null) {
+    const user = rows[0];
+
+    if (user === undefined) {
       // Spend comparable time so response timing does not reveal existence.
       await verifyPassword(DUMMY_HASH, password);
       throw new AppError(ERROR_CODES.INVALID_CREDENTIALS);
@@ -152,8 +173,10 @@ export class AuthService implements OnModuleInit {
       throw new AppError(ERROR_CODES.INVALID_CREDENTIALS);
     }
 
-    const { passwordHash: _discarded, ...safe } = user;
-    return this.issueSession(safe, meta);
+    return this.issueSession(
+      { id: user.id, email: user.email, name: user.name, role: user.role },
+      meta,
+    );
   }
 
   /**
@@ -166,28 +189,39 @@ export class AuthService implements OnModuleInit {
     const tokenHash = hashRefreshToken(refreshToken);
     const now = new Date();
 
-    const user = await this.prisma.$transaction(async (tx: TransactionClient) => {
-      const session = await tx.refreshSession.findUnique({
-        where: { tokenHash },
-        select: {
-          id: true,
-          userId: true,
-          expiresAt: true,
-          revokedAt: true,
-          user: { select: { id: true, email: true, name: true, role: true } },
-        },
-      });
+    const user = await this.db.transaction(async (tx: DbTransaction) => {
+      const rows = await tx
+        .select({
+          id: refreshSessions.id,
+          expiresAt: refreshSessions.expiresAt,
+          revokedAt: refreshSessions.revokedAt,
+          userId: users.id,
+          email: users.email,
+          name: users.name,
+          role: users.role,
+        })
+        .from(refreshSessions)
+        .innerJoin(users, eq(refreshSessions.userId, users.id))
+        .where(eq(refreshSessions.tokenHash, tokenHash))
+        .limit(1);
 
-      if (session === null || session.revokedAt !== null || session.expiresAt <= now) {
+      const session = rows[0];
+
+      if (session === undefined || session.revokedAt !== null || session.expiresAt <= now) {
         throw new AppError(ERROR_CODES.UNAUTHORIZED, 'Refresh token is invalid or expired');
       }
 
-      await tx.refreshSession.update({
-        where: { id: session.id },
-        data: { revokedAt: now },
-      });
+      await tx
+        .update(refreshSessions)
+        .set({ revokedAt: now })
+        .where(eq(refreshSessions.id, session.id));
 
-      return session.user;
+      return {
+        id: session.userId,
+        email: session.email,
+        name: session.name,
+        role: session.role,
+      };
     });
 
     return this.issueSession(user, meta);
@@ -195,29 +229,37 @@ export class AuthService implements OnModuleInit {
 
   /** Revokes the presented session. Idempotent: logging out twice is fine. */
   async logout(refreshToken: string): Promise<void> {
-    const tokenHash = hashRefreshToken(refreshToken);
-    await this.prisma.refreshSession.updateMany({
-      where: { tokenHash, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    await this.db
+      .update(refreshSessions)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(refreshSessions.tokenHash, hashRefreshToken(refreshToken)),
+          isNull(refreshSessions.revokedAt),
+        ),
+      );
   }
 
   /** Revokes every session for a user (password change, "log out everywhere"). */
   async logoutAll(userId: string): Promise<number> {
-    const result = await this.prisma.refreshSession.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    return result.count;
+    const rows = await this.db
+      .update(refreshSessions)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshSessions.userId, userId), isNull(refreshSessions.revokedAt)))
+      .returning({ id: refreshSessions.id });
+    return rows.length;
   }
 
-  /** Public profile. Selects fields explicitly so password_hash cannot leak. */
+  /** Public profile. Selects fields explicitly so passwordHash cannot leak. */
   async findUserById(userId: string): Promise<IssuedSession['user']> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, name: true, role: true },
-    });
-    if (user === null) {
+    const rows = await this.db
+      .select({ id: users.id, email: users.email, name: users.name, role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const user = rows[0];
+    if (user === undefined) {
       throw new AppError(ERROR_CODES.NOT_FOUND, 'User not found', { details: { userId } });
     }
     return user;
@@ -240,15 +282,12 @@ export class AuthService implements OnModuleInit {
     const refreshToken = generateRefreshToken();
     const refreshTokenExpiresAt = new Date(Date.now() + refreshTtl * 1000);
 
-    await this.prisma.refreshSession.create({
-      data: {
-        userId: user.id,
-        tokenHash: hashRefreshToken(refreshToken),
-        expiresAt: refreshTokenExpiresAt,
-        userAgent: meta.userAgent ?? null,
-        ipAddress: meta.ipAddress ?? null,
-      },
-      select: { id: true },
+    await this.db.insert(refreshSessions).values({
+      userId: user.id,
+      tokenHash: hashRefreshToken(refreshToken),
+      expiresAt: refreshTokenExpiresAt,
+      userAgent: meta.userAgent ?? null,
+      ipAddress: meta.ipAddress ?? null,
     });
 
     return {
@@ -269,12 +308,3 @@ export class AuthService implements OnModuleInit {
  */
 const DUMMY_HASH =
   '$argon2id$v=19$m=19456,t=2,p=1$c29tZXNhbHRzb21lc2FsdA$Y7gQ1p2Xh8v0kQKf3nR6tS9uW4yZ1aB2cD3eF5gH7jK9mN0pQ';
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 'P2002'
-  );
-}

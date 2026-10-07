@@ -141,7 +141,7 @@ jobs:
       - name: apply migrations
         env:
           DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow
-        run: pnpm db:migrate:deploy
+        run: pnpm db:migrate
 
       - name: start application
         run: docker compose up -d api web

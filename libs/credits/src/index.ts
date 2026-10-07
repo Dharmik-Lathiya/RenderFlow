@@ -17,4 +17,22 @@
 
 export * from './balance';
 export * from './signup-bonus';
-export * from './types';
+export {
+  assertIntegerCredits,
+  CreditError,
+  signupBonusCredits,
+  REFERENCE_TYPES,
+  type CreditEntryType,
+  type CreditTransaction,
+  type GrantSignupBonusInput,
+  type LedgerEntry,
+  type ReferenceType,
+} from './signup-bonus';
+export {
+  getBalance,
+  reconcileAll,
+  reconcileUser,
+  type LedgerPage,
+  type ReconcileReport,
+  type WalletBalance,
+} from './balance';

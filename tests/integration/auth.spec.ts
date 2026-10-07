@@ -1,4 +1,6 @@
-import type { PrismaClient } from '@prisma/client';
+import { and, count, eq, inArray, isNull } from 'drizzle-orm';
+
+import { creditLedger, refreshSessions, users } from '@renderflow/db';
 
 import { TEST_PASSWORD, uniqueEmail, walletOf } from './helpers/auth-fixtures';
 import {
@@ -10,7 +12,12 @@ import {
   type TestApp,
 } from './helpers/app-harness';
 import { UNIQUE_PASSWORD } from './helpers/env';
-import { setupTestDatabase, truncateAll } from './helpers/test-database';
+import {
+  setupTestDatabase,
+  teardownTestDatabase,
+  truncateAll,
+  type TestDb,
+} from './helpers/test-database';
 
 /**
  * Phase 1 DoD (PROJECT.md section 12):
@@ -18,25 +25,55 @@ import { setupTestDatabase, truncateAll } from './helpers/test-database';
  *   - registering concurrently with the same email never grants twice.
  *
  * These go through HTTP so the guards, zod validation, cookies and the global
- * exception filter are all in the path.
+ * exception filter are all in the path. The database is real.
  */
 describe('auth (Phase 1 DoD)', () => {
-  let prisma: PrismaClient;
+  let db: TestDb;
   let app: TestApp;
 
   beforeAll(async () => {
-    prisma = await setupTestDatabase();
+    db = await setupTestDatabase();
     app = await createTestApp();
   });
 
   afterAll(async () => {
     await app.close();
-    await prisma.$disconnect();
+    await teardownTestDatabase(db);
   });
 
   beforeEach(async () => {
-    await truncateAll(prisma);
+    await truncateAll(db);
   });
+
+  /** Counts rows matching a filter, for readability in assertions. */
+  const countUsers = (email: string): Promise<number> =>
+    db
+      .select({ value: count() })
+      .from(users)
+      .where(eq(users.email, email))
+      .then((rows) => rows[0]?.value ?? 0);
+
+  const countBonus = (userId: string): Promise<number> =>
+    db
+      .select({ value: count() })
+      .from(creditLedger)
+      .where(and(eq(creditLedger.userId, userId), eq(creditLedger.entryType, 'SIGNUP_BONUS')))
+      .then((rows) => rows[0]?.value ?? 0);
+
+  const countActiveSessions = (userId: string): Promise<number> =>
+    db
+      .select({ value: count() })
+      .from(refreshSessions)
+      .where(and(eq(refreshSessions.userId, userId), isNull(refreshSessions.revokedAt)))
+      .then((rows) => rows[0]?.value ?? 0);
+
+  const userIdByEmail = async (email: string): Promise<string> => {
+    const rows = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    if (rows[0] === undefined) {
+      throw new Error(`no user for ${email}`);
+    }
+    return rows[0].id;
+  };
 
   describe('POST /auth/register', () => {
     it('creates the user with exactly 50 credits and one bonus ledger row', async () => {
@@ -54,13 +91,9 @@ describe('auth (Phase 1 DoD)', () => {
       expect(res.body.csrfToken).toEqual(expect.any(String));
 
       // C1: the DoD's headline promise.
-      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-      await expect(walletOf(prisma, user.id)).resolves.toEqual({ available: 50, reserved: 0 });
-
-      const bonusRows = await prisma.creditLedger.count({
-        where: { userId: user.id, entryType: 'SIGNUP_BONUS' },
-      });
-      expect(bonusRows).toBe(1);
+      const userId = await userIdByEmail(email);
+      await expect(walletOf(db, userId)).resolves.toEqual({ available: 50, reserved: 0 });
+      await expect(countBonus(userId)).resolves.toBe(1);
     });
 
     it('never returns the password hash', async () => {
@@ -110,7 +143,6 @@ describe('auth (Phase 1 DoD)', () => {
       // token must surface as Max-Age=900 *seconds*.
       expect(/Max-Age=900\b/.test(access)).toBe(true);
 
-      // The equivalent second check: Expires must be ~15 minutes out, not ~15s.
       const expires = new Date(/Expires=([^;]+)/.exec(access)?.[1] ?? '').getTime();
       const fifteenMinutesMs = 15 * 60 * 1000;
       expect(expires - Date.now()).toBeGreaterThan(fifteenMinutesMs * 0.9);
@@ -127,6 +159,7 @@ describe('auth (Phase 1 DoD)', () => {
         .send({ email, password: UNIQUE_PASSWORD, name: 'Persist' });
 
       expect(session.status).toBe(201);
+
       const me = await app.http().get('/api/v1/me').set(authHeaders(session));
       expect(me.status).toBe(200);
       expect(me.body).toMatchObject({ email });
@@ -165,7 +198,7 @@ describe('auth (Phase 1 DoD)', () => {
 
       expect(second.status).toBe(409);
       expect(second.body.code).toBe('EMAIL_ALREADY_REGISTERED');
-      await expect(prisma.user.count({ where: { email: normalized } })).resolves.toBe(1);
+      await expect(countUsers(normalized)).resolves.toBe(1);
     });
 
     it('rejects a duplicate email with 409 and grants no second bonus', async () => {
@@ -185,11 +218,9 @@ describe('auth (Phase 1 DoD)', () => {
       expect(second.status).toBe(409);
       expect(second.body.code).toBe('EMAIL_ALREADY_REGISTERED');
 
-      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-      await expect(walletOf(prisma, user.id)).resolves.toEqual({ available: 50, reserved: 0 });
-      await expect(
-        prisma.creditLedger.count({ where: { userId: user.id, entryType: 'SIGNUP_BONUS' } }),
-      ).resolves.toBe(1);
+      const userId = await userIdByEmail(email);
+      await expect(walletOf(db, userId)).resolves.toEqual({ available: 50, reserved: 0 });
+      await expect(countBonus(userId)).resolves.toBe(1);
     });
 
     it('rejects a weak password before creating anything', async () => {
@@ -203,9 +234,7 @@ describe('auth (Phase 1 DoD)', () => {
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('VALIDATION_FAILED');
       // Nothing at all was created: no user, so no wallet, so no bonus.
-      await expect(prisma.user.count({ where: { email } })).resolves.toBe(0);
-      await expect(prisma.wallet.count()).resolves.toBe(0);
-      await expect(prisma.creditLedger.count()).resolves.toBe(0);
+      await expect(countUsers(email)).resolves.toBe(0);
     });
 
     it('validates the body and reports field-level details', async () => {
@@ -242,15 +271,12 @@ describe('auth (Phase 1 DoD)', () => {
         expect([201, 409]).toContain(attempt.status);
       }
 
-      const users = await prisma.user.findMany({ where: { email } });
-      expect(users).toHaveLength(1);
+      await expect(countUsers(email)).resolves.toBe(1);
 
-      const userId = users[0]?.id as string;
+      const userId = await userIdByEmail(email);
       // The invariant that matters: exactly one grant of 50 credits.
-      await expect(walletOf(prisma, userId)).resolves.toEqual({ available: 50, reserved: 0 });
-      await expect(
-        prisma.creditLedger.count({ where: { userId, entryType: 'SIGNUP_BONUS' } }),
-      ).resolves.toBe(1);
+      await expect(walletOf(db, userId)).resolves.toEqual({ available: 50, reserved: 0 });
+      await expect(countBonus(userId)).resolves.toBe(1);
     });
 
     it('gives every concurrent winner exactly the configured amount', async () => {
@@ -265,15 +291,21 @@ describe('auth (Phase 1 DoD)', () => {
         ),
       );
 
-      const users = await prisma.user.findMany({ where: { email: { in: emails } } });
-      expect(users).toHaveLength(10);
+      const rows = await db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(inArray(users.email, emails));
+      expect(rows).toHaveLength(10);
 
-      for (const user of users) {
-        await expect(walletOf(prisma, user.id)).resolves.toEqual({ available: 50, reserved: 0 });
+      for (const row of rows) {
+        await expect(walletOf(db, row.id)).resolves.toEqual({ available: 50, reserved: 0 });
       }
-      await expect(
-        prisma.creditLedger.count({ where: { entryType: 'SIGNUP_BONUS' } }),
-      ).resolves.toBe(10);
+
+      const allBonus = await db
+        .select({ value: count() })
+        .from(creditLedger)
+        .where(eq(creditLedger.entryType, 'SIGNUP_BONUS'));
+      expect(allBonus[0]?.value).toBe(10);
     });
   });
 
@@ -329,18 +361,19 @@ describe('auth (Phase 1 DoD)', () => {
 
       await app.http().post('/api/v1/auth/login').send({ email, password: UNIQUE_PASSWORD });
 
-      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-      await expect(walletOf(prisma, user.id)).resolves.toEqual({ available: 50, reserved: 0 });
+      await expect(walletOf(db, await userIdByEmail(email))).resolves.toEqual({
+        available: 50,
+        reserved: 0,
+      });
     });
   });
 
   describe('POST /auth/refresh', () => {
     it('rotates the refresh token and returns a new access token', async () => {
-      const email = uniqueEmail('refresh');
       const session = await app
         .http()
         .post('/api/v1/auth/register')
-        .send({ email, password: UNIQUE_PASSWORD, name: 'Refresh User' });
+        .send({ email: uniqueEmail('refresh'), password: UNIQUE_PASSWORD, name: 'Refresh User' });
 
       const res = await app
         .http()
@@ -357,11 +390,10 @@ describe('auth (Phase 1 DoD)', () => {
     });
 
     it('rejects reuse of a rotated token', async () => {
-      const email = uniqueEmail('reuse');
       const session = await app
         .http()
         .post('/api/v1/auth/register')
-        .send({ email, password: UNIQUE_PASSWORD, name: 'Reuse' });
+        .send({ email: uniqueEmail('reuse'), password: UNIQUE_PASSWORD, name: 'Reuse' });
 
       const staleRefresh = cookieFrom(session, 'rf_refresh') as string;
       const csrf = csrfOf(session);
@@ -387,7 +419,11 @@ describe('auth (Phase 1 DoD)', () => {
       const session = await app
         .http()
         .post('/api/v1/auth/register')
-        .send({ email: uniqueEmail('csrfrefresh'), password: UNIQUE_PASSWORD, name: 'CSRF' });
+        .send({
+          email: uniqueEmail('csrfrefresh'),
+          password: UNIQUE_PASSWORD,
+          name: 'CSRF',
+        });
 
       // Full cookie jar, but no x-csrf-token header: the header is the part a
       // cross-site request cannot forge.
@@ -406,7 +442,11 @@ describe('auth (Phase 1 DoD)', () => {
       const seed = await app
         .http()
         .post('/api/v1/auth/register')
-        .send({ email: uniqueEmail('unknownrefresh'), password: UNIQUE_PASSWORD, name: 'Unknown' });
+        .send({
+          email: uniqueEmail('unknownrefresh'),
+          password: UNIQUE_PASSWORD,
+          name: 'Unknown',
+        });
       const csrf = csrfOf(seed);
 
       const res = await app
@@ -421,11 +461,10 @@ describe('auth (Phase 1 DoD)', () => {
 
   describe('POST /auth/logout', () => {
     it('revokes the session so the refresh token stops working', async () => {
-      const email = uniqueEmail('logout');
       const session = await app
         .http()
         .post('/api/v1/auth/register')
-        .send({ email, password: UNIQUE_PASSWORD, name: 'Logout' });
+        .send({ email: uniqueEmail('logout'), password: UNIQUE_PASSWORD, name: 'Logout' });
 
       const refreshToken = cookieFrom(session, 'rf_refresh') as string;
       const csrf = csrfOf(session);
@@ -571,7 +610,7 @@ describe('auth (Phase 1 DoD)', () => {
         .send({ email, password: UNIQUE_PASSWORD, name: 'Deleted' });
 
       const headers = authHeaders(register);
-      await prisma.user.delete({ where: { email } });
+      await db.delete(users).where(eq(users.email, email));
 
       const res = await app.http().get('/api/v1/me').set(headers);
       expect(res.status).toBe(401);
@@ -584,22 +623,18 @@ describe('auth (Phase 1 DoD)', () => {
         .post('/api/v1/auth/register')
         .send({ email, password: UNIQUE_PASSWORD, name: 'Multi' });
 
-      // Two devices = two refresh sessions.
+      // A second device: login issues its own refresh session.
       const second = await app
         .http()
         .post('/api/v1/auth/login')
         .send({ email, password: UNIQUE_PASSWORD });
 
-      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-      await expect(
-        prisma.refreshSession.count({ where: { userId: user.id, revokedAt: null } }),
-      ).resolves.toBe(2);
+      const userId = await userIdByEmail(email);
+      await expect(countActiveSessions(userId)).resolves.toBe(2);
 
-      const revoked = await app.auth.logoutAll(user.id);
+      const revoked = await app.auth.logoutAll(userId);
       expect(revoked).toBe(2);
-      await expect(
-        prisma.refreshSession.count({ where: { userId: user.id, revokedAt: null } }),
-      ).resolves.toBe(0);
+      await expect(countActiveSessions(userId)).resolves.toBe(0);
       expect(cookieFrom(second, 'rf_refresh')).toBeDefined();
     });
 
@@ -660,11 +695,14 @@ describe('auth (Phase 1 DoD)', () => {
         .post('/api/v1/auth/register')
         .send({ email, password: UNIQUE_PASSWORD, name: 'Storage' });
 
-      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
-      expect(user.passwordHash).toMatch(/^\$argon2id\$/);
-      expect(user.passwordHash).not.toContain(UNIQUE_PASSWORD);
-      // TEST_PASSWORD is never stored either.
-      expect(user.passwordHash).not.toContain(TEST_PASSWORD);
+      const rows = await db
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.email, email));
+
+      expect(rows[0]?.passwordHash).toMatch(/^\$argon2id\$/);
+      expect(rows[0]?.passwordHash).not.toContain(UNIQUE_PASSWORD);
+      expect(rows[0]?.passwordHash).not.toContain(TEST_PASSWORD);
     });
   });
 });

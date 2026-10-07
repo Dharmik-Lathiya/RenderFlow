@@ -1,6 +1,7 @@
+import { eq } from 'drizzle-orm';
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { AppError, ERROR_CODES, type UserRole } from '@renderflow/common';
-import { getPrismaClient, type PrismaClient } from '@renderflow/db';
+import { getDb, users, type Database } from '@renderflow/db';
 
 export interface MeResponse {
   id: string;
@@ -18,19 +19,28 @@ export interface MeResponse {
  */
 @Injectable()
 export class UsersService implements OnModuleInit {
-  private prisma!: PrismaClient;
+  private db!: Database;
 
   onModuleInit(): void {
-    this.prisma = getPrismaClient();
+    this.db = getDb();
   }
 
   async getMe(userId: string): Promise<MeResponse> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-    });
+    const rows = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        role: users.role,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
-    if (user === null) {
+    const user = rows[0];
+
+    if (user === undefined) {
       // The token is valid but the account is gone: treat it as unauthenticated.
       throw new AppError(ERROR_CODES.UNAUTHORIZED, 'Account no longer exists');
     }
