@@ -349,8 +349,62 @@ SCHEDULED ─► QUEUED (delayed job fires) ─► PUBLISHING ─► PUBLISHED
 6. **Saga/compensation:** on permanent failure → refund credits, delete temp files, notify.
 7. **DLQ + admin replay:** exhausted jobs land in `dlq`; admin UI can inspect and replay.
 8. **Graceful shutdown:** on SIGTERM stop consuming, finish or release the current job back to the queue.
-9. **Reconciliation job (hourly):** `wallet.available + reserved == SUM(ledger)`; alert on drift.
+9. **Reconciliation job (hourly):** per-bucket ledger comparison; alert on drift. See the correction below.
 10. **Rate limiting:** per-user API limits; per-platform publish limiter.
+
+### 5.10 Reconciliation invariant (corrected)
+
+An earlier revision of this document stated the invariant as
+
+```
+wallet.available + wallet.reserved == SUM(credit_ledger.amount)
+```
+
+**That is arithmetically impossible with a single signed `amount` column, and this
+document's own section 5.4 SQL is what makes it so.** A reservation moves credits
+_between_ the two buckets without changing what the user holds, but `RESERVE` is
+recorded as `-cost`, so the running sum drops by the cost while
+`available + reserved` does not move at all. Measured against Postgres:
+
+| step                   | `available` | `reserved` | wallet total | `SUM(amount)` | stated invariant    |
+| ---------------------- | ----------- | ---------- | ------------ | ------------- | ------------------- |
+| signup bonus +50       | 50          | 0          | 50           | 50            | holds               |
+| reserve 30             | 20          | 30         | 50           | 20            | **fails**           |
+| capture 30             | 20          | 0          | 20           | -10           | **fails**           |
+| reserve 30 then refund | 50          | 0          | 50           | 50            | holds (coincidence) |
+
+The refund row appearing to satisfy it is an accident of `RESERVE` and `REFUND`
+cancelling out, not a property of the system.
+
+**The correct invariant is per bucket**, and it holds exactly:
+
+```
+available = SUM(SIGNUP_BONUS, PURCHASE, ADJUSTMENT, REFUND) + SUM(RESERVE, EXPIRY)
+reserved  = -SUM(RESERVE, REFUND) + SUM(CAPTURE)
+```
+
+The signs do not all match the column names because `RESERVE`, `CAPTURE` and
+`EXPIRY` are stored negative (credits leaving the user's holdings) while `REFUND`
+is stored positive (credits rejoining them).
+
+Reconciliation compares **per bucket, not on totals**. A wallet that has moved 30
+from available to reserved and back has the correct total the entire time while
+being wrong in between, so a total-based check would miss a whole class of real
+corruption. `libs/credits/src/balance.ts` holds the executable form, and
+`tests/integration/credit-engine.spec.ts` (C12) checks it against an independently
+written SQL formulation so the two cannot silently agree on a wrong answer.
+
+**Ledger sign convention** (authoritative, used by the whole engine):
+
+| Entry          | Stored sign | Moves                                 |
+| -------------- | ----------- | ------------------------------------- |
+| `SIGNUP_BONUS` | +           | → available                           |
+| `PURCHASE`     | +           | → available                           |
+| `ADJUSTMENT`   | ±           | → available                           |
+| `RESERVE`      | −           | available → reserved                  |
+| `CAPTURE`      | −           | reserved → spent                      |
+| `REFUND`       | +           | reserved → available                  |
+| `EXPIRY`       | −           | → available (reserved credits expire) |
 
 **Rate limiting — Phase 1 slice (shipped).** `apps/api/src/ratelimit` provides a
 global `RateLimitGuard` registered _ahead of_ CSRF and auth, so a refused request
@@ -599,6 +653,39 @@ Each phase ends with a **Definition of Done (DoD)**. Do not start the next phase
 - `reserve`, `capture`, `refund`, `adjust`, `getBalance`, `reconcile`.
 - Raw SQL guarded updates, unique ledger keys, DB CHECK constraints (no negative balances).
 - **DoD:** 100 concurrent reserves against 50 credits never overspend; double refund is a no-op; reconcile reports zero drift.
+
+**Status: engine shipped.** `pricing_rules`, `generation_jobs` and `outbox_events`
+added; `reserve`/`capture`/`refund`/`adjust` implemented in `libs/credits`. C3-C12
+all covered by `tests/integration/credit-engine.spec.ts` against real Postgres,
+including 100 parallel reserves and a concurrent refund race.
+
+Four decisions worth carrying forward:
+
+- **Idempotency is enforced twice.** `generation_jobs.refunded` / `.captured` are
+  claimed with a guarded `UPDATE ... WHERE refunded = 0 AND captured = 0`, whose
+  row count is the decision; the `(reference_type, reference_id, entry_type)`
+  unique index is the backstop. `generation_jobs_not_captured_and_refunded` is a
+  CHECK constraint, so even raw SQL cannot record a job as both spent and
+  refunded. Ten concurrent refunds produce exactly one.
+- **`reserveOnce` wraps `reserve` for HTTP handlers.** A bare `reserve` makes
+  concurrent retries of one `Idempotency-Key` fail the guarded UPDATE on _funds_ —
+  the winner has already moved the credits — so a client whose first call succeeded
+  would be told `402 INSUFFICIENT_CREDITS`. `reserveOnce` re-reads the key outside
+  the aborted transaction and returns the original job. Found by the C10 race test,
+  not by reading the code.
+- **A missing price is a server error, not zero.** `priceFor` throws
+  `PRICING_UNAVAILABLE` rather than falling back to a default, because charging a
+  guessed amount is how a customer gets billed with no record of why. Prices live
+  in `pricing_rules` (never code), and inactive rules are retained so historical
+  charges still reconcile.
+- **Refund and capture refuse to act on a wallet that disagrees with the job**
+  (`LEDGER_DRIFT`). Rolling back leaves the inconsistency visible to
+  reconciliation instead of inventing credits.
+
+Known gaps, deliberately deferred: `partialRefund` for per-line-item settlement
+(C11 is asserted at the ledger level; the job-level API for multi-item assets
+belongs with Phase 3 assets), and job lease/heartbeat columns exist but are not
+yet written by anyone — they land in Phase 5.
 
 ### Phase 3: Brands, campaigns, posts, assets (CRUD)
 

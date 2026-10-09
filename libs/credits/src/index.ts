@@ -16,6 +16,8 @@
  */
 
 export * from './balance';
+export * from './pricing';
+export * from './reserve';
 export * from './signup-bonus';
 export {
   assertIntegerCredits,

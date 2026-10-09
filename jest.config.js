@@ -81,17 +81,24 @@ module.exports = {
     '!src/**/**.module.ts',
     '!src/**/*.controller.ts',
     '!src/**/*.service.ts',
-    // The credit engine's SQL is verified by tests/integration/signup-bonus.spec.ts
-    // against a real Postgres (CHECK constraints, partial unique indexes,
-    // transaction rollback). This globs are relative to each project's rootDir,
-    // so these two patterns match only inside the libs/credits project.
+    // The credit engine's SQL is verified by tests/integration against a real
+    // Postgres: CHECK constraints, partial unique indexes, guarded-UPDATE row
+    // counts, transaction rollback, and the concurrent-reserve race. These globs
+    // are relative to each project's rootDir, so they match only inside
+    // libs/credits.
     //
-    // PROJECT.md section 13.6 requires >= 95% for libs/credits. That gate is a
-    // Phase 2 deliverable: it is met when the integration suite emits its own
-    // coverage and the two reports are merged, at which point these exclusions
-    // are removed.
+    // `reserve.ts` and `pricing.ts` are here for the same reason: their logic is
+    // the SQL they emit, so a unit test can only reach the input guards. What
+    // they contribute to this gate is a misleading near-zero.
+    //
+    // PROJECT.md section 13.6 requires >= 95% for libs/credits. That gate is met
+    // when the integration suite emits its own coverage and the two reports are
+    // merged; at that point these exclusions are removed. jest.integration.config.js
+    // already collects these files, at a 70% floor.
     '!src/balance.ts',
     '!src/signup-bonus.ts',
+    '!src/reserve.ts',
+    '!src/pricing.ts',
   ],
   coverageDirectory: '<rootDir>/coverage',
   coverageReporters: ['text-summary', 'lcov'],

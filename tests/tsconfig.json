@@ -8,7 +8,24 @@
     "types": ["node", "jest"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+
+    // Resolve workspace packages to SOURCE, not to `dist/`.
+    //
+    // Without this the integration suite runs against compiled output, so
+    // coverage is attributed to `dist/*.js` instead of the TypeScript it came
+    // from and the report shows the credit engine at ~0% despite being
+    // thoroughly tested. Path mapping also means a stale `dist/` cannot make a
+    // test pass against code that is no longer what ships.
+    "baseUrl": "..",
+    "paths": {
+      "@renderflow/common": ["libs/common/src/index.ts"],
+      "@renderflow/credits": ["libs/credits/src/index.ts"],
+      "@renderflow/db": ["libs/db/src/index.ts"],
+      "@renderflow/observability": ["libs/observability/src/index.ts"],
+      "@renderflow/queue": ["libs/queue/src/index.ts"],
+      "@renderflow/storage": ["libs/storage/src/index.ts"]
+    }
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist", "coverage"]

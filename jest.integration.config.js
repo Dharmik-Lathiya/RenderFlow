@@ -46,6 +46,17 @@ module.exports = {
     ],
   },
 
+  // Point the `@renderflow/*` specifiers at source.
+  //
+  // Without this, pnpm's symlinks resolve them to each package's built `dist/`,
+  // and coverage is attributed to compiled JavaScript rather than the
+  // TypeScript that produced it - which reports a thoroughly exercised credit
+  // engine as near-zero. It also means the suite would test a stale build.
+  moduleNameMapper: {
+    '^@renderflow/(common|credits|db|observability|queue|storage)$':
+      '<rootDir>/libs/$1/src/index.ts',
+  },
+
   // Only what THIS suite uniquely verifies.
   //
   // Files already covered by the unit suite are excluded so the two reports do
@@ -94,12 +105,23 @@ module.exports = {
   // covers only integration-verified files and is set at 70% so that adding a
   // new database-backed path cannot silently ship untested; it is expected to
   // rise as more phases land integration suites.
+  //
+  // `perPath` for libs/credits rather than a global figure: the credit engine is
+  // the part of this codebase where untested code is a money bug, so it gets a
+  // higher bar than the aggregate. The global number is easy to satisfy by
+  // covering the easy half of a large suite.
   coverageThreshold: {
     global: {
       branches: 70,
       functions: 70,
       lines: 70,
       statements: 70,
+    },
+    './libs/credits/src/': {
+      branches: 70,
+      functions: 60,
+      lines: 75,
+      statements: 75,
     },
   },
 };

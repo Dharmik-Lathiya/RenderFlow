@@ -181,7 +181,16 @@ export interface LedgerEntry {
 export class CreditError extends Error {
   constructor(
     message: string,
-    readonly code: 'WALLET_NOT_FOUND' | 'INVALID_AMOUNT' | 'UNKNOWN_ACTION' | 'PRICING_UNAVAILABLE',
+    readonly code:
+      | 'WALLET_NOT_FOUND'
+      | 'INVALID_AMOUNT'
+      | 'UNKNOWN_ACTION'
+      | 'PRICING_UNAVAILABLE'
+      // A refund or capture that cannot be applied because the wallet disagrees
+      // with the job. That is corruption rather than a bad request, and it has to
+      // be distinguishable so reconciliation alerts on it.
+      | 'LEDGER_DRIFT'
+      | 'IDEMPOTENCY_CONFLICT',
     options?: { cause?: unknown },
   ) {
     super(message, options);

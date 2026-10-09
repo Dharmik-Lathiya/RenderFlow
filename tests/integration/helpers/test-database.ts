@@ -117,7 +117,7 @@ export function createTestDb(databaseUrl: string): TestDb {
  */
 export async function truncateAll(db: TestDb): Promise<void> {
   await db.execute(
-    'TRUNCATE TABLE refresh_sessions, credit_ledger, wallets, users RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE outbox_events, generation_jobs, refresh_sessions, credit_ledger, wallets, users RESTART IDENTITY CASCADE',
   );
 }
 

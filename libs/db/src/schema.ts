@@ -3,8 +3,10 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
+  text,
   timestamp,
   uniqueIndex,
   uuid,
@@ -12,7 +14,10 @@ import {
 } from 'drizzle-orm/pg-core';
 
 /**
- * RenderFlow database schema (PROJECT.md section 6, Phase 1 slice).
+ * RenderFlow database schema (PROJECT.md section 6).
+ *
+ * Phases 1 (auth, wallet, signup bonus) and 2 (pricing, generation jobs,
+ * outbox). Later phases add workspaces, brands, campaigns, posts and assets.
  *
  * Every credit guarantee is declared HERE, in TypeScript, rather than in
  * hand-written migration SQL:
@@ -200,6 +205,206 @@ export const refreshSessions = pgTable(
   }),
 );
 
+// ---------------------------------------------------------------------------
+// pricing_rules
+// ---------------------------------------------------------------------------
+
+/**
+ * Server-side prices (PROJECT.md section 5.2, AGENTS.md rule 7: "Costs come from
+ * the server, never from the client").
+ *
+ * A row per billable action rather than a constant in code, so a price change is
+ * a data change and an audit of what a user was charged is a query, not a
+ * archaeology exercise through git.
+ */
+export const pricingRules = pgTable(
+  'pricing_rules',
+  {
+    /** Matches `GENERATION_KINDS`; the key is what a job stores. */
+    action: varchar('action', { length: 40 }).primaryKey(),
+    /** Integer credits. Never a float (AGENTS.md section 7). */
+    credits: integer('credits').notNull(),
+    /**
+     * Inactive rules stay for historical pricing: a job captured last month must
+     * still reconcile against the rate that was in force then.
+     */
+    active: integer('active').notNull().default(1),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    // A price of zero is legitimate (a free action), a negative one is not: it
+    // would let a "cost" mint credits.
+    nonNegative: check('pricing_rules_credits_non_negative', sql`${table.credits} >= 0`),
+    activeIdx: index('pricing_rules_active_idx').on(table.active),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// generation_jobs
+// ---------------------------------------------------------------------------
+
+export const jobStatusEnum = pgEnum('job_status', [
+  'PENDING',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+]);
+
+export const jobStageEnum = pgEnum('job_stage', [
+  'PLAN',
+  'SCRIPT',
+  'IMAGE',
+  'VOICE',
+  'RENDER',
+  'DONE',
+]);
+
+/**
+ * A generation job and its credit reservation.
+ *
+ * The job row is what makes reserve/capture/refund safe under retries: the
+ * `refunded` flag and the status guard are the atomic test-and-set that stops a
+ * reaper and a worker refunding the same job twice (PROJECT.md section 5.5,
+ * test C8). The credit movement itself lives in `libs/credits`; this table is
+ * the state it is guarded by.
+ */
+export const generationJobs = pgTable(
+  'generation_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Null until Phase 3 introduces campaigns and posts. */
+    postId: uuid('post_id'),
+
+    kind: varchar('kind', { length: 40 }).notNull(),
+    status: jobStatusEnum('status').notNull().default('PENDING'),
+    stage: jobStageEnum('stage').notNull().default('PLAN'),
+
+    /** Credits moved available -> reserved by the creating transaction. */
+    creditsReserved: integer('credits_reserved').notNull(),
+    /**
+     * Set true by the refund path, atomically with the wallet update.
+     *
+     * This is the idempotency guarantee for C8: `WHERE refunded = false` means
+     * only one caller can ever win the refund, however many race.
+     */
+    refunded: integer('refunded').notNull().default(0),
+    /** Set true by the capture path; a refunded job can never be captured. */
+    captured: integer('captured').notNull().default(0),
+
+    attempts: integer('attempts').notNull().default(0),
+    maxAttempts: integer('max_attempts').notNull().default(3),
+
+    // Lease fields. The reaper reclaims a job whose worker died without
+    // finishing (PROJECT.md section 9, chaos test R-series).
+    workerId: varchar('worker_id', { length: 100 }),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true, mode: 'date' }),
+    lockedUntil: timestamp('locked_until', { withTimezone: true, mode: 'date' }),
+
+    /**
+     * Client-supplied idempotency key (PROJECT.md section 9.5, test C10).
+     *
+     * Scoped to the user, not global: two users legitimately picking the same
+     * key must not collide, and a key is not a secret so it is safe to store.
+     */
+    idempotencyKey: varchar('idempotency_key', { length: 200 }),
+
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    result: jsonb('result').$type<Record<string, unknown>>(),
+    error: text('error'),
+
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    // C10: one job per (user, idempotency key). The unique index is the whole
+    // mechanism - a replayed request collides here rather than charging twice.
+    userIdempotencyKey: uniqueIndex('generation_jobs_user_idempotency_key')
+      .on(table.userId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+
+    // Partial, so a job with no key (an internally created one) does not collide
+    // with any other keyless job.
+    // The reaper's queue poll: "unfinished jobs whose lease has expired".
+    reclaimIdx: index('generation_jobs_reclaim_idx')
+      .on(table.status, table.lockedUntil)
+      .where(sql`${table.status} IN ('PENDING','PROCESSING')`),
+
+    nonNegativeCosts: check(
+      'generation_jobs_credits_non_negative',
+      sql`${table.creditsReserved} >= 0`,
+    ),
+    nonNegativeAttempts: check(
+      'generation_jobs_attempts_non_negative',
+      sql`${table.attempts} >= 0`,
+    ),
+
+    // A job cannot be both captured and refunded: it either cost the user the
+    // credits or it did not. Without this the terminal-state race in C9 could
+    // settle either way and neither path would notice.
+    notCapturedAndRefunded: check(
+      'generation_jobs_not_captured_and_refunded',
+      sql`NOT (${table.captured} = 1 AND ${table.refunded} = 1)`,
+    ),
+
+    userCreatedIdx: index('generation_jobs_user_id_created_at_idx').on(
+      table.userId,
+      table.createdAt,
+    ),
+  }),
+);
+
+/**
+ * Outbox events (PROJECT.md section 6, AGENTS.md rule 6).
+ *
+ * Written in the same transaction as the state change it describes. The relay
+ * publishes them to BullMQ afterwards, so no request handler ever pushes to a
+ * queue directly and a crash between commit and publish cannot lose an event.
+ */
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** e.g. `JOB`, `POST`, `USER`. */
+    aggregateType: varchar('aggregate_type', { length: 40 }).notNull(),
+    aggregateId: varchar('aggregate_id', { length: 64 }).notNull(),
+    /** One of `DOMAIN_EVENT_TYPES`. */
+    eventType: varchar('event_type', { length: 60 }).notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true, mode: 'date' }),
+    attempts: integer('attempts').notNull().default(0),
+  },
+  (table) => ({
+    // The relay's poll: exactly the unpublished rows, oldest first. Partial so
+    // the index stays small instead of growing with processed history.
+    pendingIdx: index('outbox_events_pending_idx')
+      .on(table.createdAt)
+      .where(sql`${table.processedAt} IS NULL`),
+
+    // An aggregate can publish a given event type once. Re-running a handler
+    // that rewrites state is then a no-op at the outbox rather than a duplicate
+    // message on the queue.
+    dedupeIdx: uniqueIndex('outbox_events_dedupe_idx').on(
+      table.aggregateType,
+      table.aggregateId,
+      table.eventType,
+    ),
+
+    nonNegativeAttempts: check('outbox_events_attempts_non_negative', sql`${table.attempts} >= 0`),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
@@ -211,6 +416,15 @@ export type NewCreditLedgerEntry = typeof creditLedger.$inferInsert;
 
 export type RefreshSession = typeof refreshSessions.$inferSelect;
 export type NewRefreshSession = typeof refreshSessions.$inferInsert;
+
+export type PricingRule = typeof pricingRules.$inferSelect;
+export type NewPricingRule = typeof pricingRules.$inferInsert;
+
+export type GenerationJob = typeof generationJobs.$inferSelect;
+export type NewGenerationJob = typeof generationJobs.$inferInsert;
+
+export type OutboxEvent = typeof outboxEvents.$inferSelect;
+export type NewOutboxEvent = typeof outboxEvents.$inferInsert;
 
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
 export type CreditEntryType = (typeof creditEntryTypeEnum.enumValues)[number];
