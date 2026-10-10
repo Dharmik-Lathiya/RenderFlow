@@ -615,10 +615,27 @@ Two supported paths:
 
 - **Empty database** (CI, a new developer machine): drop, recreate, then
   `pnpm db:migrate`. This is what the local development database did.
-- **Database holding data**: write a Drizzle _baseline_ migration that matches
-  the Prisma schema as-is, record it as applied, then generate a follow-up
-  migration that adds the missing column defaults. This is required before any
-  deployment that has real users.
+- **Database holding data**: `scripts/db-adopt-legacy.sh <database-url>`. This is
+  now implemented and tested, not merely described. It records migration `0000`
+  as already applied (it describes exactly what Prisma built), then lets Drizzle
+  apply `0001` onwards; migration `0004_legacy_column_defaults` adds the column
+  defaults that were missing. Both steps are idempotent.
+
+  Run it against a backup. The script refuses to run on an empty database (use
+  `pnpm db:migrate`) or on one that already has Drizzle history, so the two
+  mistakes it is most likely to be aimed at fail loudly rather than corrupting
+  the history.
+
+  Verified by `tests/integration/legacy-cutover.spec.ts`, which builds a faithful
+  Prisma-era schema containing rows, runs the adoption, and asserts that the data
+  survives, all 13 tables exist, the column defaults are present, the credit
+  CHECK constraints still fire, and the history is recorded. A column-by-column
+  schema diff against a freshly migrated database leaves exactly two differences,
+  both intentional: `refresh_sessions.token_hash` is `char(64)` rather than
+  `varchar(64)` (the change this migration made, and blank-padding is harmless
+  for a fixed-length hex digest), and the `UserRole` / `CreditEntryType` enum
+  _type names_ remain Prisma's capitalised ones because renaming an enum type
+  rewrites dependent columns for no functional gain.
 
 **Also changed by the swap**
 
