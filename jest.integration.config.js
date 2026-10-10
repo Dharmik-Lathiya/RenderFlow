@@ -53,7 +53,7 @@ module.exports = {
   // TypeScript that produced it - which reports a thoroughly exercised credit
   // engine as near-zero. It also means the suite would test a stale build.
   moduleNameMapper: {
-    '^@renderflow/(common|credits|db|observability|queue|storage)$':
+    '^@renderflow/(ai|common|credits|db|jobs|observability|queue|storage)$':
       '<rootDir>/libs/$1/src/index.ts',
   },
 
@@ -88,6 +88,9 @@ module.exports = {
     'apps/api/src/workspaces/**/*.ts',
     'apps/api/src/common/openapi.ts',
     'libs/credits/src/**/*.ts',
+    // Phase 4: the stage machine's runner. Checkpoint, resume, capture and refund
+    // behaviour only exists against a real database and real credit rules.
+    'libs/jobs/src/**/*.ts',
 
     // Excluded because the unit suite covers them with real assertions, not
     // hand-rolled fakes; counting them here would double-count while reporting a

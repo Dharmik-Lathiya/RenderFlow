@@ -83,6 +83,7 @@ module.exports = {
     '!src/**/**.module.ts',
     '!src/**/*.controller.ts',
     '!src/**/*.service.ts',
+    '!src/runner.ts',
     // The credit engine's SQL is verified by tests/integration against a real
     // Postgres: CHECK constraints, partial unique indexes, guarded-UPDATE row
     // counts, transaction rollback, and the concurrent-reserve race. These globs
@@ -101,6 +102,11 @@ module.exports = {
     '!src/signup-bonus.ts',
     '!src/reserve.ts',
     '!src/pricing.ts',
+
+    // The job runner is the SQL it emits plus a stage loop; a unit test can only
+    // reach the error helpers. Its behaviour - checkpoints, resume, capture and
+    // refund - is asserted against a real Postgres in
+    // tests/integration/job-runner.spec.ts.
 
     // The OpenAPI document can only be generated from a fully-wired
     // INestApplication, which needs a booted Nest app. Covered by

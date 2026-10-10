@@ -13,19 +13,32 @@ import type { StorageLike } from '../../../apps/api/src/workspaces/assets.servic
  */
 export interface FakeStorage extends StorageLike {
   objects: Map<string, { sizeBytes: number; contentType: string }>;
+  /** Raw bytes the server wrote, so a test can assert on what was produced. */
+  bodies: Map<string, Uint8Array>;
+  putObject(input: { key: string; body: Uint8Array; contentType: string }): Promise<unknown>;
   /** Makes the next `deleteObject` throw, to exercise the failure path. */
   setDeleteFailure(value: boolean): void;
 }
 
 export function fakeStorage(): FakeStorage {
   const objects = new Map<string, { sizeBytes: number; contentType: string }>();
+  const bodies = new Map<string, Uint8Array>();
   let deleteFails = false;
 
   return {
     objects,
 
+    /** Bodies written by the server, so a test can assert on what was produced. */
+    bodies,
+
     setDeleteFailure(value: boolean): void {
       deleteFails = value;
+    },
+
+    putObject: async ({ key, body, contentType }) => {
+      objects.set(key, { sizeBytes: body.byteLength, contentType });
+      bodies.set(key, body);
+      return { key, contentType, sizeBytes: body.byteLength, metadata: {} };
     },
 
     createPresignedUpload: async (key, contentType, expiresInSeconds = 900) => {

@@ -450,9 +450,24 @@ importers:
 
   libs/jobs:
     dependencies:
+      '@renderflow/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@renderflow/common':
         specifier: workspace:*
         version: link:../common
+      '@renderflow/credits':
+        specifier: workspace:*
+        version: link:../credits
+      '@renderflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@renderflow/storage':
+        specifier: workspace:*
+        version: link:../storage
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.23.1)(pg@8.23.1)(prisma@6.19.3(typescript@5.9.3))
     devDependencies:
       '@types/node':
         specifier: ^24.19.1
@@ -513,6 +528,9 @@ importers:
       '@nestjs/testing':
         specifier: ^11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@7.2.0))(@nestjs/core@11.2.7)(@nestjs/platform-express@11.2.7)
+      '@renderflow/ai':
+        specifier: workspace:*
+        version: link:../libs/ai
       '@renderflow/common':
         specifier: workspace:*
         version: link:../libs/common
@@ -522,6 +540,9 @@ importers:
       '@renderflow/db':
         specifier: workspace:*
         version: link:../libs/db
+      '@renderflow/jobs':
+        specifier: workspace:*
+        version: link:../libs/jobs
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../libs/observability

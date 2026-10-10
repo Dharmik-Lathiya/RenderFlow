@@ -16,7 +16,12 @@
     "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
   },
   "dependencies": {
-    "@renderflow/common": "workspace:*"
+    "@renderflow/ai": "workspace:*",
+    "@renderflow/common": "workspace:*",
+    "@renderflow/credits": "workspace:*",
+    "@renderflow/db": "workspace:*",
+    "@renderflow/storage": "workspace:*",
+    "drizzle-orm": "^0.45.3"
   },
   "devDependencies": {
     "@types/node": "^24.19.1"
