@@ -9,9 +9,11 @@ import { AuthGuard, RolesGuard } from './auth/auth.guard';
 import { CSRF_OPTIONS, CsrfGuard } from './auth/csrf.guard';
 import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { OpenApiModule } from './common/openapi';
 import { CreditsModule } from './credits/credits.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { WorkspacesModule } from './workspaces/workspaces.module';
 import { UsersModule } from './users/users.module';
 
 /**
@@ -35,6 +37,8 @@ import { UsersModule } from './users/users.module';
     }),
     RateLimitModule,
     AuthModule,
+    OpenApiModule,
+    WorkspacesModule,
     UsersModule,
     CreditsModule,
     HealthModule,

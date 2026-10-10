@@ -1,11 +1,13 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  date,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -363,6 +365,272 @@ export const generationJobs = pgTable(
     ),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// workspaces and membership
+// ---------------------------------------------------------------------------
+
+export const workspaceRoleEnum = pgEnum('workspace_role', [
+  'OWNER',
+  'EDITOR',
+  'APPROVER',
+  'VIEWER',
+]);
+
+/**
+ * The tenancy boundary.
+ *
+ * Every brand, campaign, post and asset hangs off a workspace, and every query
+ * for one filters by the caller's membership in it. That is the multi-tenant
+ * isolation requirement (AGENTS.md section 10), and it is why `workspace_id`
+ * appears on each table rather than being inferred through a join.
+ */
+export const workspaces = pgTable(
+  'workspaces',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 120 }).notNull(),
+    /** The user who created it; always also an OWNER member. */
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    notBlank: check('workspaces_name_not_blank', sql`length(btrim(${table.name})) > 0`),
+  }),
+);
+
+/**
+ * Membership, and the single source of truth for what a user may do in a
+ * workspace.
+ *
+ * The composite primary key makes membership unique per (workspace, user) by
+ * construction, so there is no window in which a user can hold two roles.
+ *
+ * Declared through `primaryKey({ columns })` rather than `.primaryKey()` on both
+ * columns: the latter marks each column primary on its own, which Postgres
+ * rejects, and omitting it entirely leaves the table with no key at all - so a
+ * user could be added twice and `ON CONFLICT (workspace_id, user_id)` would
+ * fail with "no unique or exclusion constraint matching the ON CONFLICT".
+ */
+export const workspaceMembers = pgTable(
+  'workspace_members',
+  {
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: workspaceRoleEnum('role').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    workspaceUserPk: primaryKey({
+      name: 'workspace_members_pkey',
+      columns: [table.workspaceId, table.userId],
+    }),
+    // "which workspaces am I in", the question every scoped query starts from.
+    userIdx: index('workspace_members_user_id_idx').on(table.userId),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// brands, campaigns, posts, assets
+// ---------------------------------------------------------------------------
+
+/**
+ * A brand: the voice and visual identity content is generated against.
+ *
+ * `colors` and `languages` are jsonb / text[] rather than child tables because
+ * they are always read and written whole, never queried across brands. A
+ * normalised colour table would buy nothing at this scale.
+ *
+ * Both defaults are written as explicit SQL. Passing `.default([])` makes
+ * drizzle-kit emit an empty `DEFAULT` for the array column, producing
+ * `"languages" text DEFAULT NOT NULL` - a syntax error that fails the migration
+ * rather than doing anything visible.
+ */
+export const brands = pgTable(
+  'brands',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 120 }).notNull(),
+    industry: varchar('industry', { length: 120 }),
+    /** Free text describing the writing voice; injected into prompts. */
+    tone: text('tone'),
+    audience: text('audience'),
+    /** Hex colours, validated as `#rrggbb` before they are stored. */
+    colors: jsonb('colors')
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    /** BCP-47-ish language tags, e.g. `en`, `hi`. */
+    languages: text('languages')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** FK to assets is added after `assets` exists, to avoid a cycle. */
+    logoAssetId: uuid('logo_asset_id'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    // Brand names are unique within a workspace, not globally: two companies may
+    // both have a brand called "Spring".
+    workspaceNameIdx: uniqueIndex('brands_workspace_id_name_key').on(table.workspaceId, table.name),
+  }),
+);
+
+export const campaignStatusEnum = pgEnum('campaign_status', [
+  'DRAFT',
+  'PLANNING',
+  'ACTIVE',
+  'COMPLETED',
+  'CANCELLED',
+]);
+
+export const campaigns = pgTable(
+  'campaigns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    brandId: uuid('brand_id')
+      .notNull()
+      .references(() => brands.id, { onDelete: 'cascade' }),
+    /** Free text; the AI planner turns this into a content plan. */
+    goal: text('goal').notNull(),
+    status: campaignStatusEnum('status').notNull().default('DRAFT'),
+    // Calendar dates, not instants: a campaign runs for days and has no time of
+    // day, so a timestamp implies precision that does not exist and makes
+    // off-by-one-day comparisons easy to get wrong.
+    //
+    // `mode: 'string'` keeps the value as the `YYYY-MM-DD` the API sends.
+    // Inserting still goes through a SQL cast - see `createCampaign`.
+    startDate: date('start_date', { mode: 'string' }),
+    endDate: date('end_date', { mode: 'string' }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    brandIdx: index('campaigns_brand_id_idx').on(table.brandId),
+    // An end date before the start date is always a mistake, and a CHECK is the
+    // only place it can be refused for every writer.
+    dateOrder: check(
+      'campaigns_date_order',
+      sql`${table.startDate} IS NULL OR ${table.endDate} IS NULL OR ${table.endDate} >= ${table.startDate}`,
+    ),
+  }),
+);
+
+export const postStatusEnum = pgEnum('post_status', [
+  'DRAFT',
+  'GENERATING',
+  'READY',
+  'APPROVED',
+  'SCHEDULED',
+  'PUBLISHING',
+  'PUBLISHED',
+  'FAILED',
+]);
+
+/**
+ * A single piece of content.
+ *
+ * `version` is incremented on every edit: the publish path and the SSE stream
+ * both key off it so a client can tell a stale render from a current one.
+ */
+export const posts = pgTable(
+  'posts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    /** Denormalised from the campaign so brand queries never need the join. */
+    brandId: uuid('brand_id')
+      .notNull()
+      .references(() => brands.id, { onDelete: 'cascade' }),
+    type: varchar('type', { length: 20 }).notNull(),
+    caption: text('caption'),
+    hashtags: text('hashtags').notNull().default(''),
+    status: postStatusEnum('status').notNull().default('DRAFT'),
+    approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true, mode: 'date' }),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    campaignIdx: index('posts_campaign_id_idx').on(table.campaignId),
+    brandIdx: index('posts_brand_id_idx').on(table.brandId),
+    versionPositive: check('posts_version_positive', sql`${table.version} >= 1`),
+  }),
+);
+
+/**
+ * A stored file: an uploaded image, a generated reel, a caption translation.
+ *
+ * `size_bytes` is not in PROJECT.md section 6's sketch but is required to enforce
+ * the upload size limit (AGENTS.md section 10) before a presigned PUT is issued -
+ * without it the server cannot refuse an oversized upload, because the client
+ * streams the bytes straight to S3.
+ */
+export const assets = pgTable(
+  'assets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** Null for a workspace-level asset such as a brand logo. */
+    postId: uuid('post_id').references(() => posts.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    type: varchar('type', { length: 20 }).notNull(),
+    storageKey: varchar('storage_key', { length: 400 }).notNull(),
+    mime: varchar('mime', { length: 120 }).notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    durationMs: integer('duration_ms'),
+    width: integer('width'),
+    height: integer('height'),
+    meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    postIdx: index('assets_post_id_idx').on(table.postId),
+    workspaceIdx: index('assets_workspace_id_idx').on(table.workspaceId),
+    // Two assets cannot share an object key: the same key would be uploaded
+    // twice and the first write silently win.
+    storageKeyIdx: uniqueIndex('assets_storage_key_key').on(table.storageKey),
+    sizePositive: check('assets_size_bytes_positive', sql`${table.sizeBytes} >= 0`),
+    dimensionsSane: check(
+      'assets_dimensions_sane',
+      sql`(${table.width} IS NULL OR ${table.width} > 0) AND (${table.height} IS NULL OR ${table.height} > 0)`,
+    ),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// outbox_events
+// ---------------------------------------------------------------------------
 
 /**
  * Outbox events (PROJECT.md section 6, AGENTS.md rule 6).

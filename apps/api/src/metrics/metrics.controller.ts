@@ -1,6 +1,7 @@
 // METRICS must stay a VALUE import: Nest's `emitDecoratorMetadata` reads
 // `design:paramtypes` at runtime, and a type-only import makes it emit `Object`,
 // which silently breaks dependency injection (see eslint.config.mjs).
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Inject, Controller, Get, Header, Res } from '@nestjs/common';
 import type { Response } from 'express';
 
@@ -14,12 +15,14 @@ import { METRICS } from './metrics.tokens';
  *
  * Un-versioned and un-cached so Prometheus always sees live values.
  */
+@ApiTags('metrics')
 @Controller('metrics')
 @Public()
 export class MetricsController {
   constructor(@Inject(METRICS) private readonly metrics: RenderFlowMetrics) {}
 
   @Get()
+  @ApiOperation({ summary: 'Prometheus metrics' })
   @Header('Cache-Control', 'no-store')
   async scrape(@Res() res: Response): Promise<void> {
     res.setHeader('Content-Type', this.metrics.contentType);

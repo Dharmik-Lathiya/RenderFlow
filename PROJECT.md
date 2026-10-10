@@ -692,6 +692,43 @@ yet written by anyone — they land in Phase 5.
 - Workspaces, members/roles, brands (tone, colors, audience), campaigns, posts, asset upload via presigned S3 URLs.
 - **DoD:** role permissions enforced; assets upload and download; OpenAPI docs generated.
 
+**Status: shipped.** `workspaces`, `workspace_members`, `brands`, `campaigns`,
+`posts`, `assets` added (migration `0002_phase3_workspaces`). Every new user gets
+a personal workspace they own, created in the same transaction as the account.
+
+Decisions worth carrying forward:
+
+- **Roles are a capability table, not a rank.** `OWNER > EDITOR > APPROVER > VIEWER`
+  would let an EDITOR approve, which is the exact thing the split exists to
+  prevent: whoever wrote the caption should not be the one who signs it off. So
+  `write` and `approve` are disjoint below OWNER, and `roleHas()` is unit-tested
+  per combination. A test caught the linear rank doing exactly this.
+- **Tenancy is enforced in the service, not a guard.** `AGENTS.md` §10 says to use
+  guards for RBAC, and Phase 1 does. Phase 3 cannot use that shape because the
+  documented API addresses resources directly (`POST /brands`), so a guard cannot
+  know which workspace `/brands/:brandId` belongs to without running the query the
+  service runs anyway. `WorkspaceAccessService.scope()` puts the check on the one
+  path that issues the tenant-scoped query. Missing and forbidden deliberately
+  return the same answer, so ids cannot be probed.
+- **Registration creates the personal workspace in the same transaction.** Every
+  scoped query needs a membership to check, so a user without one could not create
+  a brand and would have no way to find out why.
+- **`assets.size_bytes` is not in the §6 sketch but is required.** The client
+  streams bytes straight to S3, so the server can only see the object _after_ the
+  upload. Declared size is checked before a URL is issued; the real size is read
+  back with `headObject` on confirm, and a client that lied is caught there.
+- **Campaign dates are `date`, not `timestamptz`,** and are inserted as SQL
+  literals. A calendar date has no time of day; `new Date('2026-03-01')` is UTC
+  midnight, which becomes the previous day for anyone west of Greenwich.
+- **`brand_memory` / pgvector is deliberately NOT built here.** It is Phase 6
+  scope and would add a database extension dependency now, before anything needs
+  embeddings. The generated OpenAPI _client_ is likewise still hand-written.
+
+Known gap: `POST /workspaces` is specified in §10 but not implemented — every user
+gets a personal workspace at registration, and creating additional workspaces is
+the natural next endpoint. A test records the 404 rather than leaving it
+undocumented.
+
 ### Phase 4: Job pipeline with mock AI
 
 - `generation_jobs`, `job_checkpoints`, outbox + relay, content-worker + media-worker with **mock providers** (`sleep` + dummy files).

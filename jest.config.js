@@ -99,6 +99,12 @@ module.exports = {
     '!src/signup-bonus.ts',
     '!src/reserve.ts',
     '!src/pricing.ts',
+
+    // The OpenAPI document can only be generated from a fully-wired
+    // INestApplication, which needs a booted Nest app. Covered by
+    // tests/integration/openapi.spec.ts; counting it here reports 0% for code that
+    // is in fact exercised.
+    '!src/common/openapi.ts',
   ],
   coverageDirectory: '<rootDir>/coverage',
   coverageReporters: ['text-summary', 'lcov'],

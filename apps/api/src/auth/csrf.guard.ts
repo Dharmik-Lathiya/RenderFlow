@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppError, ERROR_CODES } from '@renderflow/common';
 import { timingSafeEqual } from './password';
 
-import { CSRF_COOKIE, CSRF_HEADER } from './auth.config';
+import { ACCESS_TOKEN_COOKIE, CSRF_COOKIE, CSRF_HEADER, REFRESH_TOKEN_COOKIE } from './auth.config';
 import type { RequestWithAuth } from './request.types';
 
 /** Methods that cannot change state and therefore need no CSRF token. */
@@ -25,11 +25,20 @@ export interface CsrfOptions {
 export const CSRF_OPTIONS = Symbol('CSRF_OPTIONS');
 
 /**
- * Double-submit CSRF protection (AGENTS.md section 10).
+ * Double-submit CSRF protection for COOKIE auth (AGENTS.md section 10: "CSRF
+ * protection for cookie auth").
  *
  * Cookie auth is ambient: a browser attaches it to cross-site requests without
  * the page's consent. The defence is that unsafe requests must ALSO carry the
  * CSRF value in a header, which a cross-origin form or image request cannot set.
+ *
+ * Requests authenticated by an `Authorization: Bearer` header are EXEMPT. This is
+ * not a weakening: CSRF exists because a browser attaches cookies
+ * automatically. A cross-site request cannot attach an `Authorization` header,
+ * so a bearer-authenticated request is not forgeable in the first place, and
+ * demanding a CSRF token from a mobile client makes the documented bearer flow
+ * impossible. (Found by the Phase 3 studio suite, which uses bearer tokens
+ * exactly as `packages/api-client` will.)
  *
  * Stateless by design - the header is compared against the readable cookie rather
  * than a server-side session store, which keeps the API horizontally scalable.
@@ -56,7 +65,12 @@ export class CsrfGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<RequestWithAuth>();
     const method = request.method.toUpperCase();
 
-    if (SAFE_METHODS.has(method) || this.isExempt(request)) {
+    if (
+      SAFE_METHODS.has(method) ||
+      this.isExempt(request) ||
+      !hasCookieCredentials(request) ||
+      usesBearerAuth(request)
+    ) {
       return true;
     }
 
@@ -99,4 +113,34 @@ export class CsrfGuard implements CanActivate {
     const withoutPrefix = path.replace(/^\/api\/v\d+(?=\/)/, '');
     return withoutPrefix !== path && this.exemptPaths.has(withoutPrefix);
   }
+}
+
+/**
+ * True when the request presents a bearer credential.
+ *
+ * Only a header counts. A cookie named like a token, or a query parameter, would
+ * be attacker-controllable across sites and must not grant an exemption.
+ */
+function usesBearerAuth(request: RequestWithAuth): boolean {
+  const header = request.headers.authorization;
+  return (
+    typeof header === 'string' && header.startsWith('Bearer ') && header.slice(7).trim() !== ''
+  );
+}
+
+/**
+ * True when the browser is attaching session cookies automatically.
+ *
+ * CSRF protection exists ONLY for ambient credentials. A request that carries no
+ * auth cookie has nothing for a cross-site page to ride on, so demanding a CSRF
+ * token from it just reports a confusing `CSRF_TOKEN_INVALID` for what is
+ * actually a missing-credentials problem - the caller should get 401 from
+ * AuthGuard, which runs next.
+ */
+function hasCookieCredentials(request: RequestWithAuth): boolean {
+  const cookies = request.cookies as Record<string, string | undefined> | undefined;
+  return (
+    typeof cookies?.[ACCESS_TOKEN_COOKIE] === 'string' ||
+    typeof cookies?.[REFRESH_TOKEN_COOKIE] === 'string'
+  );
 }

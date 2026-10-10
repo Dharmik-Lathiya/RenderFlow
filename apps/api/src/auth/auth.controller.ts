@@ -1,3 +1,4 @@
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import type { UserRole } from '@renderflow/common';
 import { z } from 'zod';
@@ -30,6 +31,7 @@ import {
  * aimed at one account. See `rate-limit.config.ts` for why that second limit is
  * deliberately generous.
  */
+@ApiTags('auth')
 @Controller('auth')
 @Public()
 export class AuthController {
@@ -38,6 +40,7 @@ export class AuthController {
   /** POST /api/v1/auth/register - creates the user and grants the signup bonus. */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create an account and grant the signup bonus' })
   // Tightest limit here: each accepted call mints a user AND grants credits, so
   // unbounded registration is both an abuse vector and a way to drain the bonus
   // pool across throwaway accounts.
@@ -59,6 +62,7 @@ export class AuthController {
   /** POST /api/v1/auth/login */
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Exchange credentials for a session' })
   @RateLimit(
     { name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' },
     // Second, independent limit keyed on the submitted address, so the pair
@@ -79,6 +83,7 @@ export class AuthController {
   /** POST /api/v1/auth/refresh - rotates the refresh token. */
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Rotate the refresh token and issue a new access token' })
   @RateLimit({ name: RATE_LIMIT_RULES.REFRESH_IP, scope: 'ip' })
   async refresh(
     @Req() request: RequestWithAuth,
@@ -92,6 +97,7 @@ export class AuthController {
   /** POST /api/v1/auth/logout - revokes the session and clears cookies. */
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Revoke the presented session' })
   async logout(
     @Req() request: RequestWithAuth,
     @Res({ passthrough: true }) response: ResponseWithCookies,
@@ -102,6 +108,7 @@ export class AuthController {
 
   /** GET /api/v1/auth/me - the token's claims; GET /me returns the full profile. */
   @Get('me')
+  @ApiOperation({ summary: "The current token's claims" })
   me(@CurrentUser() user: AuthenticatedUser): { id: string; role: UserRole } {
     return { id: user.id, role: user.role };
   }

@@ -3,7 +3,15 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppError, ERROR_CODES } from '@renderflow/common';
 import { grantSignupBonus, isUniqueViolation } from '@renderflow/credits';
-import { getDb, refreshSessions, users, type Database, type DbTransaction } from '@renderflow/db';
+import {
+  getDb,
+  refreshSessions,
+  users,
+  workspaceMembers,
+  workspaces,
+  type Database,
+  type DbTransaction,
+} from '@renderflow/db';
 import { createLogger } from '@renderflow/observability';
 
 import type { Env } from '../config/env';
@@ -124,6 +132,26 @@ export class AuthService implements OnModuleInit {
 
         // Same transaction as the user insert (AGENTS.md rule 6).
         await grantSignupBonus(tx, { userId: user.id, amount: signupBonus });
+
+        // A personal workspace with the new user as OWNER, in the same
+        // transaction. Every workspace-scoped query needs a membership to check,
+        // so a user without one could not create a brand and would have no way to
+        // diagnose why. Creating it here rather than on first use means there is
+        // no window where the account exists but the app cannot be used.
+        const [workspace] = await tx
+          .insert(workspaces)
+          .values({ name: `${input.name}'s workspace`, ownerId: user.id })
+          .returning({ id: workspaces.id });
+
+        if (workspace === undefined) {
+          throw new AppError(ERROR_CODES.INTERNAL_ERROR, 'Workspace insert returned no row');
+        }
+
+        await tx.insert(workspaceMembers).values({
+          workspaceId: workspace.id,
+          userId: user.id,
+          role: 'OWNER',
+        });
 
         return user;
       });

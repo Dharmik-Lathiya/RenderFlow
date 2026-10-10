@@ -1,3 +1,4 @@
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Controller, Get, Header, HttpCode, HttpStatus } from '@nestjs/common';
 
 import { Public } from '../auth/auth.guard';
@@ -10,18 +11,21 @@ import { HealthService, type ReadinessReport } from './health.service';
  * Health routes live outside the `/api/v1` prefix so orchestrator probes and
  * load balancers need no knowledge of the API version.
  */
+@ApiTags('health')
 @Controller()
 @Public()
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 
   @Get('health/live')
+  @ApiOperation({ summary: 'Liveness: the process is up' })
   @HttpCode(HttpStatus.OK)
   live(): { status: 'ok'; service: string; uptimeSeconds: number } {
     return { status: 'ok', service: 'api', uptimeSeconds: this.health.uptimeSeconds };
   }
 
   @Get('health/ready')
+  @ApiOperation({ summary: 'Readiness: dependencies are reachable' })
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
   async ready(): Promise<ReadinessReport> {

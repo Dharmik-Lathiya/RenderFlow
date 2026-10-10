@@ -82,6 +82,11 @@ module.exports = {
     // argon2), surface a real 429 through the exception filter, and write
     // headers the client sees. None of that is observable in a unit test.
     'apps/api/src/ratelimit/rate-limit.guard.ts',
+    // Phase 3: workspace tenancy, the studio resources and the asset flow. The
+    // isolation property under test - one user cannot read or write another
+    // workspace's rows - only exists at the HTTP layer.
+    'apps/api/src/workspaces/**/*.ts',
+    'apps/api/src/common/openapi.ts',
     'libs/credits/src/**/*.ts',
 
     // Excluded because the unit suite covers them with real assertions, not

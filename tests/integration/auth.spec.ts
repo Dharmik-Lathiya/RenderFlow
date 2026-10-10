@@ -1,6 +1,6 @@
 import { and, count, eq, inArray, isNull } from 'drizzle-orm';
 
-import { creditLedger, refreshSessions, users } from '@renderflow/db';
+import { creditLedger, refreshSessions, users, workspaces } from '@renderflow/db';
 
 import { TEST_PASSWORD, uniqueEmail, walletOf } from './helpers/auth-fixtures';
 import {
@@ -610,6 +610,11 @@ describe('auth (Phase 1 DoD)', () => {
         .send({ email, password: UNIQUE_PASSWORD, name: 'Deleted' });
 
       const headers = authHeaders(register);
+      // Every user owns a personal workspace, and `workspaces.owner_id` is
+      // ON DELETE RESTRICT so an owner can never be removed out from under a
+      // workspace. Clear that first; the point of the test is the orphaned
+      // access token, not the deletion order.
+      await db.delete(workspaces).where(eq(workspaces.ownerId, await userIdByEmail(email)));
       await db.delete(users).where(eq(users.email, email));
 
       const res = await app.http().get('/api/v1/me').set(headers);

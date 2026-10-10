@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 
 import { configureAuthLogger } from './auth/auth.service';
 import { configureExceptionLogger } from './common/all-exceptions.filter';
+import { OPENAPI_JSON_PATH, setupOpenApi } from './common/openapi';
 import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
@@ -19,6 +20,9 @@ const UNVERSIONED_ROUTES = [
   { path: 'health/live', method: RequestMethod.GET },
   { path: 'health/ready', method: RequestMethod.GET },
   { path: 'metrics', method: RequestMethod.GET },
+  // The OpenAPI document describes the API as a whole, so it sits outside the
+  // version prefix alongside the probes rather than at /api/v1/docs-json.
+  { path: OPENAPI_JSON_PATH, method: RequestMethod.GET },
 ];
 
 async function bootstrap(): Promise<void> {
@@ -46,6 +50,9 @@ async function bootstrap(): Promise<void> {
     // Required for cookies; browsers reject credentialed requests with a wildcard.
     credentials: true,
   });
+
+  // Built before listen so the document reflects the fully-wired route table.
+  setupOpenApi(app, { mountUi: env.NODE_ENV !== 'production' });
 
   await app.listen(env.API_PORT);
 

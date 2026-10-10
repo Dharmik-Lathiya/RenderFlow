@@ -23,6 +23,7 @@ import {
   AllExceptionsFilter,
   configureExceptionLogger,
 } from '../../../apps/api/src/common/all-exceptions.filter';
+import { OPENAPI_JSON_PATH } from '../../../apps/api/src/common/openapi';
 import { AppModule } from '../../../apps/api/src/app.module';
 import { AuthService, configureAuthLogger } from '../../../apps/api/src/auth/auth.service';
 import { createLogger } from '@renderflow/observability';
@@ -39,6 +40,7 @@ const UNVERSIONED_ROUTES = [
   { path: 'health/live', method: RequestMethod.GET },
   { path: 'health/ready', method: RequestMethod.GET },
   { path: 'metrics', method: RequestMethod.GET },
+  { path: OPENAPI_JSON_PATH, method: RequestMethod.GET },
 ];
 
 export interface TestApp {
@@ -77,8 +79,14 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 
   // Keep the app's logging consistent with LOG_LEVEL after the harness has set
   // the rest of the environment.
-  configureExceptionLogger(createLogger({ service: 'api', level: env.LOG_LEVEL ?? 'silent' }));
-  configureAuthLogger(createLogger({ service: 'auth', level: env.LOG_LEVEL ?? 'silent' }));
+  //
+  // The exception filter's logger is pinned to 'error' when RENDERFLOW_TEST_LOGS
+  // is set rather than following LOG_LEVEL ('silent'). A 500 that produces no
+  // output at all is a 500 nobody can debug: silencing the only thing that
+  // explains it is how a real bug hid here for an hour.
+  const diagnosticLevel = process.env.RENDERFLOW_TEST_LOGS === '1' ? 'error' : 'silent';
+  configureExceptionLogger(createLogger({ service: 'api', level: diagnosticLevel }));
+  configureAuthLogger(createLogger({ service: 'auth', level: diagnosticLevel }));
 
   resetDbForTests();
 

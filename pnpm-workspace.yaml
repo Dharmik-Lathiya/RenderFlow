@@ -34,3 +34,6 @@ allowBuilds:
   ssh2: true
   # esbuild ships a platform binary; drizzle-kit depends on it.
   esbuild: true
+  # @nestjs/swagger's telemetry ping. Opted out explicitly: it phones home on
+  # install, and a build tool should not need network access to be installed.
+  '@scarf/scarf': false
