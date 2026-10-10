@@ -29,6 +29,13 @@
       "when": 1791655112137,
       "tag": "0004_legacy_column_defaults",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791658419489,
+      "tag": "0005_useful_zaladane",
+      "breakpoints": true
     }
   ]
 }

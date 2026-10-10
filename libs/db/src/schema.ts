@@ -673,6 +673,39 @@ export const outboxEvents = pgTable(
   }),
 );
 
+/**
+ * Per-stage checkpoint (PROJECT.md section 6: `job_checkpoints(job_id, stage,
+ * output_ref, created_at, PRIMARY KEY(job_id, stage))`).
+ *
+ * A retry resumes at the first stage with no row here, which is what makes a
+ * crashed worker cheap: a reel that already rendered its audio does not pay to
+ * render it twice. The composite primary key is the mechanism - two workers
+ * cannot both claim the same stage.
+ *
+ * `output_ref` is a storage key rather than the payload itself, so a checkpoint
+ * costs a row and not a copy of the media.
+ */
+export const jobCheckpoints = pgTable(
+  'job_checkpoints',
+  {
+    jobId: uuid('job_id')
+      .notNull()
+      .references(() => generationJobs.id, { onDelete: 'cascade' }),
+    stage: jobStageEnum('stage').notNull(),
+    /** Storage key of the stage artefact; also carried on the outbox event. */
+    outputRef: varchar('output_ref', { length: 400 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    // `PRIMARY KEY(job_id, stage)` - declared as a composite key rather than two
+    // single-column `.primaryKey()` calls, which Postgres rejects.
+    jobStagePk: primaryKey({
+      name: 'job_checkpoints_pkey',
+      columns: [table.jobId, table.stage],
+    }),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
@@ -690,6 +723,9 @@ export type NewPricingRule = typeof pricingRules.$inferInsert;
 
 export type GenerationJob = typeof generationJobs.$inferSelect;
 export type NewGenerationJob = typeof generationJobs.$inferInsert;
+
+export type JobCheckpoint = typeof jobCheckpoints.$inferSelect;
+export type NewJobCheckpoint = typeof jobCheckpoints.$inferInsert;
 
 export type OutboxEvent = typeof outboxEvents.$inferSelect;
 export type NewOutboxEvent = typeof outboxEvents.$inferInsert;

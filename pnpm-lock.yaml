@@ -394,6 +394,16 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
 
+  libs/ai:
+    dependencies:
+      '@renderflow/common':
+        specifier: workspace:*
+        version: link:../common
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.1
+        version: 24.19.1
+
   libs/common:
     dependencies:
       zod:
@@ -437,6 +447,16 @@ importers:
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+
+  libs/jobs:
+    dependencies:
+      '@renderflow/common':
+        specifier: workspace:*
+        version: link:../common
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.1
+        version: 24.19.1
 
   libs/observability:
     dependencies:

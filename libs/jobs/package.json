@@ -1,0 +1,27 @@
+{
+  "name": "@renderflow/jobs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generation stage machine and job runner",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
+  },
+  "dependencies": {
+    "@renderflow/common": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}
