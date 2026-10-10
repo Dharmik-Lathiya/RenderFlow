@@ -573,6 +573,40 @@ volumes: { pgdata: {} }
 - **Turbo** pipeline: `build`, `lint`, `test`, `test:e2e`.
 - **CI (GitHub Actions):** install → lint → typecheck → unit → integration (Testcontainers) → build images → e2e (compose up) → upload reports.
 - **Drizzle ORM:** schema in `libs/db/src/schema.ts` (TypeScript, type-checked); migrations in `libs/db/drizzle/`; credit-critical statements use tagged `sql` templates inside `db.transaction()`. Partial and unique indexes are declared in the schema, so the credit invariants are version-controlled alongside every other constraint.
+- **Vercel:** `vercel.json` at the repository root, plus one project setting that Vercel does not allow in that file. See 11.5.
+
+### 11.5 Deployment (Vercel)
+
+Only `apps/web` is deployed. The API, the workers and the database run under
+Docker; the dashboard is a Next.js app that talks to the API over
+`NEXT_PUBLIC_API_URL`.
+
+Build settings live in `vercel.json` **in the repository**, so a fresh clone
+reproduces the deployment instead of relying on someone's memory of the Vercel
+dashboard. `scripts/vercel-setup.sh` applies the one remaining setting and verifies
+that no dashboard override is shadowing the file.
+
+`rootDirectory` is the exception, and the reason is a Vercel limitation rather than
+a choice:
+
+- `vercel.json` has no `rootDirectory` property. Vercel accepts it only as a
+  project setting.
+- It is not optional. With `framework: null` and the repository root as the project
+  root, Vercel builds successfully — and then serves `404 NOT_FOUND` for every
+  route, because the Next.js framework preset is what resolves the app, and it
+  resolves relative to `rootDirectory`. An output directory that is not a Build
+  Output API bundle is treated as static, which is why the build reports success
+  while nothing is routable.
+
+That was measured by deploying both configurations, not inferred: the
+zero-dashboard-config build reported "migrations applied successfully" / build
+completed, and answered 404. The working configuration keeps `framework: "nextjs"`
+with `rootDirectory: apps/web`, and the other three settings in `vercel.json` with
+no project-level overrides.
+
+Known limitation, stated rather than hidden: a fresh clone still needs
+`vercel link` and one dashboard setting. Until Vercel exposes `rootDirectory` in
+`vercel.json`, that cannot be removed from here.
 
 ### 11.4 Data layer: Drizzle ORM (decision record)
 

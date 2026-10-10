@@ -48,3 +48,7 @@ apps/web/next-env.d.ts
 coverage
 coverage-integration
 .vercel
+# Local env files. Deliberately NOT `.env*`: `.env.example` is committed and is
+# the documented template, so a blanket pattern would stop contributors adding it.
+.env.local
+.env*.local
