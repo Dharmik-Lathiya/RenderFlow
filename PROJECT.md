@@ -216,8 +216,8 @@ VALUES (:jid, :uid, :kind, 'PENDING', :cost, :idem, :payload);
 INSERT INTO credit_ledger (user_id, entry_type, amount, reference_type, reference_id)
 VALUES (:uid, 'RESERVE', -:cost, 'JOB', :jid);
 
-INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload)
-VALUES ('JOB', :jid, 'job.created', :payload);
+INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, dedupe_key, payload)
+VALUES ('JOB', :jid, 'job.created', 'JOB:'||:jid||':job.created', :payload);
 
 COMMIT;
 ```
@@ -290,12 +290,18 @@ publish_jobs(id, post_id, social_account_id, status, attempts, scheduled_for, pu
     -- status: SCHEDULED | QUEUED | PUBLISHING | PUBLISHED | FAILED | CANCELLED
 post_metrics(id, publish_job_id, likes, comments, reach, clicks, fetched_at)
 
-outbox_events(id, aggregate_type, aggregate_id, event_type, payload jsonb, created_at, processed_at, attempts)
+outbox_events(id, aggregate_type, aggregate_id, event_type, dedupe_key, payload jsonb, created_at, processed_at, attempts)
 notifications(id, user_id, type, title, body, read_at, created_at)
 audit_logs(id, actor_id, action, entity, entity_id, meta jsonb, created_at)
 ```
 
-Indexes: `generation_jobs(status, locked_until)`, `publish_jobs(status, scheduled_for)`, `outbox_events(processed_at) WHERE processed_at IS NULL`, `credit_ledger(user_id, created_at)`.
+Indexes: `generation_jobs(status, locked_until)`, `publish_jobs(status, scheduled_for)`, `outbox_events(created_at) WHERE processed_at IS NULL`, `outbox_events(dedupe_key) UNIQUE`, `credit_ledger(user_id, created_at)`.
+
+`dedupe_key` is the identity of the EVENT, and it is a column rather than a
+derived index because the composite `(aggregate_type, aggregate_id, event_type)`
+cannot express "one job emits five `job.stage_completed` events" — stage two is a
+unique-index violation. Writers supply it: `JOB:<id>:job.created`,
+`JOB:<id>:job.stage_completed:<stage>`. See §12 Phase 4.
 
 ---
 
@@ -333,6 +339,18 @@ SCHEDULED ─► QUEUED (delayed job fires) ─► PUBLISHING ─► PUBLISHED
 | analytics | 3             | 3        | fixed 60s                                        |
 
 **Domain events** (via outbox): `user.registered`, `job.created`, `job.stage_completed`, `job.completed`, `job.failed`, `credits.reserved`, `credits.refunded`, `post.approved`, `post.scheduled`, `post.published`, `post.publish_failed`.
+
+**Routing by stage.** A generation job crosses both queues. `job.created` opens it
+on `content`; each `job.stage_completed` routes to the queue that owns the stage
+just finished, so `PLAN`/`SCRIPT` go to `content` and `IMAGE`/`VOICE`/`RENDER` go
+to `media`. This is the hand-off between content-worker and media-worker: neither
+app imports the other, and neither knows the other's stages. The split follows the
+shape of the work — an LLM call is mostly waiting on a socket, a render is CPU
+bound — which is why `media` runs at concurrency 2.
+
+A worker that receives a job whose _first missing stage_ it does not own does
+nothing and returns; it does not skip ahead. Rendering from a script that does not
+exist yet produces a broken asset that still costs the user the full price.
 
 ---
 
@@ -775,6 +793,12 @@ Decisions worth carrying forward:
   scope and would add a database extension dependency now, before anything needs
   embeddings. The generated OpenAPI _client_ is likewise still hand-written.
 
+Verified by `./scripts/smoke-phase4.sh` against a running server: 33 assertions
+covering reserve-on-request, the two-worker split, capture, SSE, tenancy, an
+unaffordable second reel and the refund path. It runs the pipeline in-process
+because there is no Redis here, so it exercises the HTTP surface and the database
+agreeing with each other rather than the queue hop.
+
 Known gap: `POST /workspaces` is specified in §10 but not implemented — every user
 gets a personal workspace at registration, and creating additional workspaces is
 the natural next endpoint. A test records the 404 rather than leaving it
@@ -786,6 +810,90 @@ undocumented.
 - Stage machine PLAN→SCRIPT→IMAGE→VOICE→RENDER, SSE progress endpoint.
 - Reserve on request, capture on success, refund on failure.
 - **DoD:** creating a reel job reserves 30, progresses through all stages visible via SSE, ends with capture; forced failure ends with refund.
+
+**Status: shipped.** `job_checkpoints` added in migration `0005`; migration
+`0006` replaces the outbox's dedupe index. New endpoints `POST
+/posts/:id/generate`, `GET /jobs/:id`, `GET /jobs/:id/events`. New package
+`libs/outbox`: the relay, the `JobPublisher` interface, `BullMqPublisher` and
+`InMemoryPublisher`.
+
+DoD verified against a real Postgres (`tests/integration/job-runner.spec.ts`,
+`jobs-api.spec.ts`, `worker-handler.spec.ts`, `outbox-relay.spec.ts`): a reel
+reserves 30 (`available 20, reserved 30`), checkpoints all five stages in order,
+and ends in capture (`reserved 0, available 20`, exactly one `CAPTURE` row); a
+forced failure at any stage ends in refund (back to 50, one `REFUND` row); the
+wallet still reconciles to zero drift afterwards.
+
+Decisions worth carrying forward:
+
+- **The pipeline is split across the two workers, not run by one of them.**
+  `job.created` routes to `content`; each `job.stage_completed` routes to the
+  queue that owns the next stage (`queueForJobStage`), so a reel genuinely crosses
+  from content-worker to media-worker without either app knowing the other
+  exists. The runner takes a `stages` filter and a worker refuses to start unless
+  the first missing stage is one it owns — otherwise media-worker would render a
+  reel from a script that does not exist yet.
+- **Capture only when the whole pipeline is complete.** A content worker that has
+  finished SCRIPT has done a third of the work, and charging for the reel the user
+  did not get is the obvious failure mode of splitting the pipeline.
+- **Checkpoint, stage pointer and hand-off event are written in one transaction.**
+  An event pointing at a checkpoint that does not exist hands the next worker a
+  job it cannot resume; a checkpoint with no event strands the job halfway with
+  credits reserved and nobody left to finish it.
+- **`runJob` throws; `failJob` refunds.** Deliberately separate. A `TRANSIENT`
+  provider error is retried with the queue's backoff preset and only the _final_
+  attempt returns the credits; a `PERMANENT` error refunds immediately.
+  `handleGenerationJob` owns that arithmetic, and rethrows either way so BullMQ
+  still sees the failure and can move the job to the DLQ.
+- **The outbox is at-least-once, and leans on the deterministic job id.** `SKIP
+LOCKED` stops two relays grabbing the same row _while both are inside the claim
+  transaction_; it does not reserve the row afterwards, because closing that
+  window would mean holding a database transaction open across a call to Redis
+  (`AGENTS.md` §6). Exactly-once _enqueue_ comes from `generation:<aggregateId>` —
+  BullMQ drops the second add. `InMemoryPublisher` therefore dedupes on
+  `queue + jobId` so tests measure what production actually does. This one is
+  worth re-reading: an earlier version of the test asserted disjoint batches and
+  failed roughly one run in five, which is what exposed the over-claim.
+- **Outbox dedupe is a column, not a composite index** (migration `0006`). The
+  index sketched in §9, `(aggregate_type, aggregate_id, event_type)`, is wrong the
+  moment a job emits five `job.stage_completed` events — stage two was a
+  unique-index violation. `dedupe_key` carries the natural identity of the _event_
+  (`JOB:<id>:job.stage_completed:<stage>`); a column rather than an expression
+  index, because a guarantee the migration tool cannot diff is one it can drop.
+- **`reserve` needs a `workspaceId` to emit `job.created`.** The envelope schema
+  validates it as a uuid, so an event carrying a placeholder would fail validation
+  _inside a worker_ rather than on an API error path. Omitting it yields a job
+  with no event and nothing to run it, which is why the API path always supplies
+  it.
+- **`FAIL_EVERY_NTH`, not the `FAIL_RATE` named above.** A random failure rate
+  makes a suite flaky, which teaches people to re-run rather than to read the
+  failure. Recorded as a deliberate deviation.
+- **SSE polls `job_checkpoints` rather than subscribing to an in-process bus.**
+  The durable record is the truth, so a client that reconnects gets the whole
+  history and it works across API instances.
+- **Relay tuning is configuration** (`OUTBOX_BATCH_SIZE`,
+  `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_MAX_ATTEMPTS` on `QueueConfig`), not literals
+  in the loop, per `AGENTS.md` §12.
+
+- **`pnpm db:seed` did not exist until now, and an unseeded database cannot
+  generate anything.** `AGENTS.md` §4 and §11 both list the command; nothing
+  implemented it. `pricing_rules` ships empty, and a missing price is _deliberately_
+  a hard failure rather than a silent fallback to `DEFAULT_PRICES`
+  (`libs/credits/pricing.ts`), so every `POST /posts/:id/generate` 500s. Phase 4
+  is the first phase that charges for anything, which is when it became visible.
+  The seed lives in `libs/credits/scripts/seed.mjs` — not `libs/db` — because
+  pricing is credits' to own, and putting it in `libs/db` would make the two
+  import each other. It copies `DEFAULT_PRICES` rather than restating it, and
+  seeds nothing else: a seed that inserted a fake account with a balance is a
+  balance nobody's tests can reason about.
+
+Known gaps: the BullMQ path (`BullMqPublisher`, both workers' `createWorker`) is
+typechecked and unit-tested against a stubbed factory but has never actually been
+_run_ — there is no Redis in this environment. Media stages write deterministic
+placeholder bytes rather than real images and FFmpeg output; Phase 6 replaces the
+providers. The lease/heartbeat columns exist but are unused: that is Phase 5,
+along with the reaper that refunds a reservation whose worker was killed
+mid-flight.
 
 ### Phase 5: Reliability layer
 

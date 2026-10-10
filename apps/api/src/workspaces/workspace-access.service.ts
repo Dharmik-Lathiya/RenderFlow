@@ -38,7 +38,7 @@ export class WorkspaceAccessService {
    */
   async scope<T>(args: {
     userId: string;
-    resource: 'workspace' | 'brand' | 'campaign' | 'post' | 'asset';
+    resource: 'workspace' | 'brand' | 'campaign' | 'post' | 'asset' | 'job';
     lookup: (db: Database) => Promise<{ workspaceId: string; value: T } | null>;
     required?: WorkspaceRole;
   }): Promise<{ workspaceId: string; role: WorkspaceRole; value: T }> {
@@ -46,15 +46,31 @@ export class WorkspaceAccessService {
     const found = await args.lookup(db);
 
     if (found === null) {
-      throw new WorkspaceAccessDeniedError(args.resource);
+      // Deliberately no id: the caller learns nothing about whether a foreign
+      // resource exists, which is the whole point of running the lookup first.
+      throw new WorkspaceAccessDeniedError('', args.resource);
     }
 
-    const membership = await this.workspaces.requireMembership(
-      db,
-      found.workspaceId,
-      args.userId,
-      args.required,
-    );
+    let membership: { role: WorkspaceRole };
+
+    try {
+      membership = await this.workspaces.requireMembership(
+        db,
+        found.workspaceId,
+        args.userId,
+        args.required,
+      );
+    } catch (error) {
+      // `requireMembership` names the workspace it refused, which is right for
+      // the workspace-addressed routes (`/workspaces/:id` - the caller already
+      // had the id) and wrong here. A resource-addressed caller never knew the
+      // workspace id, so echoing it back confirms that the resource exists and
+      // hands them the next thing to try. Re-thrown with the resource type only.
+      if (error instanceof WorkspaceAccessDeniedError) {
+        throw new WorkspaceAccessDeniedError('', args.resource);
+      }
+      throw error;
+    }
 
     return { workspaceId: found.workspaceId, role: membership.role, value: found.value };
   }

@@ -648,6 +648,22 @@ export const outboxEvents = pgTable(
     aggregateId: varchar('aggregate_id', { length: 64 }).notNull(),
     /** One of `DOMAIN_EVENT_TYPES`. */
     eventType: varchar('event_type', { length: 60 }).notNull(),
+    /**
+     * The natural identity of the EVENT, as one string.
+     *
+     * This exists because "an aggregate publishes an event type once" is not
+     * true for stage events: a reel emits `job.stage_completed` five times, once
+     * per stage, and those are five different messages to five different
+     * workers. Indexing `(aggregate_type, aggregate_id, event_type)` made the
+     * second stage a unique-constraint violation.
+     *
+     * A column rather than an expression index, because the identity of an event
+     * is a rule about which events exist - not a query detail. AGENTS.md is
+     * explicit that a guarantee the migration tool cannot diff is one it can
+     * silently drop. Writers supply it: `JOB:<id>:job.created`,
+     * `JOB:<id>:job.stage_completed:<stage>`.
+     */
+    dedupeKey: varchar('dedupe_key', { length: 200 }).notNull(),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     processedAt: timestamp('processed_at', { withTimezone: true, mode: 'date' }),
@@ -660,14 +676,10 @@ export const outboxEvents = pgTable(
       .on(table.createdAt)
       .where(sql`${table.processedAt} IS NULL`),
 
-    // An aggregate can publish a given event type once. Re-running a handler
-    // that rewrites state is then a no-op at the outbox rather than a duplicate
-    // message on the queue.
-    dedupeIdx: uniqueIndex('outbox_events_dedupe_idx').on(
-      table.aggregateType,
-      table.aggregateId,
-      table.eventType,
-    ),
+    // One row per logical event. Re-running a handler that rewrites state is
+    // then a no-op at the outbox rather than a duplicate message on the queue -
+    // and the same job at five different stages is five rows, not a collision.
+    dedupeIdx: uniqueIndex('outbox_events_dedupe_idx').on(table.dedupeKey),
 
     nonNegativeAttempts: check('outbox_events_attempts_non_negative', sql`${table.attempts} >= 0`),
   }),

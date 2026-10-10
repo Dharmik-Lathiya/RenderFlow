@@ -53,7 +53,7 @@ module.exports = {
   // TypeScript that produced it - which reports a thoroughly exercised credit
   // engine as near-zero. It also means the suite would test a stale build.
   moduleNameMapper: {
-    '^@renderflow/(ai|common|credits|db|jobs|observability|queue|storage)$':
+    '^@renderflow/(ai|common|credits|db|jobs|observability|outbox|queue|storage)$':
       '<rootDir>/libs/$1/src/index.ts',
   },
 
@@ -88,9 +88,14 @@ module.exports = {
     'apps/api/src/workspaces/**/*.ts',
     'apps/api/src/common/openapi.ts',
     'libs/credits/src/**/*.ts',
-    // Phase 4: the stage machine's runner. Checkpoint, resume, capture and refund
-    // behaviour only exists against a real database and real credit rules.
-    'libs/jobs/src/**/*.ts',
+    // Phase 4. Only the files that cannot be reached without a database: the runner
+    // is the SQL it emits, the handler settles credits, the relay polls a table.
+    // `stage-machine.ts` and `bullmq-publisher.ts` are pure and are covered by
+    // the unit gate, so collecting them here too would report a LOWER number for
+    // code that is in fact well covered.
+    'libs/jobs/src/runner.ts',
+    'libs/jobs/src/worker-handler.ts',
+    'libs/outbox/src/relay.ts',
 
     // Excluded because the unit suite covers them with real assertions, not
     // hand-rolled fakes; counting them here would double-count while reporting a

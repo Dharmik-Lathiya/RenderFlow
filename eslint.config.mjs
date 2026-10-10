@@ -105,17 +105,41 @@ export default tseslint.config(
     },
   },
   {
-    // Config files are plain ESM JavaScript, so they are parsed by the default
-    // JS parser (espree) rather than the type-aware TypeScript parser.
+    // Plain JavaScript: config files and operational scripts that no tsconfig
+    // project covers.
+    //
+    // The type-aware parser from the block above is still the one doing the
+    // parsing - `@eslint/js` exposes no parser to swap in - so what has to be
+    // undone here is `project`, not `parser`. Leaving `project` set on a file
+    // the project does not include is a hard parse error, which is why this
+    // block previously applied its rules but silently failed on any `.mjs`
+    // that was not already in `ignores`.
     files: ['**/*.mjs', '**/*.js', '**/*.cjs'],
     languageOptions: {
-      parser: js.configs.recommended.languageOptions?.parser ?? undefined,
+      parserOptions: {
+        project: null,
+        projectService: false,
+      },
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: { ...globals.node },
     },
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
+    },
+  },
+  {
+    // Operational scripts. Their entire output IS the interface: a seed that
+    // prints nothing, or a smoke run whose assertions nobody can read, has
+    // failed at the job it exists to do.
+    //
+    // AGENTS.md's "no console.log" rule is about application and library code
+    // quietly bypassing the shared pino logger. These files are process entry
+    // points with no logger to bypass - their output goes to a terminal or a
+    // pipe, not to a log aggregator.
+    files: ['scripts/**/*.{mjs,js}', '**/scripts/**/*.{mjs,js}', 'tests/tools/**/*.mjs'],
+    rules: {
+      'no-console': 'off',
     },
   },
 );

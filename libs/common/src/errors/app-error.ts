@@ -151,10 +151,19 @@ export class ResourceNotFoundError extends AppError {
   }
 }
 
-/** Multi-tenant isolation failure: caller is authenticated but not a member. */
+/**
+ * Multi-tenant isolation failure: caller is authenticated but not a member.
+ *
+ * `resource` is carried when the caller named a resource type but deliberately
+ * did NOT name the id. "You may not touch that post" and "no such post exists"
+ * have to be indistinguishable, so a resource-scoped rejection cannot say which
+ * workspace it was aiming at.
+ */
 export class WorkspaceAccessDeniedError extends AppError {
-  constructor(workspaceId: string) {
-    super(ERROR_CODES.WORKSPACE_ACCESS_DENIED, undefined, { details: { workspaceId } });
+  constructor(workspaceId: string, resource?: string) {
+    super(ERROR_CODES.WORKSPACE_ACCESS_DENIED, undefined, {
+      details: resource === undefined ? { workspaceId } : { resource },
+    });
   }
 }
 

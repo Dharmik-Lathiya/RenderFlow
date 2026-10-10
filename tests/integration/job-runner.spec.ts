@@ -8,7 +8,15 @@ import {
 } from '@renderflow/ai';
 import { getBalance, reconcileUser, reserve } from '@renderflow/credits';
 import { describeError, failJob, processJob, runJob } from '@renderflow/jobs';
-import { creditLedger, generationJobs, jobCheckpoints, pricingRules } from '@renderflow/db';
+import {
+  creditLedger,
+  generationJobs,
+  jobCheckpoints,
+  outboxEvents,
+  pricingRules,
+} from '@renderflow/db';
+import { queueForJobStage } from '@renderflow/common';
+import { queueForEvent } from '@renderflow/outbox';
 
 import { createUserWithBonus, walletOf } from './helpers/auth-fixtures';
 import { seedPricing } from './helpers/credit-fixtures';
@@ -49,7 +57,7 @@ describe('job runner (Phase 4 DoD)', () => {
     storage = fakeStorage();
   });
 
-  function deps(options: { failStage?: string; failEveryNth?: number } = {}) {
+  function deps(options: { failStage?: string; failEveryNth?: number; stages?: string[] } = {}) {
     const shared = {
       failStage: options.failStage,
       failEveryNth: options.failEveryNth,
@@ -64,6 +72,7 @@ describe('job runner (Phase 4 DoD)', () => {
         tts: new MockTtsProvider(shared),
         renderer: new MockRendererProvider(shared),
       },
+      stages: options.stages as never,
       brand: {
         name: 'Northwind',
         tone: 'friendly',
@@ -366,6 +375,127 @@ describe('job runner (Phase 4 DoD)', () => {
       await expect(runJob(deps(), '00000000-0000-4000-8000-000000000000')).rejects.toThrow(
         /not found/,
       );
+    });
+  });
+
+  describe('two workers: content-worker then media-worker', () => {
+    const CONTENT_STAGES = ['PLAN', 'SCRIPT'] as const;
+    const MEDIA_STAGES = ['IMAGE', 'VOICE', 'RENDER'] as const;
+
+    it('content-worker runs only its own stages and hands the job over', async () => {
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      const jobId = await createJob(user.id, 'REEL', { scenes: 2, images: 2 });
+
+      const result = await runJob(deps({ stages: [...CONTENT_STAGES] }), jobId);
+
+      expect(result.outcome).toBe('PARTIAL');
+      expect(result.stagesRun).toEqual(['PLAN', 'SCRIPT']);
+
+      // Reserved, not captured: the reel does not exist yet, so charging for it
+      // now would take the user's credits for work still to come.
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: 20, reserved: 30 });
+      await expect(checkpointsOf(jobId)).resolves.toEqual(['PLAN', 'SCRIPT']);
+    });
+
+    it('media-worker picks up where content-worker stopped and captures', async () => {
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      const jobId = await createJob(user.id, 'REEL', { scenes: 2, images: 2 });
+
+      await runJob(deps({ stages: [...CONTENT_STAGES] }), jobId);
+      const result = await runJob(deps({ stages: [...MEDIA_STAGES] }), jobId);
+
+      expect(result.outcome).toBe('COMPLETED');
+      expect(result.stagesRun).toEqual(['IMAGE', 'VOICE', 'RENDER']);
+      await expect(checkpointsOf(jobId)).resolves.toEqual([
+        'PLAN',
+        'SCRIPT',
+        'IMAGE',
+        'VOICE',
+        'RENDER',
+      ]);
+
+      // Only when the last worker finishes does the user actually pay.
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: 20, reserved: 0 });
+    });
+
+    it('emits one hand-off event per stage, each routed to the right queue', async () => {
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      const jobId = await createJob(user.id, 'REEL', { scenes: 1, images: 1 });
+
+      await runJob(deps({ stages: [...CONTENT_STAGES] }), jobId);
+      await runJob(deps({ stages: [...MEDIA_STAGES] }), jobId);
+
+      const events = await db
+        .select({ eventType: outboxEvents.eventType, payload: outboxEvents.payload })
+        .from(outboxEvents)
+        .where(eq(outboxEvents.aggregateId, jobId));
+      const stages = events
+        .filter((e) => e.eventType === 'job.stage_completed')
+        .map((e) => (e.payload as { stage: string }).stage);
+
+      expect(stages).toEqual(['PLAN', 'SCRIPT', 'IMAGE', 'VOICE', 'RENDER']);
+
+      // This is the whole point of routing by stage: the relay sends each event
+      // to the queue whose worker owns the NEXT stage, which is how a reel
+      // crosses processes without either worker knowing the other exists.
+      for (const stage of stages) {
+        expect(queueForEvent('job.stage_completed', { stage })).toBe(queueForJobStage(stage));
+      }
+    });
+
+    it('a worker asked for stages it does not own does nothing at all', async () => {
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      const jobId = await createJob(user.id, 'REEL');
+
+      // media-worker gets the event before content-worker has run. Running
+      // anything here would render a reel from a script that does not exist.
+      const result = await runJob(deps({ stages: [...MEDIA_STAGES] }), jobId);
+
+      expect(result.stagesRun).toEqual([]);
+      expect(result.outcome).toBe('HANDED_OFF');
+      await expect(checkpointsOf(jobId)).resolves.toEqual([]);
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: 20, reserved: 30 });
+    });
+
+    it('re-delivering an event to the worker that already ran it is a no-op', async () => {
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      const jobId = await createJob(user.id, 'REEL', { scenes: 1, images: 1 });
+
+      await runJob(deps({ stages: [...CONTENT_STAGES] }), jobId);
+      const again = await runJob(deps({ stages: [...CONTENT_STAGES] }), jobId);
+
+      // BullMQ delivers at least once and the outbox can republish after a
+      // crash. Neither may re-run a stage or re-charge the user.
+      expect(again.stagesRun).toEqual([]);
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: 20, reserved: 30 });
+    });
+
+    it('a single-stage kind completes on whichever worker owns it', async () => {
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      const jobId = await createJob(user.id, 'POSTER');
+
+      // content-worker first: nothing for it to do on a poster.
+      await runJob(deps({ stages: [...CONTENT_STAGES] }), jobId);
+      const result = await runJob(deps({ stages: [...MEDIA_STAGES] }), jobId);
+
+      expect(result.outcome).toBe('COMPLETED');
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: 45, reserved: 0 });
+    });
+
+    it('refunds when a stage fails in the second worker', async () => {
+      const user = await createUserWithBonus(db, { bonus: 50 });
+      const jobId = await createJob(user.id, 'REEL', { scenes: 1, images: 1 });
+
+      await runJob(deps({ stages: [...CONTENT_STAGES] }), jobId);
+      const result = await processJob(
+        deps({ stages: [...MEDIA_STAGES], failStage: 'VOICE' }),
+        jobId,
+      );
+
+      expect(result.outcome).toBe('FAILED');
+      // The content work is genuinely wasted here, and the user still gets their
+      // credits back - a half-finished reel is not a thing we charge for.
+      await expect(walletOf(db, user.id)).resolves.toEqual({ available: 50, reserved: 0 });
     });
   });
 

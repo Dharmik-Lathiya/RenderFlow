@@ -19,6 +19,7 @@
     "@renderflow/db": "workspace:*",
     "@renderflow/jobs": "workspace:*",
     "@renderflow/observability": "workspace:*",
+    "@renderflow/outbox": "workspace:*",
     "argon2": "^0.45.1",
     "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.45.3",

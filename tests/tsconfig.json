@@ -23,6 +23,7 @@
       "@renderflow/credits": ["libs/credits/src/index.ts"],
       "@renderflow/ai": ["libs/ai/src/index.ts"],
       "@renderflow/jobs": ["libs/jobs/src/index.ts"],
+      "@renderflow/outbox": ["libs/outbox/src/index.ts"],
       "@renderflow/db": ["libs/db/src/index.ts"],
       "@renderflow/observability": ["libs/observability/src/index.ts"],
       "@renderflow/queue": ["libs/queue/src/index.ts"],

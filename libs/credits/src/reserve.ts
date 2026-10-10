@@ -39,6 +39,16 @@ export interface ReserveInput {
   /** PROJECT.md section 9.5, test C10. */
   idempotencyKey?: string | null;
   /**
+   * The workspace the job belongs to.
+   *
+   * Required to emit the outbox event, because `job.created` has to name the
+   * workspace a worker will act on and the event schema validates it as a uuid.
+   * A caller that omits it gets a job with no event, which means nothing will
+   * pick it up - so the API path always supplies it, and omitting it is only
+   * sensible for a job its own caller will drive directly.
+   */
+  workspaceId?: string;
+  /**
    * Emit the outbox event. Only the caller that owns the transaction should set
    * this; a nested reserve inside someone else's transaction must not publish a
    * second `job.created`.
@@ -140,18 +150,17 @@ export async function reserve(tx: CreditTransaction, input: ReserveInput): Promi
     throw error;
   }
 
-  if (input.emitOutbox !== false) {
+  if (input.emitOutbox !== false && input.workspaceId !== undefined) {
     await tx.insert(outboxEvents).values({
       aggregateType: 'JOB',
       aggregateId: jobId,
       eventType: 'job.created',
+      dedupeKey: `JOB:${jobId}:job.created`,
       payload: {
         eventType: 'job.created',
         jobId,
         userId,
-        // workspaceId is filled in Phase 3; the envelope schema requires it, so
-        // the event is only emitted once workspaces exist.
-        workspaceId: '',
+        workspaceId: input.workspaceId,
         kind,
         creditsReserved: cost,
       },
@@ -278,6 +287,7 @@ export async function refund(
     aggregateType: 'JOB',
     aggregateId: jobId,
     eventType: 'credits.refunded',
+    dedupeKey: `JOB:${jobId}:credits.refunded`,
     payload: {
       eventType: 'credits.refunded',
       userId: job.userId,

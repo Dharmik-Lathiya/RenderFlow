@@ -1,8 +1,8 @@
 {
-  "name": "@renderflow/outbox-relay",
+  "name": "@renderflow/outbox",
   "version": "0.1.0",
   "private": true,
-  "description": "Relays outbox_events from Postgres to BullMQ",
+  "description": "Transactional outbox relay",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
@@ -10,20 +10,21 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js",
-    "dev": "node --watch src/main.ts",
     "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
     "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
   },
   "dependencies": {
     "@renderflow/common": "workspace:*",
     "@renderflow/db": "workspace:*",
-    "@renderflow/observability": "workspace:*",
-    "@renderflow/outbox": "workspace:*",
-    "@renderflow/queue": "workspace:*"
+    "@renderflow/queue": "workspace:*",
+    "bullmq": "^6.3.11",
+    "drizzle-orm": "^0.45.3"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/node": "^24.19.1"
+  },
   "engines": {
     "node": ">=22.18.0"
   }

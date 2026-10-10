@@ -50,6 +50,7 @@ module.exports = {
     tsProject('libs/storage', '@renderflow/storage'),
     tsProject('libs/ai', '@renderflow/ai'),
     tsProject('libs/jobs', '@renderflow/jobs'),
+    tsProject('libs/outbox', '@renderflow/outbox'),
     tsProject('libs/observability', '@renderflow/observability'),
     tsProject('packages/api-client', '@renderflow/api-client'),
   ],

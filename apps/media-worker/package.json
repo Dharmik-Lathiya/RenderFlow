@@ -17,10 +17,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@renderflow/ai": "workspace:*",
     "@renderflow/common": "workspace:*",
-    "@renderflow/queue": "workspace:*",
+    "@renderflow/db": "workspace:*",
+    "@renderflow/jobs": "workspace:*",
     "@renderflow/observability": "workspace:*",
-    "@renderflow/db": "workspace:*"
+    "@renderflow/queue": "workspace:*",
+    "@renderflow/storage": "workspace:*"
   },
   "devDependencies": {},
   "engines": {

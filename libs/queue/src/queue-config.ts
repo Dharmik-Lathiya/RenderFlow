@@ -30,6 +30,17 @@ export interface QueueConfig {
   presets: Readonly<Record<QueueName, RetryPreset>>;
   /** BullMQ prefix, so several environments can share one Redis. */
   prefix: string;
+  /**
+   * Outbox relay tuning.
+   *
+   * These live here rather than in `libs/outbox` because they are deployment
+   * knobs in the same family as the retry presets, and AGENTS.md is explicit
+   * that retry counts and timeouts are configuration rather than literals
+   * scattered through the code that uses them.
+   */
+  relayBatchSize: number;
+  relayPollIntervalMs: number;
+  relayMaxAttempts: number;
 }
 
 export class QueueConfigError extends Error {
@@ -41,6 +52,24 @@ export class QueueConfigError extends Error {
 
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 const DEFAULT_PREFIX = 'renderflow';
+
+/**
+ * Relay defaults.
+ *
+ * Batch 50 and poll 1s: a generation takes seconds to minutes, so an extra
+ * second of latency is invisible to the user, while an unbounded batch would
+ * hold a database connection and a lock for as long as it took to drain.
+ */
+export const DEFAULT_RELAY_BATCH_SIZE = 50;
+export const DEFAULT_RELAY_POLL_INTERVAL_MS = 1_000;
+/**
+ * Ten failed publishes before an event is abandoned.
+ *
+ * Each retry is a backoff away, so this is roughly a minute of a queue being
+ * down. Longer and a transient outage costs users a generation; shorter and a
+ * single bad payload looks like an outage.
+ */
+export const DEFAULT_RELAY_MAX_ATTEMPTS = 10;
 
 const BACKOFF_TYPES: readonly BackoffType[] = ['exponential', 'fixed'];
 
@@ -142,5 +171,12 @@ export function loadQueueConfig(env: NodeJS.ProcessEnv = process.env): QueueConf
     safeRedisUrl: redactConnectionUrl(redisUrl),
     presets: resolveRetryPresets(overrides),
     prefix: env.QUEUE_PREFIX?.trim() || DEFAULT_PREFIX,
+    relayBatchSize:
+      readPositiveInt(env.OUTBOX_BATCH_SIZE, 'OUTBOX_BATCH_SIZE') ?? DEFAULT_RELAY_BATCH_SIZE,
+    relayPollIntervalMs:
+      readPositiveInt(env.OUTBOX_POLL_INTERVAL_MS, 'OUTBOX_POLL_INTERVAL_MS') ??
+      DEFAULT_RELAY_POLL_INTERVAL_MS,
+    relayMaxAttempts:
+      readPositiveInt(env.OUTBOX_MAX_ATTEMPTS, 'OUTBOX_MAX_ATTEMPTS') ?? DEFAULT_RELAY_MAX_ATTEMPTS,
   };
 }

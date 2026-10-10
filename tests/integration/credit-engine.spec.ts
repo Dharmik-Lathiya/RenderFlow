@@ -44,6 +44,16 @@ import { setupTestDatabase, teardownTestDatabase, type TestDb } from './helpers/
 describe('credit engine (C3-C12)', () => {
   let db: TestDb;
   const BONUS = 50;
+  /**
+   * Every reservation names its workspace, as the API does.
+   *
+   * `reserve` only emits `job.created` when it is told which workspace the job
+   * belongs to, because the relay validates that field as a uuid and an event
+   * carrying a placeholder would fail validation inside a worker instead of on
+   * an API error path. These tests assert on the outbox, so they have to supply
+   * it.
+   */
+  const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
 
   beforeAll(async () => {
     db = await setupTestDatabase();
@@ -70,7 +80,7 @@ describe('credit engine (C3-C12)', () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
 
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       expect(reservation.cost).toBe(30);
@@ -96,7 +106,7 @@ describe('credit engine (C3-C12)', () => {
       await seedPrice(db, 'REEL', 42);
 
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       expect(reservation.cost).toBe(42);
@@ -105,7 +115,9 @@ describe('credit engine (C3-C12)', () => {
     it('creates the job and its outbox event atomically', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'POSTER' }));
+      await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID }),
+      );
 
       // No direct queue push happens anywhere in the API (AGENTS.md rule 6); the
       // relay picks this up later.
@@ -122,7 +134,9 @@ describe('credit engine (C3-C12)', () => {
       const before = await ledgerOf(db, user.id);
 
       await expect(
-        inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' })),
+        inTransaction((tx) =>
+          reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+        ),
       ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS', httpStatus: 402 });
 
       // Nothing at all: no movement, no job, no event, balance untouched.
@@ -137,7 +151,9 @@ describe('credit engine (C3-C12)', () => {
 
       let thrown: unknown;
       try {
-        await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' }));
+        await inTransaction((tx) =>
+          reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+        );
       } catch (error) {
         thrown = error;
       }
@@ -163,7 +179,9 @@ describe('credit engine (C3-C12)', () => {
 
       const attempts = await Promise.allSettled(
         Array.from({ length: 100 }, () =>
-          inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'POSTER', cost: 10 })),
+          inTransaction((tx) =>
+            reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID, cost: 10 }),
+          ),
         ),
       );
 
@@ -193,7 +211,9 @@ describe('credit engine (C3-C12)', () => {
 
       const attempts = await Promise.allSettled(
         Array.from({ length: 60 }, () =>
-          inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL', cost: 17 })),
+          inTransaction((tx) =>
+            reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID, cost: 17 }),
+          ),
         ),
       );
 
@@ -209,7 +229,9 @@ describe('credit engine (C3-C12)', () => {
 
       const attempts = await Promise.allSettled(
         Array.from({ length: 50 }, () =>
-          inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL', cost: 50 })),
+          inTransaction((tx) =>
+            reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID, cost: 50 }),
+          ),
         ),
       );
 
@@ -222,7 +244,7 @@ describe('credit engine (C3-C12)', () => {
     it('releases reserved credits and records CAPTURE, with no refund', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       await inTransaction((tx) => capture(tx, reservation.jobId, { assetKey: 'out/reel.mp4' }));
@@ -244,7 +266,7 @@ describe('credit engine (C3-C12)', () => {
     it('is a no-op when called twice', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       const first = await inTransaction((tx) => capture(tx, reservation.jobId));
@@ -262,7 +284,7 @@ describe('credit engine (C3-C12)', () => {
     it('marks the job finished', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'POSTER' }),
+        reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID }),
       );
 
       await inTransaction((tx) => capture(tx, reservation.jobId));
@@ -277,7 +299,7 @@ describe('credit engine (C3-C12)', () => {
     it('returns reserved credits to available and records one REFUND', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       const result = await inTransaction((tx) =>
@@ -302,7 +324,7 @@ describe('credit engine (C3-C12)', () => {
     it('emits credits.refunded for the relay', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       await inTransaction((tx) => refund(tx, reservation.jobId));
@@ -314,8 +336,12 @@ describe('credit engine (C3-C12)', () => {
 
     it('keeps the user who had reserved several jobs whole on one failure', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
-      const first = await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' }));
-      const second = await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'POSTER' }));
+      const first = await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+      );
+      const second = await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID }),
+      );
 
       await expect(walletOf(db, user.id)).resolves.toEqual({ available: 15, reserved: 35 });
 
@@ -331,7 +357,7 @@ describe('credit engine (C3-C12)', () => {
     it('two refunds of one job produce exactly one', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       const first = await inTransaction((tx) => refund(tx, reservation.jobId, 'worker 1'));
@@ -351,7 +377,7 @@ describe('credit engine (C3-C12)', () => {
       // decides the job is dead. Both call refund at once.
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       const results = await Promise.all(
@@ -372,7 +398,7 @@ describe('credit engine (C3-C12)', () => {
       // for the same (reference_type, reference_id, entry_type) cannot be written.
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
       await inTransaction((tx) => refund(tx, reservation.jobId));
 
@@ -395,7 +421,7 @@ describe('credit engine (C3-C12)', () => {
     it('is refused, so a successful job is never paid for twice', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       await inTransaction((tx) => capture(tx, reservation.jobId));
@@ -415,7 +441,7 @@ describe('credit engine (C3-C12)', () => {
     it('is refused even when the two race', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       const [captured, refunded] = await Promise.all([
@@ -432,7 +458,7 @@ describe('credit engine (C3-C12)', () => {
     it('capture after refund is refused too', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       await inTransaction((tx) => refund(tx, reservation.jobId));
@@ -446,7 +472,7 @@ describe('credit engine (C3-C12)', () => {
       // The CHECK constraint is the backstop for the race above.
       const user = await createUserWithBonus(db, { bonus: BONUS });
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       const violation = db
@@ -467,10 +493,20 @@ describe('credit engine (C3-C12)', () => {
       const key = 'idem-key-0001';
 
       const first = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL', idempotencyKey: key }),
+        reserve(tx, {
+          userId: user.id,
+          kind: 'REEL',
+          workspaceId: WORKSPACE_ID,
+          idempotencyKey: key,
+        }),
       );
       const second = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL', idempotencyKey: key }),
+        reserve(tx, {
+          userId: user.id,
+          kind: 'REEL',
+          workspaceId: WORKSPACE_ID,
+          idempotencyKey: key,
+        }),
       );
 
       expect(first.replayed).toBe(false);
@@ -505,8 +541,12 @@ describe('credit engine (C3-C12)', () => {
       // job without a client key would fail against the first one.
       const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'POSTER' }));
-      await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'POSTER' }));
+      await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID }),
+      );
+      await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID }),
+      );
 
       await expect(jobCount(db)).resolves.toBe(2);
     });
@@ -518,7 +558,12 @@ describe('credit engine (C3-C12)', () => {
       await Promise.allSettled(
         Array.from({ length: 8 }, () =>
           inTransaction((tx) =>
-            reserve(tx, { userId: user.id, kind: 'REEL', idempotencyKey: key }),
+            reserve(tx, {
+              userId: user.id,
+              kind: 'REEL',
+              workspaceId: WORKSPACE_ID,
+              idempotencyKey: key,
+            }),
           ),
         ),
       );
@@ -542,7 +587,12 @@ describe('credit engine (C3-C12)', () => {
 
       const attempts = await Promise.allSettled(
         Array.from({ length: 8 }, () =>
-          reserveOnce(db, { userId: user.id, kind: 'REEL', idempotencyKey: key }),
+          reserveOnce(db, {
+            userId: user.id,
+            kind: 'REEL',
+            workspaceId: WORKSPACE_ID,
+            idempotencyKey: key,
+          }),
         ),
       );
 
@@ -563,7 +613,12 @@ describe('credit engine (C3-C12)', () => {
       const user = await createUserWithBonus(db, { bonus: 5 });
 
       await expect(
-        reserveOnce(db, { userId: user.id, kind: 'REEL', idempotencyKey: 'idem-broke-1' }),
+        reserveOnce(db, {
+          userId: user.id,
+          kind: 'REEL',
+          workspaceId: WORKSPACE_ID,
+          idempotencyKey: 'idem-broke-1',
+        }),
       ).rejects.toMatchObject({ code: 'INSUFFICIENT_CREDITS' });
 
       await expect(walletOf(db, user.id)).resolves.toEqual({ available: 5, reserved: 0 });
@@ -579,7 +634,12 @@ describe('credit engine (C3-C12)', () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
 
       const total = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'CAROUSEL', payload: { images: 5 } }),
+        reserve(tx, {
+          userId: user.id,
+          kind: 'CAROUSEL',
+          workspaceId: WORKSPACE_ID,
+          payload: { images: 5 },
+        }),
       );
       expect(total.cost).toBe(15);
 
@@ -614,17 +674,21 @@ describe('credit engine (C3-C12)', () => {
     it('reports zero drift through the whole lifecycle', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
 
-      const captured = await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' }));
+      const captured = await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+      );
       await inTransaction((tx) => capture(tx, captured.jobId));
       await expect(reconcileUser(db, user.id)).resolves.toMatchObject({ drifted: false });
 
       const refunded = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'CAROUSEL' }),
+        reserve(tx, { userId: user.id, kind: 'CAROUSEL', workspaceId: WORKSPACE_ID }),
       );
       await inTransaction((tx) => refund(tx, refunded.jobId));
       await expect(reconcileUser(db, user.id)).resolves.toMatchObject({ drifted: false });
 
-      const pending = await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'POSTER' }));
+      const pending = await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID }),
+      );
       // Still in flight: reserved, not settled.
       await expect(reconcileUser(db, user.id)).resolves.toMatchObject({ drifted: false });
       expect(pending.cost).toBe(5);
@@ -635,7 +699,9 @@ describe('credit engine (C3-C12)', () => {
       // would fail. A wallet mid-reservation has the right total and wrong
       // buckets, so reconciliation has to compare per bucket to be useful.
       const user = await createUserWithBonus(db, { bonus: BONUS });
-      await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' }));
+      await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+      );
 
       const report = await reconcileUser(db, user.id);
 
@@ -683,9 +749,13 @@ describe('credit engine (C3-C12)', () => {
       // purpose. If they ever disagree, one of them is wrong and an automated
       // check is the only way to find out before a customer's credits do.
       const user = await createUserWithBonus(db, { bonus: BONUS });
-      const job = await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' }));
+      const job = await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+      );
       await inTransaction((tx) => capture(tx, job.jobId));
-      const second = await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'POSTER' }));
+      const second = await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'POSTER', workspaceId: WORKSPACE_ID }),
+      );
       await inTransaction((tx) => refund(tx, second.jobId));
 
       // Written independently of the implementation, from the per-bucket invariant in
@@ -790,7 +860,9 @@ describe('credit engine (C3-C12)', () => {
       // Charging a guessed price is how a customer gets billed an amount with no
       // record of why, so this is a server error rather than a zero.
       await expect(
-        inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' })),
+        inTransaction((tx) =>
+          reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+        ),
       ).rejects.toMatchObject({ code: 'PRICING_UNAVAILABLE' });
 
       await expect(walletOf(db, user.id)).resolves.toEqual({ available: BONUS, reserved: 0 });
@@ -801,7 +873,9 @@ describe('credit engine (C3-C12)', () => {
       await deactivatePrice(db, 'REEL');
 
       await expect(
-        inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' })),
+        inTransaction((tx) =>
+          reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+        ),
       ).rejects.toMatchObject({ code: 'PRICING_UNAVAILABLE' });
     });
 
@@ -811,7 +885,7 @@ describe('credit engine (C3-C12)', () => {
       await seedPrice(db, 'CAPTION', 0);
 
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'CAPTION' }),
+        reserve(tx, { userId: user.id, kind: 'CAPTION', workspaceId: WORKSPACE_ID }),
       );
 
       expect(reservation.cost).toBe(0);
@@ -831,7 +905,7 @@ describe('credit engine (C3-C12)', () => {
       await seedPrice(db, 'REEL', 50);
 
       const reservation = await inTransaction((tx) =>
-        reserve(tx, { userId: user.id, kind: 'REEL' }),
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
       );
 
       expect(reservation.cost).toBe(50);
@@ -855,7 +929,9 @@ describe('credit engine (C3-C12)', () => {
       await db.delete(pricingRules).where(eq(pricingRules.action, 'TRANSLATION'));
 
       await expect(
-        inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'TRANSLATION' })),
+        inTransaction((tx) =>
+          reserve(tx, { userId: user.id, kind: 'TRANSLATION', workspaceId: WORKSPACE_ID }),
+        ),
       ).rejects.toMatchObject({ code: 'PRICING_UNAVAILABLE' });
 
       // The wallet is untouched: an unpriced action must not half-reserve.
@@ -878,7 +954,9 @@ describe('credit engine (C3-C12)', () => {
   describe('getBalance', () => {
     it('reports available, reserved and the total', async () => {
       const user = await createUserWithBonus(db, { bonus: BONUS });
-      await inTransaction((tx) => reserve(tx, { userId: user.id, kind: 'REEL' }));
+      await inTransaction((tx) =>
+        reserve(tx, { userId: user.id, kind: 'REEL', workspaceId: WORKSPACE_ID }),
+      );
 
       await expect(getBalance(db, user.id)).resolves.toEqual({
         userId: user.id,

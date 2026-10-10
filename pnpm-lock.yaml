@@ -299,33 +299,51 @@ importers:
 
   apps/content-worker:
     dependencies:
+      '@renderflow/ai':
+        specifier: workspace:*
+        version: link:../../libs/ai
       '@renderflow/common':
         specifier: workspace:*
         version: link:../../libs/common
       '@renderflow/db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@renderflow/jobs':
+        specifier: workspace:*
+        version: link:../../libs/jobs
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../../libs/observability
       '@renderflow/queue':
         specifier: workspace:*
         version: link:../../libs/queue
+      '@renderflow/storage':
+        specifier: workspace:*
+        version: link:../../libs/storage
 
   apps/media-worker:
     dependencies:
+      '@renderflow/ai':
+        specifier: workspace:*
+        version: link:../../libs/ai
       '@renderflow/common':
         specifier: workspace:*
         version: link:../../libs/common
       '@renderflow/db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@renderflow/jobs':
+        specifier: workspace:*
+        version: link:../../libs/jobs
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../../libs/observability
       '@renderflow/queue':
         specifier: workspace:*
         version: link:../../libs/queue
+      '@renderflow/storage':
+        specifier: workspace:*
+        version: link:../../libs/storage
 
   apps/outbox-relay:
     dependencies:
@@ -338,6 +356,9 @@ importers:
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../../libs/observability
+      '@renderflow/outbox':
+        specifier: workspace:*
+        version: link:../../libs/outbox
       '@renderflow/queue':
         specifier: workspace:*
         version: link:../../libs/queue
@@ -485,6 +506,28 @@ importers:
         specifier: ^15.1.3
         version: 15.1.3
 
+  libs/outbox:
+    dependencies:
+      '@renderflow/common':
+        specifier: workspace:*
+        version: link:../common
+      '@renderflow/db':
+        specifier: workspace:*
+        version: link:../db
+      '@renderflow/queue':
+        specifier: workspace:*
+        version: link:../queue
+      bullmq:
+        specifier: ^6.3.11
+        version: 6.3.11(ioredis@5.11.1(supports-color@7.2.0))(pg@8.23.1)
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.23.1)(pg@8.23.1)(prisma@6.19.3(typescript@5.9.3))
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.1
+        version: 24.19.1
+
   libs/queue:
     dependencies:
       '@renderflow/common':
@@ -546,6 +589,9 @@ importers:
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../libs/observability
+      '@renderflow/outbox':
+        specifier: workspace:*
+        version: link:../libs/outbox
       argon2:
         specifier: ^0.45.1
         version: 0.45.1

@@ -10,3 +10,4 @@
 
 export * from './stage-machine';
 export * from './runner';
+export * from './worker-handler';

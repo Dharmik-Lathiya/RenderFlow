@@ -40,6 +40,8 @@ libs/common             DTOs, enums, event contracts, zod schemas, queue names
 libs/db                 Drizzle schema, client, migrations
 libs/credits            the ONLY code allowed to modify wallets/ledger
 libs/queue              BullMQ factories, retry presets
+libs/jobs               stage machine + the runner that settles credits
+libs/outbox             transactional outbox relay + JobPublisher
 libs/storage            S3 abstraction
 libs/ai                 provider interfaces + mock/real implementations
 libs/social             platform adapters

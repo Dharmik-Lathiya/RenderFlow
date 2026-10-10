@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { nextJobStage, type GenerationKind, type JobStage } from '@renderflow/common';
 import {
   ProviderError,
@@ -9,15 +9,15 @@ import {
   type TtsProvider,
 } from '@renderflow/ai';
 import { capture, refund } from '@renderflow/credits';
-import { generationJobs, jobCheckpoints, type Database, type DbTransaction } from '@renderflow/db';
-
 import {
-  START_STAGE_BY_KIND,
-  TERMINAL_STAGE,
-  isPipelineComplete,
-  resumeStage,
-  stagesFor,
-} from './stage-machine';
+  generationJobs,
+  jobCheckpoints,
+  outboxEvents,
+  type Database,
+  type DbTransaction,
+} from '@renderflow/db';
+
+import { TERMINAL_STAGE, isPipelineComplete, resumeStage, stagesFor } from './stage-machine';
 
 /**
  * The job runner (PROJECT.md section 12 Phase 4: "Stage machine
@@ -63,12 +63,19 @@ export interface JobRunDeps {
   db: Database;
   providers: RunnerProviders;
   storage: RunnerStorage;
+  /**
+   * The stages this worker owns. Omit it and the runner runs the whole pipeline,
+   * which is what tests and a single-process local setup want. Production
+   * workers pass their queue's stages so a reel genuinely crosses from
+   * content-worker to media-worker.
+   */
+  stages?: readonly JobStage[];
   /** Brand voice for prompts. Treated as untrusted data downstream. */
   brand?: BrandContext;
   signal?: AbortSignal;
 }
 
-export type JobOutcome = 'COMPLETED' | 'FAILED' | 'ALREADY_SETTLED';
+export type JobOutcome = 'COMPLETED' | 'FAILED' | 'ALREADY_SETTLED' | 'PARTIAL' | 'HANDED_OFF';
 
 export interface JobRunResult {
   jobId: string;
@@ -112,33 +119,67 @@ export async function runJob(deps: JobRunDeps, jobId: string): Promise<JobRunRes
     return { jobId, outcome: 'COMPLETED', stagesRun: [] };
   }
 
-  await markProcessing(deps.db, jobId);
-
-  const stagesRun: JobStage[] = [];
-
   // Resume at the FIRST gap, then run everything from there to the end - not
   // "skip whatever happens to be checkpointed". A later artefact can depend on an
   // earlier one that was never produced, so skipping IMAGE while redoing SCRIPT
   // would stitch a reel from a stale frame and a fresh script. Skipping
   // individually is exactly the hole `resumeStage` exists to prevent.
   const from = resumeStage(kind, [...completed]);
-  const pending = stagesFor(kind).slice(stagesFor(kind).indexOf(from));
+  const pipeline = stagesFor(kind);
+  const pending = pipeline.slice(pipeline.indexOf(from));
 
-  for (const stage of pending) {
+  // Only the stages this worker owns. A content worker runs PLAN and SCRIPT and
+  // stops, leaving IMAGE/VOICE/RENDER to the media worker; the
+  // `job.stage_completed` events it writes are what hand the job over. Without
+  // this filter a "content" worker would quietly become the only worker and
+  // media-worker would be dead code that looked alive.
+  const owned =
+    deps.stages === undefined ? pending : pending.filter((stage) => deps.stages?.includes(stage));
+
+  // And it may only start at the gap itself. If the first missing stage belongs
+  // to another worker, this one has nothing to do yet: a media worker that ran
+  // RENDER while PLAN and SCRIPT were still missing would produce a reel from a
+  // script that does not exist, which is the same stale-artefact hole
+  // `resumeStage` prevents, one process boundary further out.
+  //
+  // Returning without claiming the job also matters: a worker that marks it
+  // PROCESSING and does nothing would leave it looking like progress was made.
+  if (deps.stages !== undefined && !deps.stages.includes(from)) {
+    return { jobId, outcome: 'HANDED_OFF', stagesRun: [] };
+  }
+
+  await markProcessing(deps.db, jobId);
+
+  const stagesRun: JobStage[] = [];
+
+  for (const stage of owned) {
     deps.signal?.throwIfAborted();
 
     const outputRef = await runStage(deps, { jobId, stage, kind, job });
 
-    // Checkpoint written only after the artefact exists, so a crash mid-stage
-    // re-runs the stage rather than recording work that never happened.
-    await writeCheckpoint(deps.db, jobId, stage, outputRef);
-    await advanceStage(deps.db, jobId, nextJobStage(stage) ?? TERMINAL_STAGE);
+    // The artefact, the checkpoint and the hand-off event are written together,
+    // in one transaction. An event pointing at a checkpoint that does not exist
+    // would hand the next worker a job it cannot resume; a checkpoint with no
+    // event would strand the job with nobody left to run it.
+    await recordStage(deps.db, { jobId, stage, outputRef });
     stagesRun.push(stage);
   }
 
-  await settleSuccess(deps.db, jobId);
+  // Capture only when the WHOLE pipeline is done. A content worker that finished
+  // SCRIPT has done a third of the work; charging the user for the reel they did
+  // not get is exactly what this condition prevents.
+  const finished = await checkpointStages(deps.db, jobId);
 
-  return { jobId, outcome: 'COMPLETED', stagesRun };
+  if (isPipelineComplete(kind, [...finished])) {
+    await settleSuccess(deps.db, jobId);
+    return { jobId, outcome: 'COMPLETED', stagesRun };
+  }
+
+  return {
+    jobId,
+    outcome: stagesRun.length === 0 ? 'HANDED_OFF' : 'PARTIAL',
+    stagesRun,
+  };
 }
 
 /**
@@ -329,25 +370,55 @@ async function checkpointStages(db: Database, jobId: string): Promise<Set<JobSta
 }
 
 /**
- * Writes the checkpoint.
+ * Records a finished stage: checkpoint, job stage pointer and the hand-off
+ * event, in one transaction.
  *
- * An upsert, not `ON CONFLICT DO NOTHING`: when a stage is re-run after a resume,
- * the new artefact may be at a different key, and leaving the stale reference
- * would point downstream at media that no longer exists.
+ * Three writes that must not come apart:
+ *
+ *  - The checkpoint is an UPSERT, not `ON CONFLICT DO NOTHING`. When a stage is
+ *    re-run after a resume the new artefact may sit at a different key, and
+ *    leaving the stale reference would point downstream at media that no longer
+ *    exists.
+ *  - `job.stage_completed` is what routes the job to the worker owning the NEXT
+ *    stage. Without it the job stops here, halfway, with credits reserved and
+ *    nothing left to finish it.
+ *  - The `aggregateId` is the job id, so the relay's deterministic job id
+ *    (`generation:<jobId>`) collapses the repeated events a retry produces into a
+ *    single enqueue.
  */
-async function writeCheckpoint(
+async function recordStage(
   db: Database,
-  jobId: string,
-  stage: JobStage,
-  outputRef: string,
+  input: { jobId: string; stage: JobStage; outputRef: string },
 ): Promise<void> {
-  await db
-    .insert(jobCheckpoints)
-    .values({ jobId, stage, outputRef })
-    .onConflictDoUpdate({
-      target: [jobCheckpoints.jobId, jobCheckpoints.stage],
-      set: { outputRef },
+  await db.transaction(async (tx: DbTransaction) => {
+    await tx
+      .insert(jobCheckpoints)
+      .values({ jobId: input.jobId, stage: input.stage, outputRef: input.outputRef })
+      .onConflictDoUpdate({
+        target: [jobCheckpoints.jobId, jobCheckpoints.stage],
+        set: { outputRef: input.outputRef },
+      });
+
+    await tx
+      .update(generationJobs)
+      .set({ stage: nextJobStage(input.stage) ?? TERMINAL_STAGE, updatedAt: new Date() })
+      .where(eq(generationJobs.id, input.jobId));
+
+    await tx.insert(outboxEvents).values({
+      aggregateType: 'JOB',
+      aggregateId: input.jobId,
+      eventType: 'job.stage_completed',
+      // The stage is part of the identity: five stages of one job are five
+      // events, not one event five times.
+      dedupeKey: `JOB:${input.jobId}:job.stage_completed:${input.stage}`,
+      payload: {
+        eventType: 'job.stage_completed',
+        jobId: input.jobId,
+        stage: input.stage,
+        outputRef: input.outputRef,
+      },
     });
+  });
 }
 
 /** Claim. `WHERE status = 'PENDING'` so only one worker can win. */
@@ -356,13 +427,6 @@ async function markProcessing(db: Database, jobId: string): Promise<void> {
     .update(generationJobs)
     .set({ status: 'PROCESSING', updatedAt: new Date() })
     .where(and(eq(generationJobs.id, jobId), eq(generationJobs.status, 'PENDING')));
-}
-
-async function advanceStage(db: Database, jobId: string, stage: JobStage): Promise<void> {
-  await db
-    .update(generationJobs)
-    .set({ stage, updatedAt: new Date() })
-    .where(eq(generationJobs.id, jobId));
 }
 
 /**
@@ -438,5 +502,3 @@ export function describeError(error: unknown): string {
   }
   return 'unknown error';
 }
-
-export { START_STAGE_BY_KIND, inArray, sql };

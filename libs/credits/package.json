@@ -11,9 +11,10 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "db:seed": "node scripts/seed.mjs",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput",
     "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@renderflow/common": "workspace:*",
