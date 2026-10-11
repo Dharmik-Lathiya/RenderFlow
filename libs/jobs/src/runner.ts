@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { nextJobStage, type GenerationKind, type JobStage } from '@renderflow/common';
 import {
   ProviderError,
@@ -17,6 +17,7 @@ import {
   type DbTransaction,
 } from '@renderflow/db';
 
+import { acquireLease, releaseLease, type LeaseConfig } from './lease';
 import { TERMINAL_STAGE, isPipelineComplete, resumeStage, stagesFor } from './stage-machine';
 
 /**
@@ -70,6 +71,14 @@ export interface JobRunDeps {
    * content-worker to media-worker.
    */
   stages?: readonly JobStage[];
+  /**
+   * The lease to hold while running.
+   *
+   * Omit it and the runner claims nothing, which is what tests and a
+   * single-process local setup want. A production worker must pass it: without a
+   * lease, a killed worker leaves a PROCESSING job that nothing can ever reclaim.
+   */
+  lease?: { workerId: string; config: LeaseConfig };
   /** Brand voice for prompts. Treated as untrusted data downstream. */
   brand?: BrandContext;
   signal?: AbortSignal;
@@ -148,38 +157,68 @@ export async function runJob(deps: JobRunDeps, jobId: string): Promise<JobRunRes
     return { jobId, outcome: 'HANDED_OFF', stagesRun: [] };
   }
 
-  await markProcessing(deps.db, jobId);
+  // Take the lease before running anything, and only now - after the cheap
+  // checks. A worker that cannot get the lease must return without touching the
+  // job: someone else is working on it right now, and "someone else" includes a
+  // worker that is alive and merely slow.
+  //
+  // Claiming before these checks would bump the attempt counter on every job
+  // this worker has no business running, so a healthy two-worker setup would
+  // exhaust a three-attempt budget in a minute and start refunding jobs that
+  // were never actually broken.
+  const lease =
+    deps.lease === undefined
+      ? null
+      : await acquireLease(deps.db, jobId, deps.lease.workerId, deps.lease.config);
+
+  if (deps.lease !== undefined && lease === null) {
+    return { jobId, outcome: 'HANDED_OFF', stagesRun: [] };
+  }
 
   const stagesRun: JobStage[] = [];
 
-  for (const stage of owned) {
-    deps.signal?.throwIfAborted();
+  try {
+    for (const stage of owned) {
+      deps.signal?.throwIfAborted();
 
-    const outputRef = await runStage(deps, { jobId, stage, kind, job });
+      const outputRef = await runStage(deps, { jobId, stage, kind, job });
 
-    // The artefact, the checkpoint and the hand-off event are written together,
-    // in one transaction. An event pointing at a checkpoint that does not exist
-    // would hand the next worker a job it cannot resume; a checkpoint with no
-    // event would strand the job with nobody left to run it.
-    await recordStage(deps.db, { jobId, stage, outputRef });
-    stagesRun.push(stage);
+      // The artefact, the checkpoint and the hand-off event are written together,
+      // in one transaction. An event pointing at a checkpoint that does not exist
+      // would hand the next worker a job it cannot resume; a checkpoint with no
+      // event would strand the job with nobody left to run it.
+      await recordStage(deps.db, { jobId, stage, outputRef });
+      stagesRun.push(stage);
+    }
+
+    // Capture only when the WHOLE pipeline is done. A content worker that
+    // finished SCRIPT has done a third of the work; charging the user for the
+    // reel they did not get is exactly what this condition prevents.
+    const finished = await checkpointStages(deps.db, jobId);
+
+    if (isPipelineComplete(kind, [...finished])) {
+      await settleSuccess(deps.db, jobId);
+      return { jobId, outcome: 'COMPLETED', stagesRun };
+    }
+
+    return {
+      jobId,
+      outcome: stagesRun.length === 0 ? 'HANDED_OFF' : 'PARTIAL',
+      stagesRun,
+    };
+  } finally {
+    // Release the lease whether we finished or threw. Leaving it held would make
+    // the reaper wait out the whole lease period before anyone could pick the job
+    // up - and for a completed job, would leave the row claiming a worker that
+    // does not exist.
+    //
+    // Not on the HANDED_OFF path above: the lease was never taken there, and
+    // releasing it would clear a lease belonging to whichever worker *does* own
+    // the job.
+    if (lease !== null) {
+      await releaseLease(deps.db, jobId, deps.lease?.workerId ?? '');
+    }
   }
-
-  // Capture only when the WHOLE pipeline is done. A content worker that finished
-  // SCRIPT has done a third of the work; charging the user for the reel they did
-  // not get is exactly what this condition prevents.
-  const finished = await checkpointStages(deps.db, jobId);
-
-  if (isPipelineComplete(kind, [...finished])) {
-    await settleSuccess(deps.db, jobId);
-    return { jobId, outcome: 'COMPLETED', stagesRun };
-  }
-
-  return {
-    jobId,
-    outcome: stagesRun.length === 0 ? 'HANDED_OFF' : 'PARTIAL',
-    stagesRun,
-  };
 }
 
 /**
@@ -419,14 +458,6 @@ async function recordStage(
       },
     });
   });
-}
-
-/** Claim. `WHERE status = 'PENDING'` so only one worker can win. */
-async function markProcessing(db: Database, jobId: string): Promise<void> {
-  await db
-    .update(generationJobs)
-    .set({ status: 'PROCESSING', updatedAt: new Date() })
-    .where(and(eq(generationJobs.id, jobId), eq(generationJobs.status, 'PENDING')));
 }
 
 /**

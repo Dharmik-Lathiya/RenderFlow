@@ -18,9 +18,10 @@
   },
   "dependencies": {
     "@renderflow/common": "workspace:*",
-    "@renderflow/queue": "workspace:*",
+    "@renderflow/db": "workspace:*",
+    "@renderflow/jobs": "workspace:*",
     "@renderflow/observability": "workspace:*",
-    "@renderflow/db": "workspace:*"
+    "@renderflow/queue": "workspace:*"
   },
   "devDependencies": {},
   "engines": {

@@ -95,6 +95,11 @@ module.exports = {
     // code that is in fact well covered.
     'libs/jobs/src/runner.ts',
     'libs/jobs/src/worker-handler.ts',
+    // Phase 5: lease and reaper. Claiming, renewing, reclaiming and refunding are
+    // all guarded SQL whose correctness only exists against a real database -
+    // "one worker wins a race" is not assertable with a fake.
+    'libs/jobs/src/lease.ts',
+    'libs/jobs/src/reaper.ts',
     'libs/outbox/src/relay.ts',
 
     // Excluded because the unit suite covers them with real assertions, not

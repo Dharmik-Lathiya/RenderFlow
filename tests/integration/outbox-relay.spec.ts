@@ -211,23 +211,44 @@ describe('outbox relay', () => {
     expect(await countPending(db)).toBe(3);
   });
 
-  it('gives two concurrent relays disjoint batches', async () => {
+  it('two concurrent relays enqueue each job exactly once', async () => {
     await emit(4);
-    const a = new InMemoryPublisher();
-    const b = new InMemoryPublisher();
 
-    await Promise.all([relayOnce(db, a, { batchSize: 2 }), relayOnce(db, b, { batchSize: 2 })]);
+    // ONE publisher, because two relays are two clients of one queue. BullMQ's
+    // jobId dedupe lives in the shared Redis, so a duplicate publish by either
+    // relay collapses for both. Two separate InMemoryPublishers would model two
+    // separate queues and would make the cross-relay duplicate invisible -
+    // which is exactly the bug this test exists to catch.
+    const queue = new InMemoryPublisher();
 
-    // What must hold no matter how the two interleave: every event reached the
-    // queue, and nothing reached it twice. Not "each relay got its own two" -
-    // SKIP LOCKED only partitions work while both are inside the claim
-    // transaction, so one relay CAN legitimately publish an event the other also
-    // saw. The deterministic job id is what collapses that duplicate.
-    const ids = [...a.published, ...b.published].map((m) => m.jobId);
+    await Promise.all([
+      relayOnce(db, queue, { batchSize: 2 }),
+      relayOnce(db, queue, { batchSize: 2 }),
+    ]);
 
-    expect(ids).toHaveLength(4);
-    expect(new Set(ids).size).toBe(4);
+    expect(queue.published).toHaveLength(4);
+    expect(new Set(queue.published.map((m) => m.jobId)).size).toBe(4);
     await expect(countPending(db)).resolves.toBe(0);
+  });
+
+  it('may publish the same event twice, and the queue collapses it', async () => {
+    // The documented behaviour, pinned rather than left implicit: the relay is
+    // at-least-once, `calls` records the duplicate, and `published` does not.
+    // SKIP LOCKED cannot prevent the duplicate - closing the window would mean
+    // holding a transaction open across a call to Redis.
+    await emit(1);
+    const queue = new InMemoryPublisher();
+
+    await relayOnce(db, queue, { maxAttempts: 1 });
+    const first = (await rows())[0];
+    await db
+      .update(outboxEvents)
+      .set({ processedAt: null, attempts: 0 })
+      .where(eq(outboxEvents.id, first?.id as string));
+    await relayOnce(db, queue, { maxAttempts: 1 });
+
+    expect(queue.calls).toHaveLength(2);
+    expect(queue.published).toHaveLength(1);
   });
 
   it('collapses a duplicate publish on the deterministic job id', async () => {

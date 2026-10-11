@@ -26,6 +26,7 @@
     "@renderflow/common": "workspace:*",
     "@renderflow/credits": "workspace:*",
     "@renderflow/db": "workspace:*",
+    "@renderflow/jobs": "workspace:*",
     "@renderflow/observability": "workspace:*",
     "@renderflow/storage": "workspace:*",
     "argon2": "^0.45.1",

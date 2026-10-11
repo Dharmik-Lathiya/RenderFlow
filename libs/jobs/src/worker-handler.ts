@@ -1,6 +1,10 @@
+import { eq } from 'drizzle-orm';
+
 import { jobCreatedEventSchema } from '@renderflow/common';
 import { ProviderError } from '@renderflow/ai';
+import { generationJobs } from '@renderflow/db';
 
+import { startHeartbeat } from './lease';
 import { describeError, failJob, runJob, type JobRunDeps } from './runner';
 
 /**
@@ -81,10 +85,18 @@ export async function handleGenerationJob(
 ): Promise<void> {
   const event = parseGenerationJob(job.data);
 
+  // The heartbeat is the reason a killed worker is recoverable, so it has to run
+  // for the WHOLE invocation including the refund - a worker that hangs during
+  // cleanup is exactly as dead as one that hangs mid-render.
+  const heartbeat =
+    deps.lease === undefined
+      ? null
+      : startHeartbeat(deps.db, event.jobId, deps.lease.workerId, deps.lease.config);
+
   try {
     await runJob(deps, event.jobId);
   } catch (error) {
-    if (isPermanent(error) || isFinalAttempt(job, deps.defaultAttempts)) {
+    if (isPermanent(error) || (await outOfAttempts(deps, job, event.jobId))) {
       // Idempotent in libs/credits, so a reaper racing us here produces one
       // refund between the two of them rather than two.
       await failJob(deps.db, event.jobId, describeError(error));
@@ -94,7 +106,57 @@ export async function handleGenerationJob(
     // failure to move the job to the DLQ when attempts run out. Swallowing it
     // would mark a failed generation as succeeded.
     throw error;
+  } finally {
+    heartbeat?.stop();
+    // `done` resolves once the loop has actually exited, so a drain does not
+    // close the database pool out from under an in-flight heartbeat.
+    await heartbeat?.done;
   }
+}
+
+/**
+ * Whether the job has spent its attempt budget, and therefore should refund.
+ *
+ * Which counter answers that depends on how the worker is running:
+ *
+ *  - **With a lease**, the durable row is authoritative. `runJob` increments it
+ *    when it takes the lease, and it survives the Redis restart the reaper
+ *    exists for. BullMQ's `attemptsMade` lives in Redis and is reset by exactly
+ *    that restart, so trusting it means a queue that loses its state hands every
+ *    job an infinite number of retries and never refunds.
+ *
+ *  - **Without a lease** - tests, and the single-process local run - nothing
+ *    advanced the row's counter, so reading it would conclude "budget remains"
+ *    forever and a job would never be refunded. The queue's counter is then the
+ *    only one that has moved, so it is used.
+ */
+async function outOfAttempts(
+  deps: GenerationProcessorDeps,
+  job: GenerationJobLike,
+  jobId: string,
+): Promise<boolean> {
+  if (deps.lease === undefined) {
+    return isFinalAttempt(job, deps.defaultAttempts ?? 1);
+  }
+
+  const rows = await deps.db
+    .select({ attempts: generationJobs.attempts, maxAttempts: generationJobs.maxAttempts })
+    .from(generationJobs)
+    .where(eq(generationJobs.id, jobId))
+    .limit(1);
+
+  const row = rows[0];
+  // The job was deleted underneath the worker. Refunding is then moot but safe:
+  // `refund` is idempotent and will find nothing to move.
+  if (row === undefined) {
+    return true;
+  }
+
+  // ONLY the row's own budget. `defaultAttempts` describes the queue, and
+  // comparing the durable counter against it would let a queue configured for a
+  // single attempt shorten a job's real three-attempt budget - so a single
+  // transient blip would refund a job that still had two retries left.
+  return row.attempts >= row.maxAttempts;
 }
 
 /** A `Processor` for `createWorker`. Wraps the handler with BullMQ's signature. */

@@ -7,7 +7,13 @@ import {
 } from '@renderflow/ai';
 import { QUEUE_NAMES, stagesForQueue, type JobStage } from '@renderflow/common';
 import { disconnectDb, getDb } from '@renderflow/db';
-import { createGenerationProcessor, describeError } from '@renderflow/jobs';
+import {
+  createGenerationProcessor,
+  describeError,
+  workerIdForProcess,
+  validateLeaseConfig,
+  type LeaseConfig,
+} from '@renderflow/jobs';
 import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
 import { S3Storage, loadStorageConfig } from '@renderflow/storage';
@@ -37,6 +43,35 @@ const APP_NAME = 'content-worker';
 const QUEUE = QUEUE_NAMES.CONTENT;
 /** PLAN and SCRIPT only. IMAGE/VOICE/RENDER belong to media-worker. */
 const OWNED_STAGES = stagesForQueue(QUEUE) as readonly JobStage[];
+/** This process's lease identity: stable for its lifetime, unique across them. */
+const WORKER_ID = workerIdForProcess();
+
+/**
+ * Lease configuration, read once at boot.
+ *
+ * Validated rather than trusted: a heartbeat interval at or above the lease
+ * length lets a lease expire while its holder is still running, the reaper
+ * hands a live job to a second worker, and both race to capture the credits.
+ * That is not a slow-environment problem, so it fails at boot instead.
+ */
+function loadLease(): LeaseConfig {
+  return validateLeaseConfig({
+    leaseSeconds: positiveInt(process.env.JOB_LEASE_SECONDS, 'JOB_LEASE_SECONDS', 120),
+    heartbeatSeconds: positiveInt(process.env.HEARTBEAT_SECONDS, 'HEARTBEAT_SECONDS', 30),
+    maxAttempts: positiveInt(process.env.MAX_JOB_ATTEMPTS, 'MAX_JOB_ATTEMPTS', 3),
+  });
+}
+
+function positiveInt(raw: string | undefined, name: string, fallback: number): number {
+  if (raw === undefined || raw.trim() === '') {
+    return fallback;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer, received "${raw}"`);
+  }
+  return value;
+}
 
 function main(): void {
   const queueConfig = loadQueueConfig();
@@ -67,6 +102,9 @@ function main(): void {
     },
     storage: new S3Storage(loadStorageConfig()),
     stages: OWNED_STAGES,
+    // Without a lease, a killed worker leaves a PROCESSING job that nothing can
+    // ever reclaim, and a reservation pinned to the user's balance for good.
+    lease: { workerId: WORKER_ID, config: loadLease() },
     // Matches the queue preset, so "the last attempt" means the same thing to the
     // handler as it does to BullMQ.
     defaultAttempts: preset.attempts,

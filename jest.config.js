@@ -85,6 +85,13 @@ module.exports = {
     '!src/**/*.controller.ts',
     '!src/**/*.service.ts',
     '!src/runner.ts',
+    // Phase 5: the lease and the reaper are SQL and timing loops. Their pure
+    // parts (validateLeaseConfig, workerIdForProcess) are unit-tested in
+    // lease.spec.ts, but a unit test cannot reach the guarded UPDATEs, and a
+    // coverage floor that forces it to try would push the real assertions into
+    // integration where they belong.
+    '!src/lease.ts',
+    '!src/reaper.ts',
     // The credit engine's SQL is verified by tests/integration against a real
     // Postgres: CHECK constraints, partial unique indexes, guarded-UPDATE row
     // counts, transaction rollback, and the concurrent-reserve race. These globs

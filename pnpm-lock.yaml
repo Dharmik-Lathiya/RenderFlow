@@ -253,6 +253,9 @@ importers:
       '@renderflow/db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@renderflow/jobs':
+        specifier: workspace:*
+        version: link:../../libs/jobs
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../../libs/observability
@@ -386,6 +389,9 @@ importers:
       '@renderflow/db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@renderflow/jobs':
+        specifier: workspace:*
+        version: link:../../libs/jobs
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../../libs/observability

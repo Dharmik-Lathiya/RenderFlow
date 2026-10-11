@@ -900,6 +900,92 @@ mid-flight.
 - Heartbeat/lease, reaper, retries with backoff, checkpoint resume, DLQ, graceful shutdown, idempotency keys.
 - **DoD:** killing `media-worker` at stage IMAGE results in retry on another worker that resumes from checkpoint; after max attempts the job fails and credits are refunded exactly once; chaos test passes.
 
+**Status: mostly shipped.** `libs/jobs` gained `lease.ts` and `reaper.ts`; the
+two generation workers now hold a lease and heartbeat; `apps/reaper` runs the
+sweeps under a Postgres advisory lock. New admin endpoints: `GET /admin/dlq`,
+`POST /admin/dlq/:jobId/replay`, `GET /admin/dlq/outbox`,
+`POST /admin/dlq/outbox/:eventId/replay`, `GET /admin/reconcile`. Already
+delivered in earlier phases: retries with backoff (`libs/queue` presets),
+checkpoint resume, idempotency keys, graceful shutdown.
+
+DoD verified in `tests/integration/reliability.spec.ts` (27 assertions) and
+`tests/chaos/run.sh` (R1-R4, 14 assertions). **R5 is not implemented** — see the
+known gaps below.
+
+Decisions worth carrying forward:
+
+- **The durable attempt counter on the job row is authoritative, not BullMQ's
+  `attemptsMade`.** The queue's counter lives in Redis, and a Redis restart —
+  the exact event the reaper exists for — would reset it and hand every job an
+  infinite number of retries. `acquireLease` increments the row, and the refund
+  decision reads the row.
+- **Every lease mutation is a guarded UPDATE.** Acquire only takes a lease that
+  is free or expired; renew is guarded on `worker_id`, so a worker that was
+  declared dead, reclaimed, and then woke up cannot extend a lease it no longer
+  holds. Without that guard the zombie and the new owner both believe they have
+  the job and the reaper can never reclaim it again.
+- **The lease is taken AFTER the cheap checks, and only then.** A worker handed
+  a job whose next stage it does not own must not bump the attempt counter — a
+  healthy two-worker setup would exhaust a three-attempt budget in a minute and
+  start refunding jobs that were never broken.
+- **`validateLeaseConfig` fails at boot if the heartbeat interval reaches half
+  the lease.** A lease that can expire while its holder is still running means
+  the reaper hands a live job to a second worker, and both race to capture the
+  credits. Not recoverable at runtime, so it never gets to run.
+- **The reaper never runs a job.** It hands work back to the queue and lets a
+  worker own it; a reaper that rendered reels would need the lease logic it
+  exists to police.
+- **The DLQ is not a table.** It is the set of jobs and events that were given
+  up on: `generation_jobs` rows in `FAILED` with `refunded = 1`, and
+  `outbox_events` rows with their attempts spent. Both are already durable and
+  already record whether the credits moved. A separate `dead_letters` table would
+  duplicate that and introduce a place for the DLQ and the job row to disagree
+  about whether a user was refunded.
+- **Replay re-charges.** The original attempt was refunded, so a replay
+  re-reserves from the owner's wallet and is refused with `INSUFFICIENT_CREDITS`
+  if they no longer have it. Re-queuing without that would be a hole any OWNER
+  could pull on repeatedly. It also carries the original payload forward, so a
+  replay cannot silently produce a cheaper artefact than the one requested.
+- **Leader election is a Postgres advisory lock, not Redis.** Redis is already a
+  dependency of the reaper's _actions_, but a lock store that is down must not
+  stop the process that recovers jobs. Two reapers would not actually conflict —
+  every sweep is a guarded UPDATE — so this is about being able to answer "which
+  one is doing the work", not about safety.
+
+Bugs the tests caught
+---------------------
+
+- **`requeue` refused the jobs it was written for.** Its guard was
+  `locked_until IS NULL`, but `findExpiredJobs` finds a job _because_ its lease
+  has expired. Every reclaim was rejected; the "never started" case passed, which
+  is exactly the kind of partial green that hides this. The guard now re-checks
+  expiry (`IS NULL OR < now()`), which also closes the window between the sweep's
+  read and the write.
+- **`startHeartbeat().stop()` hung every worker.** It cleared the timer but never
+  settled the promise the loop was awaiting, so `done` never resolved — and the
+  SIGTERM drain awaits it. Found by a 60s test timeout, not by reading.
+- **`workerIdForProcess` did not do what its name said.** It generated a random
+  suffix per _call_, so no worker could ever renew its own lease. The instance id
+  is now generated once per module load.
+- **The durable counter was compared against the queue's budget.** With a lease
+  configured for one attempt, `attempts >= fallback` refunded every job on its
+  first transient failure. Only the row's own `maxAttempts` may shorten it.
+
+Known gaps:
+
+- **R5 — a real SIGKILL — is not implemented.** `tests/chaos/run.sh` runs R1-R4
+  against a real database and reports R5 as `SKIP`, exiting non-zero: a chaos
+  harness that reports green for what it did not do is worse than none. R1-R4
+  reproduce the exact state SIGKILL leaves (PROCESSING, an unrenewed lease,
+  partial checkpoints) and take the same recovery decisions the real thing does;
+  what they do not exercise is the process dying, which needs Redis.
+- **`/admin/*` is not filtered by workspace.** Operators are workspace OWNERs,
+  but the queries are global, so an owner sees the whole DLQ. Wrong for a
+  multi-tenant product; recorded rather than shipped quietly.
+- **Reconciliation runs on demand, not hourly.** The endpoint exists; nothing
+  schedules it yet.
+- **The DLQ has no UI.** Only the API.
+
 ### Phase 6: Real AI integration
 
 - LLM provider with Zod-validated structured output (plan, caption, script/scenes).

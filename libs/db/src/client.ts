@@ -64,6 +64,57 @@ export function resetDbForTests(): void {
 }
 
 /**
+ * A session-scoped Postgres advisory lock.
+ *
+ * Used by the reaper so only one instance sweeps at a time. Postgres is the
+ * right place for it rather than Redis: it is the dependency that already has to
+ * be up for the reaper to do anything, and a reaper that cannot start because
+ * its lock store is down is a reaper that cannot recover anything.
+ *
+ * The lock is HELD BY A CONNECTION, so it needs a dedicated client from the pool
+ * rather than one taken and returned. Pinning a pooled client for a long-running
+ * process is normally a bad idea; it is safe here because the holder is exactly
+ * one process and the pool is sized for the workers as well.
+ */
+export interface AdvisoryLock {
+  /** False when another process already holds it; there is nothing to release. */
+  readonly acquired: boolean;
+  release: () => Promise<void>;
+}
+
+export async function tryAcquireAdvisoryLock(pool: Pool, key: number): Promise<AdvisoryLock> {
+  const client = await pool.connect();
+
+  try {
+    const result = await client.query<{ locked: boolean }>(
+      'SELECT pg_try_advisory_lock($1) AS locked',
+      [key],
+    );
+
+    if (result.rows[0]?.locked !== true) {
+      client.release();
+      return { acquired: false, release: async () => {} };
+    }
+
+    return {
+      acquired: true,
+      release: async () => {
+        try {
+          await client.query('SELECT pg_advisory_unlock($1)', [key]);
+        } finally {
+          // Returned even when the unlock failed, or the pool loses a slot on
+          // every reaper restart.
+          client.release();
+        }
+      },
+    };
+  } catch (error) {
+    client.release();
+    throw error;
+  }
+}
+
+/**
  * Closes the pool even if a caller forgot, so a crashed test cannot leave the
  * integration database with open connections.
  */

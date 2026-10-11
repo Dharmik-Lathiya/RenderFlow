@@ -11,3 +11,5 @@
 export * from './stage-machine';
 export * from './runner';
 export * from './worker-handler';
+export * from './lease';
+export * from './reaper';
