@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
+import { BrandVoiceService } from './brand-voice.service';
+import { ModerationService } from './moderation.service';
 
 /**
  * Generation requests and progress.
@@ -13,7 +15,7 @@ import { JobsService } from './jobs.service';
  */
 @Module({
   controllers: [JobsController],
-  providers: [JobsService],
-  exports: [JobsService],
+  providers: [JobsService, ModerationService, BrandVoiceService],
+  exports: [JobsService, ModerationService, BrandVoiceService],
 })
 export class JobsModule {}

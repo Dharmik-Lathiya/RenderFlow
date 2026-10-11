@@ -43,6 +43,13 @@
       "when": 1791744819489,
       "tag": "0006_outbox_dedupe_key",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791831219489,
+      "tag": "0007_brand_memory",
+      "breakpoints": true
     }
   ]
 }

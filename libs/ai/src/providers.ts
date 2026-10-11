@@ -122,7 +122,16 @@ export interface RendererProvider {
   }): Promise<RenderResult>;
 }
 
-/** The brand voice, injected into prompts. Treated as untrusted data downstream. */
+/**
+ * The brand voice, injected into prompts. Treated as untrusted data downstream.
+ *
+ * `examples` are the brand's own APPROVED posts, retrieved by similarity
+ * (PROJECT.md section 6, brand_memory). They travel inside the context rather
+ * than being fetched by each provider, because that keeps the retrieval in one
+ * place: a provider that fetched them itself would decide for itself how many to
+ * use, and "how much of a brand's history fits in a prompt" is a decision with a
+ * cost attached, not a detail.
+ */
 export interface BrandContext {
   name: string;
   industry?: string | null;
@@ -130,6 +139,15 @@ export interface BrandContext {
   audience?: string | null;
   colors: string[];
   languages: string[];
+  /** Nearest approved posts, most similar first. */
+  examples?: BrandExample[];
+}
+
+export interface BrandExample {
+  id: string;
+  content: string;
+  /** Cosine similarity in [-1, 1]. */
+  score: number;
 }
 
 /** Which providers a given job kind needs. Keeps the runner honest. */

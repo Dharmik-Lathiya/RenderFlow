@@ -366,6 +366,42 @@ export const generationJobs = pgTable(
   }),
 );
 
+/**
+ * Brand voice memory (PROJECT.md section 6, Phase 6).
+ *
+ * Approved content, embedded, so the nearest few can be injected into a prompt.
+ * The point is the REGISTER, not the text: the model is shown what the brand
+ * sounds like and asked not to copy it.
+ *
+ * `embedding` is JSON, not `vector`. pgvector is not available in this
+ * environment and the image ships no extension for it, so a `vector` column could
+ * not be created or tested here. For a brand's approved posts - dozens to low
+ * hundreds - a cosine ranking in SQL is fast enough, and the store sits behind
+ * `VectorStore` so the pgvector backend is one class to add once the extension
+ * exists rather than a rewrite. The production migration is written down in
+ * `libs/ai/src/brand-memory.ts`.
+ */
+export const brandMemory = pgTable(
+  'brand_memory',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    brandId: uuid('brand_id')
+      .notNull()
+      .references(() => brands.id, { onDelete: 'cascade' }),
+    kind: varchar('kind', { length: 40 }).notNull().default('post'),
+    content: text('content').notNull(),
+    embedding: jsonb('embedding').$type<number[]>().notNull().default([]),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    // The only query the retrieval makes: one brand's memory, ranked.
+    brandIdx: index('brand_memory_brand_id_idx').on(table.brandId),
+  }),
+);
+
+export type BrandMemory = typeof brandMemory.$inferSelect;
+export type NewBrandMemory = typeof brandMemory.$inferInsert;
+
 // ---------------------------------------------------------------------------
 // workspaces and membership
 // ---------------------------------------------------------------------------

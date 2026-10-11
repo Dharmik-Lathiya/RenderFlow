@@ -97,6 +97,11 @@ module.exports = {
     // meaningfully covered by rendering a real video - which is what
     // tests/integration/ffmpeg-render.spec.ts does.
     '!src/render-provider.ts',
+    // Phase 6: brand memory. The embedders and the cosine helpers are pure and
+    // are exercised in tests/integration/brand-memory.spec.ts, but the store is
+    // SQL - "the dot product ranks these correctly" only exists against a
+    // database, and a unit test could only assert the query was assembled.
+    '!src/brand-memory.ts',
     // The credit engine's SQL is verified by tests/integration against a real
     // Postgres: CHECK constraints, partial unique indexes, guarded-UPDATE row
     // counts, transaction rollback, and the concurrent-reserve race. These globs

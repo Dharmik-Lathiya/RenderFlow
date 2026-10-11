@@ -23,6 +23,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^11.2.7",
     "@nestjs/swagger": "^11.2.7",
+    "@renderflow/ai": "workspace:*",
     "@renderflow/common": "workspace:*",
     "@renderflow/credits": "workspace:*",
     "@renderflow/db": "workspace:*",

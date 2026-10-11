@@ -270,7 +270,11 @@ pricing_rules(action PK, credits, active)
 workspaces(id, name, owner_id)
 workspace_members(workspace_id, user_id, role)            -- OWNER | EDITOR | APPROVER | VIEWER
 brands(id, workspace_id, name, industry, tone, audience, colors jsonb, logo_asset_id, languages text[])
-brand_memory(id, brand_id, kind, content, embedding vector)  -- approved posts for "brand voice"
+-- approved posts for "brand voice". Phase 6 builds this with a jsonb embedding
+-- rather than `vector`: pgvector is not installed in this environment, so a
+-- `vector` column could neither be created nor tested. The store sits behind an
+-- interface; see section 12 Phase 6.
+brand_memory(id, brand_id, kind, content, embedding jsonb)
 
 campaigns(id, brand_id, goal, status, start_date, end_date, created_by)
 posts(id, campaign_id, brand_id, type, caption, hashtags, status, approved_by, scheduled_at, version)
@@ -789,9 +793,9 @@ Decisions worth carrying forward:
 - **Campaign dates are `date`, not `timestamptz`,** and are inserted as SQL
   literals. A calendar date has no time of day; `new Date('2026-03-01')` is UTC
   midnight, which becomes the previous day for anyone west of Greenwich.
-- **`brand_memory` / pgvector is deliberately NOT built here.** It is Phase 6
-  scope and would add a database extension dependency now, before anything needs
-  embeddings. The generated OpenAPI _client_ is likewise still hand-written.
+- **`brand_memory` / pgvector was deliberately deferred here** and built in Phase 6
+  against a portable backend, because the extension is still not available. The
+  generated OpenAPI _client_ is likewise still hand-written.
 
 Verified by `./scripts/smoke-phase4.sh` against a running server: 33 assertions
 covering reserve-on-request, the two-worker split, capture, SSE, tenancy, an
@@ -993,6 +997,95 @@ Known gaps:
 - Moderation check before reserve. Brand voice memory (embed approved posts in pgvector and inject into prompts).
 - Provider fallback and per-provider timeouts and rate limits.
 - **DoD:** end-to-end real generation of caption, poster, and a 15 s reel works with provider keys; switching `AI_PROVIDER=mock` still passes the whole test suite.
+
+**Status: shipped except the first half of the DoD.** Real providers for text,
+image, TTS and FFmpeg exist behind the interfaces; the factory selects them;
+moderation runs before every reservation; brand voice memory retrieves approved
+posts and injects them into the prompt.
+
+**The DoD's first half is NOT verified: no generation has been run against a real
+provider key.** There is no network access in this environment. What IS verified:
+the second half (`AI_PROVIDER=mock` passes everything), the real renderers driven
+end to end with real ffmpeg, and every real provider's request/response handling
+through a stub transport. See the known gaps below.
+
+Decisions worth carrying forward:
+
+- **Structured output gets exactly one repair turn.** The model is asked for
+  JSON, the answer is parsed, validated with zod, and on failure handed the
+  schema shape plus the specific issues found. After that it is PERMANENT: a
+  model told what is wrong and still wrong has misunderstood the task, and
+  another round trip charges the user for the same failure.
+- **Fallback never routes around a refusal.** A PERMANENT error stops the chain.
+  A moderation decision that a second provider can overrule is not a decision. Each
+  provider also gets its OWN retry budget, because three providers at three
+  attempts each is nine upstream calls for one job.
+- **Three provider variables, not one.** Text, image and TTS are separately
+  billable and separately likely to be unavailable; a replica outage should not
+  stop captions being written.
+- **Moderation runs BEFORE the reservation, not after.** A reservation taken for
+  a request that is then refused has to be refunded, and a refund the user never
+  needed is a balance that moved for no reason.
+- **The local moderation rules cannot be switched off.** The provider-backed check
+  is additive; the deterministic list always runs, in every environment, and a
+  model can never un-refuse what it found. That is what makes "moderation runs on
+  every request" a property of the code rather than of a configuration.
+- **Subtitles are a soft track, and the watermark degrades.** Burning subtitles in
+  needs libass and a font at a path that differs on every base image; when either
+  is missing every reel would fail. The watermark is skipped and REPORTED when no
+  font is available, rather than failing the render.
+- **Brand memory ships against a portable backend, not pgvector.** The extension
+  is not installed in this environment and the image has no package for it, so a
+  `vector` column could neither be created nor tested. `VectorStore` is the seam;
+  `PortableVectorStore` stores JSON and ranks by cosine in SQL, and the pgvector
+  backend is one class plus the migration written down in
+  `libs/ai/src/brand-memory.ts`. For a brand's approved posts that is fast enough;
+  for a corpus of millions it is not, which is what the HNSW index is for.
+- **Approved examples ride inside the untrusted brand block**, not beside it. They
+  are the user's own words, so they are exactly as capable of carrying an
+  injection as the tone field is.
+
+Bugs the tests caught
+---------------------
+
+- **`-shortest` silently dropped the audio stream** when the stills and the
+  narration were the same length - which is exactly what a 15 s reel with 15 s
+  narration is. ffmpeg returned success and a mute video. Replaced with an
+  explicit output duration plus `apad`.
+- **The moderation response schema did not match the API.** It parsed for
+  `{flagged}` at the top level; OpenAI returns `{results: [...]}`, so every real
+  flag would have read as clean. The unit test passed because it was fed the
+  shape the code expected rather than the shape the API sends.
+- **Normalisation defeated the term list.** Replacing punctuation with spaces
+  turned `D-o-x-x-i-n-g` into `d o x x i n g`, which does not contain
+  `doxxing` - so the one obfuscation a person would actually try walked through.
+- **The watermark was drawn after concat**, which would have burned the text into
+  every frame for the whole reel.
+- **`withTimeout` only rejected if the inner work reacted to the abort signal.** A
+  provider that ignored it would hang past its deadline holding a leased job until
+  the reaper declared the worker dead.
+- **`PortableVectorStore.remove` read `rows[0]`** from a bare DELETE, which
+  returns a row count - so it reported "not removed" for rows it had deleted.
+
+Known gaps:
+
+- **No generation has been run against a real provider key.** No network access
+  here. The request and response handling is exercised through a stub transport;
+  the rate limits, price behaviour and outage characteristics of the real APIs are
+  not.
+- **R5 (a real SIGKILL) is still not implemented** - it needs Redis. Carried over
+  from Phase 5.
+- **The pgvector backend is documented, not written.** `PortableVectorStore` is
+  the only implementation, and it is the wrong choice at corpus scale.
+- **Brand memory is populated by nothing yet.** The store and the retrieval work;
+  no code writes a post into memory when it is approved. That belongs with the
+  approval flow in Phase 7.
+- **`OpenAiEmbedder` is unused by default** - the factory wires the local hash
+  embedder, which is deterministic but not semantic. A brand's memory only means
+  something once `OPENAI_API_KEY` is present.
+- **Provider fallback is per-stage, not per-job.** A reel whose images came from
+  two different providers is possible, and the DoD does not say whether that
+  should be.
 
 ### Phase 7: Scheduling and publishing
 

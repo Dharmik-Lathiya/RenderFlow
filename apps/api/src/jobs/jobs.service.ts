@@ -13,6 +13,7 @@ import {
 } from '@renderflow/db';
 
 import { WorkspaceAccessService } from '../workspaces/workspace-access.service';
+import { ModerationService } from './moderation.service';
 
 /**
  * Generation endpoints (PROJECT.md section 10: `POST /posts/:id/generate`,
@@ -55,7 +56,10 @@ export interface JobView {
 export class JobsService implements OnModuleInit {
   private db!: Database;
 
-  constructor(private readonly access: WorkspaceAccessService) {}
+  constructor(
+    private readonly access: WorkspaceAccessService,
+    private readonly moderation: ModerationService,
+  ) {}
 
   onModuleInit(): void {
     this.db = getDb();
@@ -92,6 +96,18 @@ export class JobsService implements OnModuleInit {
         const row = rows[0];
         return row === undefined ? null : { workspaceId: row.workspaceId, value: row };
       },
+    });
+
+    // Moderation runs BEFORE the reservation, not after.
+    //
+    // Order is the whole point: a reservation taken for a request that is then
+    // refused has to be refunded, and a refunded reservation the user never
+    // needed is a balance that moved for no reason. Checked first, a refused
+    // request never touches the wallet at all.
+    await this.moderation.assertAllowed({
+      postId,
+      prompt: input.goal ?? '',
+      kind: input.type,
     });
 
     // Only the keys the caller supplied are forwarded, so a payload cannot smuggle

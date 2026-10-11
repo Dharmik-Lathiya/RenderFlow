@@ -104,6 +104,8 @@ module.exports = {
     // ffmpeg and inspecting them with ffprobe. A unit test could only assert
     // that the argument array looks right, which is not what "it renders".
     'libs/ai/src/render-provider.ts',
+    // Phase 6: brand voice memory, against the real brand_memory table.
+    'libs/ai/src/brand-memory.ts',
     'libs/outbox/src/relay.ts',
 
     // Excluded because the unit suite covers them with real assertions, not

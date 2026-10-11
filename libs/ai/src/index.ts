@@ -20,3 +20,5 @@ export * from './text-providers';
 export * from './render-provider';
 export * from './media-providers';
 export * from './factory';
+export * from './moderation';
+export * from './brand-memory';
