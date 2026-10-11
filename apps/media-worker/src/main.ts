@@ -1,12 +1,6 @@
-import {
-  MockImageProvider,
-  MockRendererProvider,
-  MockTextProvider,
-  MockTtsProvider,
-  mockOptionsFromEnv,
-} from '@renderflow/ai';
-import { QUEUE_NAMES, stagesForQueue } from '@renderflow/common';
+import { QUEUE_NAMES, stagesForQueue, type JobStage } from '@renderflow/common';
 import { disconnectDb, getDb } from '@renderflow/db';
+import { createProviders } from '@renderflow/ai';
 import {
   createGenerationProcessor,
   describeError,
@@ -17,38 +11,28 @@ import {
 import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
 import { S3Storage, loadStorageConfig } from '@renderflow/storage';
-import type { JobStage } from '@renderflow/common';
 
 /**
  * media-worker: image generation, TTS voiceover and FFmpeg render.
  *
  * Takes the second half of a reel. `stagesForQueue` is the single source of
  * truth for the split - this worker cannot start a stage it does not own, which
- * is what stops a duplicate media stage running in parallel with content-worker
- * if an event is delivered twice.
+ * is what stops a duplicate media stage running in parallel with content-worker if
+ * an event is delivered twice.
  *
  * Concurrency is 2, against 5 on content, because rendering is CPU bound: the
  * preset is set in libs/queue and this app only obeys it.
  *
  * FFmpeg children are registered as a drain below so they cannot outlive the
- * worker on SIGTERM. With mock providers there are none yet; the registration
- * has to exist before the first real render does, not after.
+ * worker on SIGTERM. With mock providers there are none yet; the registration has
+ * to exist before the first real render does, not after.
  */
 
 const APP_NAME = 'media-worker';
 const QUEUE = QUEUE_NAMES.MEDIA;
 const OWNED_STAGES = stagesForQueue(QUEUE) as readonly JobStage[];
-/** This process's lease identity: stable for its lifetime, unique across them. */
 const WORKER_ID = workerIdForProcess();
 
-/**
- * Lease configuration, read once at boot.
- *
- * Validated rather than trusted: a heartbeat interval at or above the lease
- * length lets a lease expire while its holder is still running, the reaper
- * hands a live job to a second worker, and both race to capture the credits.
- * That is not a slow-environment problem, so it fails at boot instead.
- */
 function loadLease(): LeaseConfig {
   return validateLeaseConfig({
     leaseSeconds: positiveInt(process.env.JOB_LEASE_SECONDS, 'JOB_LEASE_SECONDS', 120),
@@ -72,6 +56,7 @@ function main(): void {
   const queueConfig = loadQueueConfig();
   const preset = queueConfig.presets[QUEUE];
   const db = getDb();
+  const storage = new S3Storage(loadStorageConfig());
 
   const worker = startWorkerProcess({
     appName: APP_NAME,
@@ -81,21 +66,25 @@ function main(): void {
     base: { stage: 'consume' },
   });
 
-  const mockOptions = mockOptionsFromEnv();
+  const providers = createProviders({
+    env: process.env,
+    sink: {
+      put: async (input) => {
+        await storage.putObject(input);
+      },
+    },
+    rendererStorage: storage,
+    ...(process.env.BRAND_WATERMARK === undefined
+      ? {}
+      : { watermark: process.env.BRAND_WATERMARK }),
+    ...(process.env.BRAND_COLOR === undefined ? {} : { watermarkColor: process.env.BRAND_COLOR }),
+  });
 
   const handle = createGenerationProcessor({
     db,
-    providers: {
-      // The media worker never runs PLAN or SCRIPT, but the runner takes the
-      // whole set, so the interfaces are all supplied.
-      text: new MockTextProvider(mockOptions),
-      image: new MockImageProvider(mockOptions),
-      tts: new MockTtsProvider(mockOptions),
-      renderer: new MockRendererProvider(mockOptions),
-    },
-    storage: new S3Storage(loadStorageConfig()),
+    providers,
+    storage,
     stages: OWNED_STAGES,
-    // Without this a killed worker leaves a PROCESSING job nothing can reclaim.
     lease: { workerId: WORKER_ID, config: loadLease() },
     defaultAttempts: preset.attempts,
   });
@@ -115,16 +104,25 @@ function main(): void {
     );
   });
 
+  // Drains in registration order, as in content-worker: stop consuming, let the
+  // in-flight render finish, then the connections, then the pool.
   worker.shutdown.registerDrain('bullmq', () => consumer.close());
-  // Phase 6 adds the real child-process reaper here; registered now so the
-  // ordering is already decided rather than being retrofitted under pressure.
+  // Phase 6 renders through ffmpeg today, synchronously, inside the handler -
+  // so by the time this drain runs there is nothing left to kill. Registered now
+  // so that the ordering is already decided when a future change makes renders
+  // detached rather than retrofitting a reaper under pressure.
   worker.shutdown.registerDrain('ffmpeg', () => {
-    worker.logger.info({ app: APP_NAME }, 'no ffmpeg children to terminate');
+    worker.logger.info({ app: APP_NAME }, 'ffmpeg renders run in-process; nothing to terminate');
   });
   worker.shutdown.registerDrain('postgres', () => disconnectDb());
 
   worker.logger.info(
-    { app: APP_NAME, stages: OWNED_STAGES, attempts: preset.attempts },
+    {
+      app: APP_NAME,
+      stages: OWNED_STAGES,
+      attempts: preset.attempts,
+      providerMode: providers.allMock ? 'mock' : 'real',
+    },
     'worker ready',
   );
 }

@@ -1,12 +1,6 @@
-import {
-  MockImageProvider,
-  MockRendererProvider,
-  MockTextProvider,
-  MockTtsProvider,
-  mockOptionsFromEnv,
-} from '@renderflow/ai';
 import { QUEUE_NAMES, stagesForQueue, type JobStage } from '@renderflow/common';
 import { disconnectDb, getDb } from '@renderflow/db';
+import { createProviders } from '@renderflow/ai';
 import {
   createGenerationProcessor,
   describeError,
@@ -19,23 +13,18 @@ import { createWorker, loadQueueConfig } from '@renderflow/queue';
 import { S3Storage, loadStorageConfig } from '@renderflow/storage';
 
 /**
- * content-worker: runs generation jobs.
+ * content-worker: LLM generation (content plan, captions, hashtags, scripts).
  *
- * The pipeline itself lives in `@renderflow/jobs`; this process is wiring. That
- * split is deliberate. It is what lets the runner's behaviour - checkpoints,
- * resume, capture, refund - be tested against a real database without a Redis,
- * and it is what stops the retry policy from drifting between six worker apps.
- *
- * It runs PLAN and SCRIPT and then stops. Each stage writes a
- * `job.stage_completed` outbox row, which the relay routes to whichever queue
- * owns the next stage - so a reel genuinely crosses to media-worker rather than
- * one app quietly doing all of it.
+ * Takes the first half of a job. It runs PLAN and SCRIPT and then stops; each
+ * stage writes a `job.stage_completed` outbox row, which the relay routes to
+ * whichever queue owns the next stage - so a reel genuinely crosses to
+ * media-worker without either app knowing the other exists.
  *
  * `handleGenerationJob` refunds on a `PERMANENT` failure or on the final
  * attempt, and rethrows either way so BullMQ owns the retry. A reservation whose
- * worker is killed mid-flight is not handled here: that is Phase 5's reaper.
+ * worker is killed mid-flight is not handled here: that is the reaper's job.
  *
- * AI_PROVIDER=mock in every environment that is not production. Phase 6 swaps in
+ * `AI_PROVIDER=mock` in every environment that is not production. Phase 6 wires
  * the real providers behind the same interfaces, and nothing here changes.
  */
 
@@ -77,6 +66,7 @@ function main(): void {
   const queueConfig = loadQueueConfig();
   const preset = queueConfig.presets[QUEUE];
   const db = getDb();
+  const storage = new S3Storage(loadStorageConfig());
 
   const worker = startWorkerProcess({
     appName: APP_NAME,
@@ -86,21 +76,23 @@ function main(): void {
     base: { stage: 'consume' },
   });
 
-  // One options object shared by every provider, so `FAIL_EVERY_NTH` counts
-  // across the whole job rather than resetting per provider: "fail the third
-  // call" has to mean the third call of the job, not of whichever stage reached
-  // it. Tests depend on that being true.
-  const mockOptions = mockOptionsFromEnv();
+  const providers = createProviders({
+    env: process.env,
+    sink: {
+      put: async (input) => {
+        await storage.putObject(input);
+      },
+    },
+    rendererStorage: storage,
+    ...(process.env.BRAND_WATERMARK === undefined
+      ? {}
+      : { watermark: process.env.BRAND_WATERMARK }),
+  });
 
   const handle = createGenerationProcessor({
     db,
-    providers: {
-      text: new MockTextProvider(mockOptions),
-      image: new MockImageProvider(mockOptions),
-      tts: new MockTtsProvider(mockOptions),
-      renderer: new MockRendererProvider(mockOptions),
-    },
-    storage: new S3Storage(loadStorageConfig()),
+    providers,
+    storage,
     stages: OWNED_STAGES,
     // Without a lease, a killed worker leaves a PROCESSING job that nothing can
     // ever reclaim, and a reservation pinned to the user's balance for good.
@@ -139,7 +131,16 @@ function main(): void {
   worker.shutdown.registerDrain('postgres', () => disconnectDb());
 
   worker.logger.info(
-    { app: APP_NAME, stages: OWNED_STAGES, attempts: preset.attempts, backoff: preset.backoff },
+    {
+      app: APP_NAME,
+      stages: OWNED_STAGES,
+      attempts: preset.attempts,
+      backoff: preset.backoff,
+      // Logged because it changes what a reel costs and whether the suite means
+      // anything: a worker running mocks in production produces placeholder media
+      // and nobody would notice from the logs otherwise.
+      providerMode: providers.allMock ? 'mock' : 'real',
+    },
     'worker ready',
   );
 }

@@ -18,3 +18,5 @@ export * from './mock-providers';
 export * from './runtime';
 export * from './text-providers';
 export * from './render-provider';
+export * from './media-providers';
+export * from './factory';
