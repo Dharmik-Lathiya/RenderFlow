@@ -6,9 +6,15 @@ publishes to social platforms on schedule. Usage is credit based — new account
 **50 free credits**, credits are reserved before work starts and refunded if
 generation fails.
 
-> **Status: Phase 0 (foundation) complete.** The monorepo, toolchain, shared
-> libraries, app skeletons and CI are in place. Domain modules, the credit engine
-> and the job pipeline arrive in Phases 1+. See `PROJECT.md` §12 for the plan and
+> **Status: 5 of 11 phases shipped** (0–4), 2 partial (5, 6). The credit
+> engine, the studio APIs and the generation pipeline are done and verified
+> against a real database; scheduling, publishing and the frontend have not
+> started.
+>
+> Two things are deliberately unverified rather than quietly counted as done:
+> the chaos suite cannot kill a real worker (no Redis), and **no generation has
+> ever been run against a real AI provider key** (no network). See [`PHASES.md`](./PHASES.md)
+> for the per-phase table and [`PROJECT.md`](./PROJECT.md) §12 for the plan and
 > §13 for the test matrix.
 
 ---
@@ -149,10 +155,9 @@ pnpm lint          # eslint (type-aware, strict)
 pnpm typecheck     # tsc --noEmit across the workspace
 pnpm test          # unit
 pnpm test:coverage # unit + coverage gates
-pnpm test:int      # integration (Testcontainers) — from Phase 1
+pnpm test:int      # integration, against a real Postgres
 pnpm test:e2e      # Playwright against the compose stack — from Phase 8
-pnpm test:chaos    # tests/chaos/run.sh — from Phase 5
-pnpm format        # prettier
+pnpm test:chaos    # tests/chaos/run.sh — R1-R4; R5 needs Redis
 ```
 
 ---

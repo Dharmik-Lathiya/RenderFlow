@@ -707,6 +707,37 @@ Two supported paths:
 
 Each phase ends with a **Definition of Done (DoD)**. Do not start the next phase until the DoD passes.
 
+### Phase progress
+
+The single place to look for where the project stands. "Shipped" means the
+DoD's assertions are written and passing; "partial" means some of them are not.
+
+| #   | Phase                             | Status                                            | Verified how                                                                                                                                                 |
+| --- | --------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0   | Foundation                        | **Shipped**, one DoD item unverified              | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                           |
+| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified              | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                        |
+| 2   | Credit engine                     | **Shipped**                                       | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                  |
+| 3   | Brands, campaigns, posts, assets  | **Shipped**                                       | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                 |
+| 4   | Job pipeline with mock AI         | **Shipped**                                       | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                        |
+| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                    |
+| 6   | Real AI integration               | **Partial** - the DoD's first half unverified     | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.** |
+| 7   | Scheduling and publishing         | Not started                                       | -                                                                                                                                                            |
+| 8   | Frontend (Next.js)                | Not started                                       | -                                                                                                                                                            |
+| 9   | Analytics, admin, observability   | Partially started                                 | The admin API (DLQ, replay, reconciliation) landed in Phase 5. No worker, dashboard or alert.                                                                |
+| 10  | Hardening and launch polish       | Not started                                       | -                                                                                                                                                            |
+
+**5 of 11 phases shipped** (0-4), **2 partial** (5, 6), **1 partially
+started** (9, the admin API), **3 untouched** (7, 8, 10).
+
+What "partial" costs, stated plainly:
+
+- **Phase 5** - the recovery logic is tested against the exact database state a
+  `kill -9` leaves behind, and takes the same decisions the real thing does. What
+  is untested is the process dying, which needs Redis.
+- **Phase 6** - every provider's request and response handling is exercised, and
+  the renderer produces real mp4s. What is untested is the behaviour of the live
+  APIs: their rate limits, their outages, their price.
+
 ### Phase 0: Foundation
 
 - pnpm monorepo, Turbo, TS strict, ESLint, Prettier, Husky, CI skeleton.
