@@ -16,7 +16,8 @@
     "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
   },
   "dependencies": {
-    "@renderflow/common": "workspace:*"
+    "@renderflow/common": "workspace:*",
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@types/node": "^24.19.1"

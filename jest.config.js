@@ -92,6 +92,11 @@ module.exports = {
     // integration where they belong.
     '!src/lease.ts',
     '!src/reaper.ts',
+    // Phase 6: the renderer is an ffmpeg argument graph and a child process.
+    // Its pure helpers are unit-tested here, but the graph itself is only
+    // meaningfully covered by rendering a real video - which is what
+    // tests/integration/ffmpeg-render.spec.ts does.
+    '!src/render-provider.ts',
     // The credit engine's SQL is verified by tests/integration against a real
     // Postgres: CHECK constraints, partial unique indexes, guarded-UPDATE row
     // counts, transaction rollback, and the concurrent-reserve race. These globs

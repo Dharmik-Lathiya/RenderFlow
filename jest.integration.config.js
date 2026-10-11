@@ -100,6 +100,10 @@ module.exports = {
     // "one worker wins a race" is not assertable with a fake.
     'libs/jobs/src/lease.ts',
     'libs/jobs/src/reaper.ts',
+    // Phase 6: the renderer, verified by producing real mp4s with the real
+    // ffmpeg and inspecting them with ffprobe. A unit test could only assert
+    // that the argument array looks right, which is not what "it renders".
+    'libs/ai/src/render-provider.ts',
     'libs/outbox/src/relay.ts',
 
     // Excluded because the unit suite covers them with real assertions, not
