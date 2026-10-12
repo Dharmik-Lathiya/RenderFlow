@@ -53,7 +53,7 @@ module.exports = {
   // TypeScript that produced it - which reports a thoroughly exercised credit
   // engine as near-zero. It also means the suite would test a stale build.
   moduleNameMapper: {
-    '^@renderflow/(ai|common|credits|db|jobs|observability|outbox|queue|storage)$':
+    '^@renderflow/(ai|common|credits|db|jobs|observability|outbox|queue|social|storage)$':
       '<rootDir>/libs/$1/src/index.ts',
   },
 
@@ -107,6 +107,9 @@ module.exports = {
     // Phase 6: brand voice memory, against the real brand_memory table.
     'libs/ai/src/brand-memory.ts',
     'libs/outbox/src/relay.ts',
+    // Phase 7: the publisher. Its whole job is the no-double-post guarantee,
+    // which is only meaningful against a real table and a real adapter.
+    'libs/social/src/publisher.ts',
 
     // Excluded because the unit suite covers them with real assertions, not
     // hand-rolled fakes; counting them here would double-count while reporting a

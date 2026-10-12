@@ -555,6 +555,28 @@ importers:
         specifier: ^5.8.2
         version: 5.11.1(supports-color@7.2.0)
 
+  libs/social:
+    dependencies:
+      '@renderflow/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@renderflow/common':
+        specifier: workspace:*
+        version: link:../common
+      '@renderflow/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.23.1)(pg@8.23.1)(prisma@6.19.3(typescript@5.9.3))
+      zod:
+        specifier: ^4.1.13
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: ^24.19.1
+        version: 24.19.1
+
   libs/storage:
     dependencies:
       '@aws-sdk/client-s3':
@@ -607,6 +629,9 @@ importers:
       '@renderflow/outbox':
         specifier: workspace:*
         version: link:../libs/outbox
+      '@renderflow/social':
+        specifier: workspace:*
+        version: link:../libs/social
       argon2:
         specifier: ^0.45.1
         version: 0.45.1

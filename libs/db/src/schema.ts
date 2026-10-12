@@ -403,6 +403,220 @@ export type BrandMemory = typeof brandMemory.$inferSelect;
 export type NewBrandMemory = typeof brandMemory.$inferInsert;
 
 // ---------------------------------------------------------------------------
+// social accounts and publishing (Phase 7)
+// ---------------------------------------------------------------------------
+
+export const socialPlatformEnum = pgEnum('social_platform', ['linkedin', 'instagram']);
+
+export const publishStatusEnum = pgEnum('publish_status', [
+  'PENDING',
+  'SCHEDULED',
+  'PUBLISHING',
+  'PUBLISHED',
+  'FAILED',
+]);
+
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'publish_failed',
+  'publish_succeeded',
+  'credit_refunded',
+  'credits_low',
+]);
+
+/**
+ * A connected social account.
+ *
+ * `token` is AES-256-GCM ciphertext, never plaintext: it is a credential for
+ * somebody else's account, and a database dump is exactly the file that leaks.
+ * The key comes from `TOKEN_ENCRYPTION_KEY`; see `libs/social/src/tokens.ts`.
+ *
+ * Unique on `(workspace_id, platform, external_account_id)` so reconnecting the
+ * same account UPDATES the row rather than accumulating a second one that would
+ * then be picked at random at publish time.
+ */
+export const socialAccounts = pgTable(
+  'social_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    platform: socialPlatformEnum('platform').notNull(),
+    /** The platform's own id for the account. Stable across reconnects. */
+    externalAccountId: varchar('external_account_id', { length: 200 }).notNull(),
+    displayName: varchar('display_name', { length: 200 }),
+    /** AES-256-GCM ciphertext. Never returned by the API. */
+    token: text('token').notNull(),
+    /** When the access token stops working; the refresh path keys off this. */
+    tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true, mode: 'date' }),
+    scopes: jsonb('scopes').$type<string[]>().notNull().default([]),
+    connectedBy: uuid('connected_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    // One row per connected account, so a reconnect updates rather than
+    // accumulating a second one that publish would then pick between.
+    workspacePlatformExternal: uniqueIndex('social_accounts_workspace_platform_external_idx').on(
+      table.workspaceId,
+      table.platform,
+      table.externalAccountId,
+    ),
+    // Which accounts a workspace publishes to.
+    workspaceIdx: index('social_accounts_workspace_id_idx').on(table.workspaceId),
+  }),
+);
+
+/**
+ * One scheduled publication of one post to one account.
+ *
+ * Persisted FIRST and scheduled second. A BullMQ delayed job is a message in
+ * Redis; Redis is not durable in the sense we need, and a lost message is a post
+ * that silently never publishes. The row is the truth and the queue entry is an
+ * optimisation, which is why the reaper can re-enqueue from this table alone.
+ *
+ * `external_post_id` is the idempotency guarantee against a DOUBLE POST: a
+ * publisher that crashed after the platform accepted the post but before it
+ * recorded the id would republish on retry, and the user sees it twice. Checking
+ * this column - and the platform - before every publish is what prevents that
+ * (PROJECT.md section 9.5).
+ */
+export const publishJobs = pgTable(
+  'publish_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    postId: uuid('post_id')
+      .notNull()
+      .references(() => posts.id, { onDelete: 'cascade' }),
+    socialAccountId: uuid('social_account_id')
+      .notNull()
+      .references(() => socialAccounts.id, { onDelete: 'cascade' }),
+
+    status: publishStatusEnum('status').notNull().default('PENDING'),
+    /** When this should go out. UTC; the API rejects local-time ambiguity. */
+    scheduledFor: timestamp('scheduled_for', { withTimezone: true, mode: 'date' }).notNull(),
+
+    /**
+     * The post text as THIS platform requires it.
+     *
+     * Stored, not formatted at publish time: LinkedIn truncates at 3000
+     * characters, Instagram at 2200, and the rules will change. Formatting at
+     * publish time means a post approved against one rendering goes out as
+     * another, with no record of why.
+     */
+    platformContent: text('platform_content').notNull(),
+    /** Storage key of the media to publish, when the post has any. */
+    mediaKey: varchar('media_key', { length: 400 }),
+
+    /**
+     * Client-supplied key, so a retried `schedule` call cannot create two jobs.
+     *
+     * Scoped to this table rather than to a user, because a schedule request is
+     * about one post and one account - the natural identity is already the
+     * `post_account` unique index below. This covers the window BEFORE that
+     * identity is known, which is two concurrent requests for a post whose
+     * scheduling is not yet committed.
+     */
+    idempotencyKey: varchar('idempotency_key', { length: 200 }),
+
+    attempts: integer('attempts').notNull().default(0),
+    maxAttempts: integer('max_attempts').notNull().default(3),
+
+    // Lease fields, same shape as generation_jobs, for the same reason: a worker
+    // killed mid-publish must be reclaimable.
+    workerId: varchar('worker_id', { length: 100 }),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true, mode: 'date' }),
+    lockedUntil: timestamp('locked_until', { withTimezone: true, mode: 'date' }),
+
+    /**
+     * The platform's id for what we published.
+     *
+     * The idempotency key for the whole feature: set once, never cleared, and
+     * checked before every publish. Losing this value is how a user gets two
+     * copies of the same post.
+     */
+    externalPostId: varchar('external_post_id', { length: 300 }),
+    externalUrl: text('external_url'),
+    error: text('error'),
+    publishedAt: timestamp('published_at', { withTimezone: true, mode: 'date' }),
+
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    // Client-supplied key. The unique index IS the mechanism: two concurrent
+    // schedule calls with one key collide here rather than creating two jobs that
+    // both publish.
+    idempotencyKey: uniqueIndex('publish_jobs_idempotency_key')
+      .on(table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} IS NOT NULL`),
+    /** One post must not be published to the same account twice. */
+    postAccount: uniqueIndex('publish_jobs_post_account_idx').on(
+      table.postId,
+      table.socialAccountId,
+    ),
+    /** The publisher's poll: due, unclaimed, unfinished. */
+    dueIdx: index('publish_jobs_due_idx')
+      .on(table.scheduledFor)
+      .where(sql`${table.status} IN ('PENDING','SCHEDULED')`),
+    /** The reaper's sweep: unfinished with an expired lease. */
+    reclaimIdx: index('publish_jobs_reclaim_idx')
+      .on(table.status, table.lockedUntil)
+      .where(sql`${table.status} IN ('PENDING','SCHEDULED','PUBLISHING')`),
+    // The double-post guard depends on being able to ask "has this already
+    // been published?" without scanning the table.
+    externalPostIdx: index('publish_jobs_external_post_id_idx')
+      .on(table.externalPostId)
+      .where(sql`${table.externalPostId} IS NOT NULL`),
+    nonNegativeAttempts: check('publish_jobs_attempts_non_negative', sql`${table.attempts} >= 0`),
+  }),
+);
+
+/**
+ * In-app notifications.
+ *
+ * Failures are surfaced here as well as logged: a generation that refunds
+ * silently is indistinguishable, from the user's side, from one that never
+ * happened.
+ */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: notificationTypeEnum('type').notNull(),
+    title: varchar('title', { length: 200 }).notNull(),
+    body: text('body').notNull(),
+    readAt: timestamp('read_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    // The notification centre: newest first, unread only.
+    userCreatedIdx: index('notifications_user_id_created_at_idx').on(table.userId, table.createdAt),
+    userUnreadIdx: index('notifications_user_id_unread_idx')
+      .on(table.userId)
+      .where(sql`${table.readAt} IS NULL`),
+  }),
+);
+
+export type SocialAccount = typeof socialAccounts.$inferSelect;
+export type NewSocialAccount = typeof socialAccounts.$inferInsert;
+export type PublishJob = typeof publishJobs.$inferSelect;
+export type NewPublishJob = typeof publishJobs.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
+
+// ---------------------------------------------------------------------------
 // workspaces and membership
 // ---------------------------------------------------------------------------
 
