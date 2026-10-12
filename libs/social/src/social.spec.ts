@@ -370,9 +370,27 @@ describe('TokenRefresherRegistry', () => {
     }),
   };
 
-  it('refreshes once', async () => {
-    const registry = new TokenRefresherRegistry(good);
-    expect(await registry.refreshOnce('linkedin', 'r1', 'job-1')).toEqual({ refreshed: true });
+  it('refreshes once and hands back the new credentials', async () => {
+    const expires = new Date('2026-06-01T00:00:00.000Z');
+    const registry = new TokenRefresherRegistry({
+      refresh: async () => ({
+        accessToken: 'new',
+        refreshToken: 'new-refresh',
+        expiresAt: expires,
+      }),
+    });
+
+    const result = await registry.refreshOnce('linkedin', 'r1', 'job-1');
+
+    // The caller has to STORE these, and it cannot ask the platform twice to get
+    // them: a refresh typically invalidates the token it just issued, so the
+    // second call fails and the account ends up logged out.
+    expect(result).toEqual({
+      refreshed: true,
+      accessToken: 'new',
+      refreshToken: 'new-refresh',
+      expiresAt: expires,
+    });
   });
 
   it('collapses concurrent refreshes of the same job', async () => {

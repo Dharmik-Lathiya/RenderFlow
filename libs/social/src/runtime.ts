@@ -90,6 +90,17 @@ export interface TokenRefresher {
 
 export interface RefreshOutcome {
   refreshed: boolean;
+  /**
+   * The new credentials, present only when `refreshed` is true.
+   *
+   * Returned rather than just a boolean because the caller has to STORE them,
+   * and asking the platform twice to get them is not an option: a refresh
+   * typically invalidates the refresh token it just issued, so a second call
+   * fails and the account ends up logged out. One call, one result.
+   */
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: Date | null;
   /** Present when `refreshed` is false. */
   reason?: string;
 }
@@ -133,8 +144,14 @@ export class TokenRefresherRegistry {
     }
 
     try {
-      await this.refresher.refresh(platform, refreshToken);
-      return { refreshed: true };
+      const result = await this.refresher.refresh(platform, refreshToken);
+
+      return {
+        refreshed: true,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresAt: result.expiresAt,
+      };
     } catch (error) {
       // A refresh failure is not itself a publish failure: the caller decides
       // whether to retry the publish or tell the user to reconnect. The reason

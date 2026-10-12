@@ -4,23 +4,23 @@ The authoritative version of this table lives in [`PROJECT.md` §12](./PROJECT.m
 This file exists so progress can be read without scrolling a thousand lines of
 specification.
 
-**Last updated:** after Phase 6 (`35ddcda`).
+**Last updated:** after Phase 7.
 
-| #   | Phase                             | Status                                                    |
-| --- | --------------------------------- | --------------------------------------------------------- |
-| 0   | Foundation                        | Shipped (`docker compose up` unverified — no Docker here) |
-| 1   | Auth, users, wallet, signup bonus | Shipped (same one gap)                                    |
-| 2   | Credit engine                     | Shipped                                                   |
-| 3   | Brands, campaigns, posts, assets  | Shipped                                                   |
-| 4   | Job pipeline with mock AI         | Shipped                                                   |
-| 5   | Reliability layer                 | **Partial** — R5 (a real SIGKILL) not implemented         |
-| 6   | Real AI integration               | **Partial** — never run against a real provider key       |
-| 7   | Scheduling and publishing         | Not started                                               |
-| 8   | Frontend (Next.js)                | Not started                                               |
-| 9   | Analytics, admin, observability   | Partially started — the admin API only                    |
-| 10  | Hardening and launch polish       | Not started                                               |
+| #   | Phase                             | Status                                                     |
+| --- | --------------------------------- | ---------------------------------------------------------- |
+| 0   | Foundation                        | Shipped (`docker compose up` unverified — no Docker here)  |
+| 1   | Auth, users, wallet, signup bonus | Shipped (same one gap)                                     |
+| 2   | Credit engine                     | Shipped                                                    |
+| 3   | Brands, campaigns, posts, assets  | Shipped                                                    |
+| 4   | Job pipeline with mock AI         | Shipped                                                    |
+| 5   | Reliability layer                 | **Partial** — R5 (a real SIGKILL) not implemented          |
+| 6   | Real AI integration               | **Partial** — never run against a real provider key        |
+| 7   | Scheduling and publishing         | Shipped (mocks only — no real adapter, no OAuth, no email) |
+| 8   | Frontend (Next.js)                | Not started                                                |
+| 9   | Analytics, admin, observability   | Partially started — the admin API only                     |
+| 10  | Hardening and launch polish       | Not started                                                |
 
-**5 shipped · 2 partial · 1 partially started · 3 untouched**
+**7 shipped · 2 partial · 1 partially started · 2 untouched**
 
 ## What "partial" means here
 
@@ -39,6 +39,25 @@ proven against infrastructure this environment does not have.
 
 Neither gap is hidden by a green build. Both are stated in `PROJECT.md` beside the
 code they affect.
+
+## Phase 7 is shipped, but only against mocks
+
+Phase 7 completes every part of its Definition of Done that can be proven without
+a real social platform. What it does **not** have is a single byte leaving the
+process:
+
+- no real `linkedin` or `instagram` adapter behind `SocialAdapter` — only the
+  deterministic mock, so the no-double-post guarantee has never been tested
+  against a platform that could reject it;
+- no OAuth authorization-code flow — `POST /social-accounts` accepts an
+  already-obtained token;
+- no email. The in-app half of "failure notifications (in-app + email)" exists;
+  the mail half does not.
+
+The interface is the seam the real adapters plug into, and the publisher depends
+on the interface rather than on the mock. What that buys is a guarantee about our
+own behaviour — a worker killed mid-publish does not double-post, an expired
+token refreshes and succeeds — and it buys nothing about anyone else's.
 
 ## Running the gates
 

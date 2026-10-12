@@ -6,6 +6,7 @@ import {
   PublishError,
   formatForPlatform,
   type FormatResult,
+  type PublishErrorClass,
   type SocialAdapter,
   type SocialPlatform,
 } from './adapter';
@@ -56,6 +57,15 @@ export interface PublishOutcome {
   /** True when the post was found already at the platform rather than created. */
   recovered: boolean;
   error?: string;
+  /**
+   * Carried through so the caller can react to the KIND of failure rather than
+   * matching on a message.
+   *
+   * The token path depends on this: `AUTH_EXPIRED` is the one classification
+   * where retrying with the same token is pointless and the right action is a
+   * refresh. Collapsing that into a string would make the processor guess.
+   */
+  errorClassification?: PublishErrorClass;
 }
 
 export interface PublishJobRow {
@@ -260,6 +270,7 @@ export async function publishJob(
     const reason = describePublishError(error);
     const attempts = job.attempts;
     const exhausted = attempts >= job.maxAttempts;
+    const classification = error instanceof PublishError ? error.classification : 'TRANSIENT';
 
     await deps.db
       .update(publishJobs)
@@ -281,6 +292,7 @@ export async function publishJob(
       externalUrl: null,
       recovered: false,
       error: reason,
+      errorClassification: classification,
     };
   }
 }

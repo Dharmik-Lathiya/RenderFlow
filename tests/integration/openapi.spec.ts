@@ -84,6 +84,34 @@ describe('OpenAPI document', () => {
     }
   });
 
+  it('documents the Phase 7 scheduling and account routes', () => {
+    // A contract test: the document and PROJECT.md section 10 cannot drift,
+    // because a route dropped from one fails here rather than surprising a
+    // client built against the other.
+    for (const path of [
+      '/api/v1/posts/{postId}/schedule',
+      '/api/v1/posts/{postId}/publishes',
+      '/api/v1/social-accounts',
+      '/api/v1/social-accounts/{accountId}',
+      '/api/v1/notifications',
+      '/api/v1/notifications/unread-count',
+      '/api/v1/notifications/{notificationId}/read',
+      '/api/v1/notifications/read-all',
+    ]) {
+      expect(document.paths[path]).toBeDefined();
+    }
+  });
+
+  it('advertises the Idempotency-Key header on schedule', () => {
+    const schedule = document.paths['/api/v1/posts/{postId}/schedule'] as {
+      post?: { parameters?: { name?: string }[] };
+    };
+
+    // The header is optional, but a client that does not know it is there
+    // cannot retry a schedule safely.
+    expect(schedule.post?.parameters?.some((p) => p.name === 'Idempotency-Key')).toBe(true);
+  });
+
   it('documents the health and metrics routes', () => {
     expect(document.paths['/health/live']).toBeDefined();
     expect(document.paths['/health/ready']).toBeDefined();

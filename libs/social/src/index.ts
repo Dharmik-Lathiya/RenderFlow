@@ -14,4 +14,5 @@ export * from './adapter';
 export * from './tokens';
 export * from './mock-adapter';
 export * from './runtime';
+export * from './processor';
 export * from './publisher';

@@ -712,22 +712,27 @@ Each phase ends with a **Definition of Done (DoD)**. Do not start the next phase
 The single place to look for where the project stands. "Shipped" means the
 DoD's assertions are written and passing; "partial" means some of them are not.
 
-| #   | Phase                             | Status                                            | Verified how                                                                                                                                                 |
-| --- | --------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 0   | Foundation                        | **Shipped**, one DoD item unverified              | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                           |
-| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified              | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                        |
-| 2   | Credit engine                     | **Shipped**                                       | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                  |
-| 3   | Brands, campaigns, posts, assets  | **Shipped**                                       | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                 |
-| 4   | Job pipeline with mock AI         | **Shipped**                                       | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                        |
-| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                    |
-| 6   | Real AI integration               | **Partial** - the DoD's first half unverified     | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.** |
-| 7   | Scheduling and publishing         | Not started                                       | -                                                                                                                                                            |
-| 8   | Frontend (Next.js)                | Not started                                       | -                                                                                                                                                            |
-| 9   | Analytics, admin, observability   | Partially started                                 | The admin API (DLQ, replay, reconciliation) landed in Phase 5. No worker, dashboard or alert.                                                                |
-| 10  | Hardening and launch polish       | Not started                                       | -                                                                                                                                                            |
+| #   | Phase                             | Status                                            | Verified how                                                                                                                                                                                  |
+| --- | --------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Foundation                        | **Shipped**, one DoD item unverified              | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                            |
+| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified              | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                         |
+| 2   | Credit engine                     | **Shipped**                                       | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                   |
+| 3   | Brands, campaigns, posts, assets  | **Shipped**                                       | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                  |
+| 4   | Job pipeline with mock AI         | **Shipped**                                       | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                         |
+| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                                                     |
+| 6   | Real AI integration               | **Partial** - the DoD's first half unverified     | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                  |
+| 7   | Scheduling and publishing         | **Shipped**, mocks only                           | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.** |
+| 8   | Frontend (Next.js)                | Not started                                       | -                                                                                                                                                                                             |
+| 9   | Analytics, admin, observability   | Partially started                                 | The admin API (DLQ, replay, reconciliation) landed in Phase 5. No worker, dashboard or alert.                                                                                                 |
+| 10  | Hardening and launch polish       | Not started                                       | -                                                                                                                                                                                             |
 
-**5 of 11 phases shipped** (0-4), **2 partial** (5, 6), **1 partially
-started** (9, the admin API), **3 untouched** (7, 8, 10).
+**7 of 11 phases shipped** (0-4, 7), **2 partial** (5, 6), **1 partially
+started** (9, the admin API), **2 untouched** (8, 10).
+
+Phase 7 is counted as shipped because its DoD is met end to end — but only
+against a mock platform. Nothing has ever left the process to a real one, so the
+guarantee is about our behaviour and not about anyone else's. The detail is in
+the phase's own known-gaps list.
 
 What "partial" costs, stated plainly:
 
@@ -1126,6 +1131,66 @@ Known gaps:
 - OAuth connect, token encryption/refresh, platform formatting rules, publish rate limiter.
 - Idempotent publish (check external post before retry), failure notifications (in-app + email).
 - **DoD:** scheduled post publishes within 5 s of target time; killing `publisher-worker` mid-publish never creates a duplicate post; token-expired path refreshes and succeeds.
+
+Status: **complete.** 72 tests (50 unit, 68 integration across the three
+publishing specs). See the per-phase notes below for what was decided and what
+was deliberately not built.
+
+Decisions taken while building it:
+
+- **The database row is the truth; the delayed queue entry is a wake-up.** Both
+  exist, as the phase description requires, and they are not equally important.
+  `publish_jobs.scheduled_for` decides when a post is due and the publisher
+  polls for it, so a delayed BullMQ message lost to a Redis restart costs latency
+  rather than the post. The delay is derived from `scheduledAt` **at relay
+  time**, not at request time - the relay may publish minutes after the
+  transaction commits, and computing the delay from the original request puts
+  the message in the queue at the wrong time.
+- **Three independent checks back the no-double-post guarantee**: our own
+  `external_post_id`, `adapter.findExternalPost(key)` called _before_ every
+  publish, and the deterministic idempotency key `renderflow:<publishJobId>`.
+  Two live in our state and one at the platform, deliberately - the failure
+  being protected against is losing our own state, so a check that lived only
+  there would fail exactly when it is needed. `findExternalPost` is on the
+  `SocialAdapter` INTERFACE for the same reason: as a duck-typed call it would
+  be found missing at the worst possible moment.
+- **Platform formatting runs at schedule time, not publish time.** A user who
+  approves text is approving it as it will appear.
+- **`publish_jobs_post_account_idx` is PARTIAL** over the live states. A plain
+  unique index would also block rescheduling after a FAILED publish, which is
+  exactly what someone does after a platform outage.
+- **APPROVER is the floor for scheduling**, the same as for approval.
+  Publishing to a public profile is the most privileged act in the product.
+
+Known gaps:
+
+- **Only the mock adapter exists.** `linkedin` and `instagram` are in the
+  `social_platform` enum, in the formatting rules, and in the media policies,
+  but there is no real HTTP adapter behind `SocialAdapter` and no OAuth
+  authorization-code flow - `POST /social-accounts` receives an already-obtained
+  token. The interface is the seam the real adapters plug into; none has been
+  written, so no post has gone to a real platform.
+- **No email is sent.** Phase 7 says "failure notifications (in-app + email)";
+  only the in-app half exists. Mail has different failure modes (bounced
+  addresses, unverified domains) and belongs behind its own seam rather than as
+  a second thing `NotificationsService` does.
+- **Token refresh is deduped per process, not per cluster.**
+  `TokenRefresherRegistry` collapses concurrent refreshes inside one worker. Two
+  `publisher-worker` processes can still both refresh the same account at the
+  same moment; on a platform that rotates refresh tokens the second call fails
+  and the account needs reconnecting. A Postgres advisory lock would close it,
+  but that means holding a connection open across the platform call, which
+  AGENTS.md section 6 forbids. Left as a recorded gap rather than half-solved.
+- **The publish rate limits are placeholders** (30/min LinkedIn, 25/min
+  Instagram). Real quotas are per app id and were not verifiable from here, so
+  they are configuration rather than constants that look authoritative.
+- **A post that published to some targets and failed others reads as `FAILED`.**
+  `post_status` has no partial state; marking it `PUBLISHED` would hide the one
+  account that needs reconnecting, which is the only thing the user can act on.
+- **Brand memory is still populated by nothing.** Phase 6 left this open and
+  Phase 7 added the approval flow it was waiting for, but wiring approval into
+  memory is still not done. This is the one Phase 6 gap Phase 7 was supposed to
+  close.
 
 ### Phase 8: Frontend (Next.js)
 

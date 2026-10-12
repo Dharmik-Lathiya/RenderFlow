@@ -380,12 +380,21 @@ importers:
       '@renderflow/db':
         specifier: workspace:*
         version: link:../../libs/db
+      '@renderflow/jobs':
+        specifier: workspace:*
+        version: link:../../libs/jobs
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../../libs/observability
       '@renderflow/queue':
         specifier: workspace:*
         version: link:../../libs/queue
+      '@renderflow/social':
+        specifier: workspace:*
+        version: link:../../libs/social
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.23.1)(pg@8.23.1)(prisma@6.19.3(typescript@5.9.3))
 
   apps/reaper:
     dependencies:
@@ -404,6 +413,9 @@ importers:
       '@renderflow/queue':
         specifier: workspace:*
         version: link:../../libs/queue
+      '@renderflow/social':
+        specifier: workspace:*
+        version: link:../../libs/social
 
   apps/web:
     dependencies:

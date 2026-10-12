@@ -21,7 +21,8 @@
     "@renderflow/db": "workspace:*",
     "@renderflow/jobs": "workspace:*",
     "@renderflow/observability": "workspace:*",
-    "@renderflow/queue": "workspace:*"
+    "@renderflow/queue": "workspace:*",
+    "@renderflow/social": "workspace:*"
   },
   "devDependencies": {},
   "engines": {

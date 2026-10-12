@@ -2,6 +2,7 @@ import { disconnectDb, getDbHandle, tryAcquireAdvisoryLock } from '@renderflow/d
 import { DEFAULT_REAPER, Reaper, type ReaperConfig } from '@renderflow/jobs';
 import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
 import { loadQueueConfig } from '@renderflow/queue';
+import { sweepStalePublishJobs } from '@renderflow/social';
 
 /**
  * reaper: the crash-recovery safety net.
@@ -106,6 +107,22 @@ async function main(): Promise<void> {
       // reconciling a balance needs to find the job that took the credits back.
       worker.logger.warn({ app: APP_NAME, jobs: report.failed }, 'jobs given up on and refunded');
     }
+
+    // Publish jobs are swept here rather than in the worker: recovery belongs
+    // with the other recovery, and a publisher that is simply down should not
+    // depend on that same publisher coming back to notice.
+    void sweepStalePublishJobs(db)
+      .then((reclaimed) => {
+        if (reclaimed > 0) {
+          worker.logger.warn(
+            { app: APP_NAME, reclaimed },
+            'publish jobs reclaimed from a dead publisher',
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        worker.logger.error({ app: APP_NAME, err: error }, 'publish sweep failed');
+      });
 
     if (report.abandonedOutbox.length > 0) {
       worker.logger.error(
