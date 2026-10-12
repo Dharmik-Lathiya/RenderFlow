@@ -1,5 +1,12 @@
 import { QUEUE_NAMES } from '@renderflow/common';
-import { InMemoryPublisher, countAbandoned, countPending, queueForEvent, relayOnce } from './relay';
+import {
+  InMemoryPublisher,
+  countAbandoned,
+  countPending,
+  delayForEvent,
+  queueForEvent,
+  relayOnce,
+} from './relay';
 
 /**
  * Pure behaviour of the relay's routing and attempt accounting.
@@ -26,6 +33,10 @@ describe('queueForEvent', () => {
     expect(queueForEvent('job.stage_completed', { stage: 'RENDER' })).toBe('media');
   });
 
+  it('routes a scheduled publish to the publish queue', () => {
+    expect(queueForEvent('post.scheduled')).toBe('publish');
+  });
+
   it('routes publish failures to notifications', () => {
     expect(queueForEvent('post.publish_failed')).toBe('notifications');
   });
@@ -48,6 +59,47 @@ describe('queueForEvent', () => {
 
   it('ignores the payload for events that do not route by stage', () => {
     expect(queueForEvent('job.created', { stage: 'RENDER' })).toBe(QUEUE_NAMES.CONTENT);
+  });
+});
+
+describe('delayForEvent', () => {
+  const now = Date.parse('2026-03-01T12:00:00.000Z');
+
+  it('leaves every event but a scheduled publish undelayed', () => {
+    // `undefined`, not 0. The publisher treats the two differently: 0 means
+    // "put it in the queue now", undefined means "do not pass a delay at all",
+    // which is what every other queue already relies on.
+    expect(
+      delayForEvent('job.created', { scheduledAt: '2026-03-01T13:00:00.000Z' }, now),
+    ).toBeUndefined();
+    expect(delayForEvent('post.publish_failed', {}, now)).toBeUndefined();
+  });
+
+  it('measures the delay from the scheduled time, not the request time', () => {
+    // The relay may publish minutes after the transaction commits. Computing the
+    // delay from the original request would queue the message at the wrong time.
+    expect(delayForEvent('post.scheduled', { scheduledAt: '2026-03-01T12:05:00.000Z' }, now)).toBe(
+      5 * 60 * 1_000,
+    );
+  });
+
+  it('clamps a time already in the past to zero', () => {
+    // "Publish at the next poll", not "publish in the negative past".
+    expect(delayForEvent('post.scheduled', { scheduledAt: '2026-03-01T11:59:00.000Z' }, now)).toBe(
+      0,
+    );
+    expect(delayForEvent('post.scheduled', { scheduledAt: '2026-03-01T12:00:00.000Z' }, now)).toBe(
+      0,
+    );
+  });
+
+  it('returns nothing when the payload cannot say when', () => {
+    // Better an immediate job that the worker then checks `scheduled_for` against,
+    // than a delay derived from a value nobody could read.
+    expect(delayForEvent('post.scheduled', undefined, now)).toBeUndefined();
+    expect(delayForEvent('post.scheduled', {}, now)).toBeUndefined();
+    expect(delayForEvent('post.scheduled', { scheduledAt: 42 }, now)).toBeUndefined();
+    expect(delayForEvent('post.scheduled', { scheduledAt: 'not a date' }, now)).toBeUndefined();
   });
 });
 

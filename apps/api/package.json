@@ -29,6 +29,7 @@
     "@renderflow/db": "workspace:*",
     "@renderflow/jobs": "workspace:*",
     "@renderflow/observability": "workspace:*",
+    "@renderflow/social": "workspace:*",
     "@renderflow/storage": "workspace:*",
     "argon2": "^0.45.1",
     "cookie-parser": "^1.4.7",

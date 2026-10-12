@@ -262,6 +262,9 @@ importers:
       '@renderflow/observability':
         specifier: workspace:*
         version: link:../../libs/observability
+      '@renderflow/social':
+        specifier: workspace:*
+        version: link:../../libs/social
       '@renderflow/storage':
         specifier: workspace:*
         version: link:../../libs/storage

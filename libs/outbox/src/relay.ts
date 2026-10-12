@@ -23,6 +23,17 @@ export interface PublishMessage {
   /** Deterministic id, so a republished event cannot double-enqueue. */
   jobId: string;
   payload: Record<string, unknown>;
+  /**
+   * Ask the queue to hold the message until this many milliseconds from now.
+   *
+   * An OPTIMISATION, never the mechanism. `publish_jobs.scheduled_for` is the
+   * truth and the publisher worker also polls for due rows, so a message lost to
+   * a Redis restart costs latency rather than the post. What the delay buys is
+   * that a worker waking at the right minute is handed the job instead of
+   * discovering it, and a far-future post does not sit in a worker's in-memory
+   * scheduled set where it would be lost on restart.
+   */
+  delayMs?: number;
 }
 
 export interface JobPublisher {
@@ -77,11 +88,47 @@ export function queueForEvent(eventType: string, payload?: Record<string, unknow
       const stage = typeof payload?.stage === 'string' ? payload.stage : undefined;
       return (stage === undefined ? null : queueForJobStage(stage)) ?? QUEUE_NAMES.CONTENT;
     }
+    case 'post.scheduled':
+      return QUEUE_NAMES.PUBLISH;
     case 'post.publish_failed':
       return QUEUE_NAMES.NOTIFICATIONS;
     default:
       return QUEUE_NAMES.CONTENT;
   }
+}
+
+/**
+ * How long the queue should hold a `post.scheduled` message.
+ *
+ * Derived from `scheduledAt` at RELAY time, not from the moment the request was
+ * made. The relay may publish seconds or minutes after the transaction commits,
+ * and computing the delay from the original request would put the message in the
+ * queue at the wrong time - early if the relay was slow, and in the past (which
+ * BullMQ treats as "now") if it was very slow.
+ *
+ * Clamped at zero because a scheduled time already in the past means "publish at
+ * the next poll", not "publish in the negative past".
+ */
+export function delayForEvent(
+  eventType: string,
+  payload: Record<string, unknown> | undefined,
+  now: number,
+): number | undefined {
+  if (eventType !== 'post.scheduled') {
+    return undefined;
+  }
+
+  const raw = payload?.scheduledAt;
+  if (typeof raw !== 'string') {
+    return undefined;
+  }
+
+  const due = Date.parse(raw);
+  if (Number.isNaN(due)) {
+    return undefined;
+  }
+
+  return Math.max(0, due - now);
 }
 
 interface OutboxRow {
@@ -176,12 +223,15 @@ export async function relayOnce(
 
   for (const event of claimed) {
     try {
+      const delayMs = delayForEvent(event.eventType, event.payload, now());
+
       await publisher.publish({
         queue: queueForEvent(event.eventType, event.payload),
         // Deterministic, so republishing after a crash between publish and
         // mark-processed cannot enqueue the same work twice.
         jobId: `generation:${event.aggregateId}`,
         payload: event.payload,
+        ...(delayMs === undefined ? {} : { delayMs }),
       });
 
       await db

@@ -57,6 +57,20 @@
       "when": 1791831220489,
       "tag": "0008_phase7_publishing",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791831221489,
+      "tag": "0009_notification_dedupe",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791831222489,
+      "tag": "0010_publish_partial_index",
+      "breakpoints": true
     }
   ]
 }

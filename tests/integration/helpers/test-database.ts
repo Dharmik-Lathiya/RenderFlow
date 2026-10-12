@@ -116,8 +116,14 @@ export function createTestDb(databaseUrl: string): TestDb {
  * ordering dependencies between suites.
  */
 export async function truncateAll(db: TestDb): Promise<void> {
+  // Every table, newest first. CASCADE would cover the new ones anyway, but
+  // naming them keeps the failure mode obvious: a table added to the schema and
+  // not here shows up as rows leaking between tests, which reads as a mystery
+  // failing assertion rather than as an incomplete fixture.
   await db.execute(
-    'TRUNCATE TABLE assets, posts, campaigns, brands, workspace_members, workspaces, outbox_events, generation_jobs, refresh_sessions, credit_ledger, wallets, users RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE notifications, publish_jobs, social_accounts, assets, posts, campaigns, brands, ' +
+      'workspace_members, workspaces, outbox_events, generation_jobs, job_checkpoints, brand_memory, ' +
+      'pricing_rules, refresh_sessions, credit_ledger, wallets, users RESTART IDENTITY CASCADE',
   );
 }
 
@@ -164,6 +170,17 @@ export function pgErrorText(error: unknown): string {
 export async function setupTestDatabase(): Promise<TestDb> {
   const databaseUrl = resolveTestDatabaseUrl();
   migrateDatabase(databaseUrl);
+
+  // Point `DATABASE_URL` at the same database before anything can read it.
+  //
+  // A test that constructs a real service calls `getDb()`, which reads
+  // `DATABASE_URL` and nothing else. Without this, every such test fails with
+  // "DATABASE_URL is required" while CI - which sets both - passes, and the
+  // failure looks like a bug in the service rather than in the fixture. The
+  // resolved URL is already `TEST_DATABASE_URL` when that is what is set, so
+  // this cannot point the suite at a developer's working database by accident.
+  process.env.DATABASE_URL = databaseUrl;
+
   const db = createTestDb(databaseUrl);
   await assertDatabaseReady(db);
   return db;

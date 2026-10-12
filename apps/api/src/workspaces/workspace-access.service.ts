@@ -38,7 +38,7 @@ export class WorkspaceAccessService {
    */
   async scope<T>(args: {
     userId: string;
-    resource: 'workspace' | 'brand' | 'campaign' | 'post' | 'asset' | 'job';
+    resource: 'workspace' | 'brand' | 'campaign' | 'post' | 'asset' | 'job' | 'socialAccount';
     lookup: (db: Database) => Promise<{ workspaceId: string; value: T } | null>;
     required?: WorkspaceRole;
   }): Promise<{ workspaceId: string; role: WorkspaceRole; value: T }> {

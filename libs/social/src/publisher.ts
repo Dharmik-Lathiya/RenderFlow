@@ -5,6 +5,7 @@ import { publishJobs, socialAccounts, type Database } from '@renderflow/db';
 import {
   PublishError,
   formatForPlatform,
+  type FormatResult,
   type SocialAdapter,
   type SocialPlatform,
 } from './adapter';
@@ -362,7 +363,6 @@ export function platformContentFor(
   platform: SocialPlatform,
   caption: string,
   hashtags: readonly string[],
-): { content: string; notes: string[] } {
-  const formatted = formatForPlatform(platform, caption, hashtags);
-  return { content: formatted.content, notes: formatted.notes };
+): FormatResult {
+  return formatForPlatform(platform, caption, hashtags);
 }

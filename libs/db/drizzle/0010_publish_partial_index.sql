@@ -1,0 +1,2 @@
+DROP INDEX "publish_jobs_post_account_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "publish_jobs_post_account_idx" ON "publish_jobs" USING btree ("post_id","social_account_id") WHERE "publish_jobs"."status" IN ('PENDING','SCHEDULED','PUBLISHING');

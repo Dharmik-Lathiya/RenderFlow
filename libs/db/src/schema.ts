@@ -558,11 +558,22 @@ export const publishJobs = pgTable(
     idempotencyKey: uniqueIndex('publish_jobs_idempotency_key')
       .on(table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),
-    /** One post must not be published to the same account twice. */
-    postAccount: uniqueIndex('publish_jobs_post_account_idx').on(
-      table.postId,
-      table.socialAccountId,
-    ),
+    /**
+     * One post must not be LIVE-published to the same account twice.
+     *
+     * PARTIAL, and that is the whole point. A plain unique index over
+     * `(post_id, social_account_id)` would also block a post from being
+     * rescheduled after a FAILED attempt - which is exactly what someone wants to
+     * do after a platform outage, and exactly when they are most likely to try.
+     * Only the live states are protected; PUBLISHED and FAILED are history.
+     *
+     * This is also the index that makes the all-or-nothing insert in
+     * `PublishingService.schedule` work: the service refuses to honour a partial
+     * insert, and this is what makes a partial insert possible to detect.
+     */
+    postAccount: uniqueIndex('publish_jobs_post_account_idx')
+      .on(table.postId, table.socialAccountId)
+      .where(sql`${table.status} IN ('PENDING','SCHEDULED','PUBLISHING')`),
     /** The publisher's poll: due, unclaimed, unfinished. */
     dueIdx: index('publish_jobs_due_idx')
       .on(table.scheduledFor)
@@ -598,6 +609,15 @@ export const notifications = pgTable(
     title: varchar('title', { length: 200 }).notNull(),
     body: text('body').notNull(),
     readAt: timestamp('read_at', { withTimezone: true, mode: 'date' }),
+    /**
+     * Optional idempotency key, set by whatever caused the notification.
+     *
+     * A publish that fails three times should tell the user once. Without this
+     * the retry path stacks three identical rows, and a centre full of
+     * duplicates is a centre people learn to ignore - which defeats the purpose
+     * of having one at all.
+     */
+    dedupeKey: varchar('dedupe_key', { length: 200 }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => ({
@@ -606,6 +626,13 @@ export const notifications = pgTable(
     userUnreadIdx: index('notifications_user_id_unread_idx')
       .on(table.userId)
       .where(sql`${table.readAt} IS NULL`),
+    // One notification per cause. PARTIAL, because most notifications have no
+    // cause worth deduplicating, and a plain unique index over a nullable column
+    // treats every NULL as equal - so the first undedupable notification would
+    // block all the others.
+    dedupeIdx: uniqueIndex('notifications_dedupe_key_idx')
+      .on(table.dedupeKey)
+      .where(sql`${table.dedupeKey} IS NOT NULL`),
   }),
 );
 

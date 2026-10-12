@@ -16,6 +16,7 @@ import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
+import { PublishingModule } from './publishing/publishing.module';
 import { UsersModule } from './users/users.module';
 
 /**
@@ -45,6 +46,7 @@ import { UsersModule } from './users/users.module';
     CreditsModule,
     HealthModule,
     JobsModule,
+    PublishingModule,
     AdminModule,
     MetricsModule,
   ],

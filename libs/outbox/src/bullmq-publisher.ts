@@ -44,6 +44,9 @@ export class BullMqPublisher implements JobPublisher {
     await this.queueFor(message.queue).add(message.queue, message.payload, {
       // Deterministic on purpose; see the class comment.
       jobId: message.jobId,
+      // `undefined` means "run now"; the relay only sets it for a scheduled
+      // publish, so every other queue behaves exactly as it did before.
+      ...(message.delayMs === undefined ? {} : { delay: message.delayMs }),
     });
   }
 
