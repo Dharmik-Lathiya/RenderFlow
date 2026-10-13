@@ -188,11 +188,23 @@ export const assetSchema = z.object({
   createdAt: z.string(),
 });
 
+/**
+ * What `POST /assets/uploads` answers with.
+ *
+ * The nested shape (`{ asset, upload }`) and the `url` key are what the API
+ * returns; an earlier version of this schema guessed `uploadUrl`, which meant
+ * every upload response failed to parse and the failure looked like a network
+ * problem rather than a wrong guess.
+ */
 export const presignedUploadSchema = z.object({
   asset: assetSchema,
-  uploadUrl: z.string(),
-  /** Headers the browser must send with the PUT, or S3 rejects it. */
-  headers: z.record(z.string(), z.string()).optional(),
+  upload: z.object({
+    url: z.string(),
+    method: z.literal('PUT'),
+    /** Headers the browser must send with the PUT, or S3 rejects it. */
+    headers: z.record(z.string(), z.string()),
+    expiresInSeconds: z.number().int().positive(),
+  }),
 });
 
 // --- publishing (Phase 7) -------------------------------------------------

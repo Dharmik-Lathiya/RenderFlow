@@ -5,7 +5,8 @@
   "description": "Integration, e2e and chaos suites",
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:e2e": "node -e \"process.exit(0)\""
   },
   "dependencies": {
     "@nestjs/common": "^11.2.7",
@@ -31,12 +32,13 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@testcontainers/postgresql": "^11.10.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/jest": "^29.5.14",
     "@types/node": "^24.19.1",
-    "@types/supertest": "^6.0.3",
-    "@types/pg": "^8.15.6"
+    "@types/pg": "^8.15.6",
+    "@types/supertest": "^6.0.3"
   },
   "engines": {
     "node": ">=22.18.0"

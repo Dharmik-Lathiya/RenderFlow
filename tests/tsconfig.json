@@ -6,6 +6,13 @@
     "declarationMap": false,
     "incremental": false,
     "types": ["node", "jest"],
+    // DOM, for the Playwright specs: a `page.evaluate` callback is typed in
+    // Node's context but RUNS in the browser, so `document` is legitimately
+    // referenced here. The cost is the same one already accepted in
+    // tsconfig.eslint.json - a Node test could now name `document` without a
+    // type error - and keeping one project is worth more than keeping the lib
+    // pure.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "useDefineForClassFields": false,

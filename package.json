@@ -31,7 +31,7 @@
     "test": "jest",
     "test:chaos": "tests/chaos/run.sh",
     "test:coverage": "jest --coverage",
-    "test:e2e": "turbo run test:e2e",
+    "test:e2e": "./scripts/e2e.sh",
     "test:int": "turbo run build && jest --config jest.integration.config.js",
     "test:int:coverage": "turbo run build && jest --config jest.integration.config.js --coverage",
     "typecheck": "turbo run typecheck"

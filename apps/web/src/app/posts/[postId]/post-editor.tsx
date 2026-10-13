@@ -8,6 +8,7 @@ import { ApiClientError } from '@renderflow/api-client';
 
 import { useApi } from '../../../lib/providers';
 import { Badge, Button, Card, ErrorNotice, Field, Spinner } from '../../../components/ui';
+import { AssetLibrary } from './asset-library';
 import { JobProgressView, useJobProgress } from './job-progress';
 import styles from '../../../components/ui.module.css';
 
@@ -198,6 +199,8 @@ export function PostEditor({ postId }: { postId: string }) {
           <JobProgressView progress={progress} />
         </Card>
       )}
+
+      {workspaceId !== undefined && <AssetLibrary postId={postId} workspaceId={workspaceId} />}
 
       <PublishHistory postId={postId} workspaceId={workspaceId} publishes={publishes.data} />
 

@@ -105,6 +105,7 @@ const NAV: { href: string; label: string }[] = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/brands', label: 'Brands' },
   { href: '/notifications', label: 'Notifications' },
+  { href: '/settings/accounts', label: 'Accounts' },
 ];
 
 /** `/` must not light up for every path, or the nav says "you are here" always. */
