@@ -20,7 +20,7 @@ specification.
 | 9   | Analytics, admin, observability   | Partially started — the admin API only                     |
 | 10  | Hardening and launch polish       | Not started                                                |
 
-**7 shipped · 2 partial · 1 partially started · 2 untouched**
+**7 shipped · 3 partial · 1 partially started · 1 untouched**
 
 ## What "partial" means here
 
@@ -39,6 +39,28 @@ proven against infrastructure this environment does not have.
 
 Neither gap is hidden by a green build. Both are stated in `PROJECT.md` beside the
 code they affect.
+
+## Phase 8 is partial, and the missing half is the DoD
+
+The screens are built, the accessibility semantics are tested, and the API
+integration is real. What has never happened is **a browser running the
+journey** — there is no browser and no Docker in the environment this was built
+in.
+
+The Playwright specs in `tests/e2e/` are written and have never run.
+`scripts/e2e.sh` follows the rule `tests/chaos/run.sh` already follows: it
+checks for Playwright, for a browser binary and for a reachable app, and on any
+of them missing prints `SKIP` with the reason and exits 3. It never reports a
+pass for work it did not do.
+
+```bash
+./scripts/e2e.sh          # → PASS: 0   SKIP: 2, exit 3
+```
+
+What that means for confidence: the jsdom suite covers behaviour and
+accessibility semantics every day. It does **not** cover layout, real SSE, or a
+real HTTP round trip. Those three are exactly what the unrun specs cover, and
+they are the gap.
 
 ## Phase 7 is shipped, but only against mocks
 

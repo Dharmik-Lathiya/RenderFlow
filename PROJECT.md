@@ -726,8 +726,8 @@ DoD's assertions are written and passing; "partial" means some of them are not.
 | 9   | Analytics, admin, observability   | Partially started                                 | The admin API (DLQ, replay, reconciliation) landed in Phase 5. No worker, dashboard or alert.                                                                                                 |
 | 10  | Hardening and launch polish       | Not started                                       | -                                                                                                                                                                                             |
 
-**7 of 11 phases shipped** (0-4, 7), **2 partial** (5, 6), **1 partially
-started** (9, the admin API), **2 untouched** (8, 10).
+**7 of 11 phases shipped** (0-4, 7), **3 partial** (5, 6, 8), **1 partially
+started** (9, the admin API), **1 untouched** (10).
 
 Phase 7 is counted as shipped because its DoD is met end to end — but only
 against a mock platform. Nothing has ever left the process to a real one, so the
@@ -1198,6 +1198,54 @@ Known gaps:
 - Campaign wizard (goal → AI plan), calendar (drag to reschedule), post editor with platform preview, asset library.
 - Live job progress (SSE), notifications center, insufficient-credits upsell modal, analytics page.
 - **DoD:** the full user journey runs in the browser; accessible (keyboard + labels); responsive on mobile.
+
+Status: **partial.** The screens, the accessibility semantics and the API
+integration are built and tested; the DoD's browser half has never been run.
+Screens built: sign in, register, dashboard (credit balance + brands), brand
+detail with the campaign form, campaign posts, post editor (generate → approve
+→ schedule), asset library, account settings, notification centre. 51 component
+tests run under jsdom.
+
+Decisions:
+
+- **The api-client's route map is GENERATED from the OpenAPI document**; the
+  response schemas are hand-written. `scripts/generate-api-client.mjs` emits
+  `src/generated/routes.ts` from `packages/api-client/openapi.json`, which
+  `apps/api/src/openapi-dump.ts` produces. A drift test asserts every path the
+  hand-written domain layer calls exists in the generated map, and accounts by
+  name and reason for every documented path it deliberately does not call.
+- **Response types are hand-written because the document has none.** The API
+  validates with zod, and Nest's Swagger plugin reads decorators rather than zod,
+  so the document carries zero component schemas. Rather than emit `any`, every
+  generated operation's `request`/`response` is `unknown` and the domain layer
+  parses with zod. Closing this means giving the API response schemas - an API
+  change, deliberately not smuggled into a frontend phase.
+- **Accessibility is tested, not asserted.** Buttons are checked on Enter _and_
+  Space; `Field` hands the caller `{ id, describedBy, invalid }` together
+  precisely so a caller cannot wire two of the three (the first version let
+  exactly that happen, and the test caught it); the file input is `sr-only` rather
+  than `display: none` so it stays in the tab order.
+- **`Providers` takes an optional `queryClient`.** An injection point, not "wrap
+  it in your own provider" - a provider outside is shadowed by the one inside,
+  so the test's settings silently do not apply.
+
+Known gaps:
+
+- **The browser journey has NEVER BEEN EXECUTED.** There is no browser and no
+  Docker in the environment this was built in. The Playwright specs in
+  `tests/e2e/` are written and have never run; `scripts/e2e.sh` checks for
+  Playwright, a browser binary and a reachable app and exits 3 with a SKIP and a
+  reason for anything missing, so it cannot report a pass for work it did not do.
+  What IS verified daily is the jsdom component layer, which covers behaviour and
+  accessibility semantics but **not** layout, real SSE, or a real HTTP round trip.
+- **No calendar, no drag-to-reschedule, no analytics page.** The API supports
+  cancelling and re-scheduling; there is no calendar view and no drag
+  interaction. The analytics page has no API to read - that is Phase 9.
+- **The OAuth flow is a token field.** `POST /social-accounts` accepts an
+  already-obtained token and the screen labels it as exactly that. The
+  authorization-code redirect is Phase 7's outstanding gap, unchanged.
+- **The generated client has no response types**, as above. A future consumer
+  reading a field the schema does not name will get a strip, not an error.
 
 ### Phase 9: Analytics, admin, observability
 
