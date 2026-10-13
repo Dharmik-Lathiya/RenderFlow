@@ -634,6 +634,26 @@
       }
     },
     "/posts/{postId}": {
+      "get": {
+        "operationId": "StudioController_getPost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Read one post",
+        "tags": ["studio"]
+      },
       "patch": {
         "operationId": "StudioController_updatePost",
         "parameters": [

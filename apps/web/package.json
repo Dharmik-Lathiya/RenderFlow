@@ -9,17 +9,30 @@
     "start": "next start -p 3000",
     "clean": "rm -rf .next .turbo tsconfig.tsbuildinfo",
     "lint": "eslint .",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest --config jest.config.js"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "@renderflow/api-client": "workspace:*",
+    "@tanstack/react-query": "^5.104.2",
     "next": "^16.3.8",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "react-hook-form": "^7.90.0",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.19.1",
-    "@types/react": "19.3.0"
+    "@types/react": "19.3.0",
+    "jest": "^30.5.2",
+    "jest-environment-jsdom": "^30.5.2",
+    "ts-jest": "^29.4.14"
   },
   "engines": {
     "node": ">=22.18.0"

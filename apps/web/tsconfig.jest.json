@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": true,
+    "isolatedModules": false,
+    "types": ["node", "jest"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"]
+}

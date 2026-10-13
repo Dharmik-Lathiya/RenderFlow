@@ -41,6 +41,7 @@ describe('domain paths are documented', () => {
     { method: 'POST', path: '/campaigns' },
     { method: 'GET', path: '/campaigns/{campaignId}/posts' },
     { method: 'POST', path: '/posts' },
+    { method: 'GET', path: '/posts/{postId}' },
     { method: 'PATCH', path: '/posts/{postId}' },
     { method: 'POST', path: '/posts/{postId}/approve' },
     { method: 'POST', path: '/posts/{postId}/generate' },

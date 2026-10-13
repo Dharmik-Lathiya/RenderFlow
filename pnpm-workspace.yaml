@@ -37,3 +37,5 @@ allowBuilds:
   # @nestjs/swagger's telemetry ping. Opted out explicitly: it phones home on
   # install, and a build tool should not need network access to be installed.
   '@scarf/scarf': false
+  '@parcel/watcher': set this to true or false
+  unrs-resolver: set this to true or false

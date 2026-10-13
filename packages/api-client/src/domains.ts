@@ -120,6 +120,7 @@ export interface DomainClient {
 
   posts: {
     create(body: unknown, options?: RequestOptions): Promise<Post>;
+    detail(postId: string, options?: RequestOptions): Promise<Post>;
     update(postId: string, body: unknown, options?: RequestOptions): Promise<Post>;
     approve(postId: string, options?: RequestOptions): Promise<Post>;
     generate(
@@ -227,6 +228,8 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
     posts: {
       create: (body, opts) =>
         parse(() => transport.post('/posts', body, opts), postSchema, 'posts.create'),
+      detail: (postId, opts) =>
+        parse(() => transport.get(`/posts/${postId}`, opts), postSchema, 'posts.detail'),
       update: (postId, body, opts) =>
         parse(() => transport.patch(`/posts/${postId}`, body, opts), postSchema, 'posts.update'),
       approve: (postId, opts) =>

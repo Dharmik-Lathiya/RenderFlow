@@ -591,7 +591,14 @@ export class StudioService implements OnModuleInit {
       .then((scoped) => scoped.value);
   }
 
-  private async getPost(userId: string, postId: string) {
+  /**
+   * Reads one post, scoped to the caller's workspace.
+   *
+   * Public because the editor needs it: a resource you can PATCH has to be
+   * readable, and the Phase 8 post editor found that out the hard way - the only
+   * way to read a post was to list a whole campaign and find it.
+   */
+  async getPost(userId: string, postId: string) {
     return this.access
       .scope({
         userId,

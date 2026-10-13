@@ -197,6 +197,12 @@ export class StudioController {
     return this.studio.createPost(user.id, parsed.data);
   }
 
+  @Get('posts/:postId')
+  @ApiOperation({ summary: 'Read one post' })
+  getPost(@CurrentUser() user: AuthenticatedUser, @Param('postId', uuidParam) postId: string) {
+    return this.studio.getPost(user.id, postId);
+  }
+
   @Patch('posts/:postId')
   @ApiOperation({ summary: 'Edit a post; increments its version (EDITOR+)' })
   async updatePost(

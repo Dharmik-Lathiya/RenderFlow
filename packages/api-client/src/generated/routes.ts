@@ -128,6 +128,7 @@ export type RouteMap = {
     readonly post: ApiOperation;
   };
   readonly '/posts/{postId}': {
+    readonly get: ApiOperation;
     readonly patch: ApiOperation;
   };
   readonly '/posts/{postId}/approve': {
@@ -564,6 +565,14 @@ export const ROUTES: RouteMap = {
     },
   },
   '/posts/{postId}': {
+    get: {
+      summary: 'Read one post',
+      pathParams: [{ name: 'postId', required: true }],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
     patch: {
       summary: 'Edit a post; increments its version (EDITOR+)',
       pathParams: [{ name: 'postId', required: true }],

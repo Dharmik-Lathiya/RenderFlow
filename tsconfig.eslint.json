@@ -9,6 +9,15 @@
     "jsx": "react-jsx",
     "allowJs": true,
     "types": ["node", "jest"],
+    // The browser app needs DOM, or every `window`/`document` reference in
+    // apps/web resolves to an error type and the type-aware rules fire on
+    // nothing useful.
+    //
+    // The cost is that a backend file could now name `document` without a type
+    // error. That is a real but small loosening, and the alternative - a second
+    // lint project for the browser - costs more than it saves, because the two
+    // projects would then disagree about which rules apply to shared code.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     // The integration helpers import NestJS modules, whose dependency injection
     // relies on decorator metadata emitted at compile time. Without these flags
     // the type-aware ESLint rules see `any` in place of those classes.

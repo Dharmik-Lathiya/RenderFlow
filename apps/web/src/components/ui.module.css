@@ -1,0 +1,335 @@
+/* Primitives in `components/ui.tsx`. */
+
+.card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.cardTitle {
+  margin: 0;
+}
+
+.cardDescription {
+  color: var(--muted);
+  margin: var(--space-1) 0 0;
+  font-size: 0.9rem;
+}
+
+.cardActions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* --- buttons --- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--fg);
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  font-weight: 550;
+  cursor: pointer;
+  /* 44px minimum target: below this a phone user cannot hit it reliably. */
+  min-height: 2.5rem;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* --- fields --- */
+
+.field {
+  margin-bottom: var(--space-4);
+}
+
+.label {
+  display: block;
+  font-weight: 550;
+  margin-bottom: var(--space-1);
+  font-size: 0.9rem;
+}
+
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  min-height: 2.5rem;
+}
+
+.field textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+.field input[aria-invalid='true'],
+.field textarea[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: var(--space-1) 0 0;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.82rem;
+  margin: var(--space-1) 0 0;
+}
+
+/* --- feedback --- */
+
+.badge {
+  display: inline-block;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  padding: 0.1rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge_good {
+  color: var(--success);
+  border-color: var(--success);
+}
+.badge_bad {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.badge_warn {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.empty {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.errorNotice {
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  color: var(--danger);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.errorNotice p {
+  margin: 0;
+}
+
+.loading {
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- shell --- */
+
+.nav {
+  border-right: 1px solid var(--border);
+  padding: var(--space-4);
+  background: var(--bg-raised);
+}
+
+.navBrand {
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+}
+
+.navList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.navLink {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.navLink:hover {
+  background: var(--bg-sunken);
+}
+
+.navFooter {
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.balance {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The nav becomes a horizontal strip on a narrow screen rather than
+   disappearing: a hidden nav is a keyboard trap on mobile. */
+@media (max-width: 48rem) {
+  .nav {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .navList {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* --- auth --- */
+
+.authCard {
+  max-width: 26rem;
+  margin: var(--space-7) auto;
+}
+
+.authForm {
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.listItem {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.progress {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 60%);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  z-index: 20;
+}
+
+.dialog {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  max-width: 30rem;
+  width: 100%;
+}

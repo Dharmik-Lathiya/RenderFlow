@@ -71,7 +71,10 @@ export default tseslint.config(
     // live HTTP and database responses, so `res.body.foo` and query results are
     // genuinely untyped at the point of assertion. The production code these
     // tests exercise is still fully type-checked and linted.
-    files: ['**/*.spec.ts', '**/*.test.ts', 'tests/**/*.ts'],
+    // `.tsx` as well as `.ts`: the web component tests are `.tsx`, and without
+    // this they were held to the production `no-unsafe-*` rules while asserting
+    // on mock query results - which is the exact situation the block exists for.
+    files: ['**/*.spec.ts', '**/*.spec.tsx', '**/*.test.ts', '**/*.test.tsx', 'tests/**/*.ts'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/unbound-method': 'off',
@@ -82,6 +85,14 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
+    },
+  },
+  {
+    // Jest configs are CommonJS by nature; `require` is correct there and the
+    // type-aware rules do not apply anyway (see the plain-JS block below).
+    files: ['**/jest.config.js', '**/jest.setup.js'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {

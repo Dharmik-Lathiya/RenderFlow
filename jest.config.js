@@ -54,6 +54,9 @@ module.exports = {
     tsProject('libs/social', '@renderflow/social'),
     tsProject('libs/observability', '@renderflow/observability'),
     tsProject('packages/api-client', '@renderflow/api-client'),
+    // The browser project needs jsdom, .tsx and CSS stubbing, so it brings its
+    // own config rather than being squeezed into `tsProject()`.
+    require('./apps/web/jest.config.js'),
   ],
 
   // Coverage options are global-only in a multi-project config, so the report
