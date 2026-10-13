@@ -23,6 +23,8 @@
     "gen:api-client": "turbo run gen:api-client",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "openapi:dump": "pnpm --filter @renderflow/api run build && node apps/api/dist/openapi-dump.js",
+    "openapi:generate": "pnpm openapi:dump && node scripts/generate-api-client.mjs",
     "prepare": "husky",
     "smoke:phase1": "./scripts/smoke-phase1.sh",
     "smoke:phase4": "./scripts/smoke-phase4.sh",

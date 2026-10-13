@@ -604,7 +604,11 @@ importers:
         specifier: workspace:*
         version: link:../common
 
-  packages/api-client: {}
+  packages/api-client:
+    dependencies:
+      zod:
+        specifier: ^4.1.13
+        version: 4.6.5
 
   tests:
     dependencies:

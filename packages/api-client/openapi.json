@@ -1,0 +1,952 @@
+{
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "cookie": {
+        "in": "cookie",
+        "name": "rf_access",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "AI marketing studio and scheduler. Auth is cookie-based for the web app and `Authorization: Bearer` for mobile clients.",
+    "title": "RenderFlow API",
+    "version": "1.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/admin/dlq": {
+      "get": {
+        "operationId": "AdminController_listJobs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Jobs that exhausted their attempts and were refunded",
+        "tags": ["admin"]
+      }
+    },
+    "/admin/dlq/outbox": {
+      "get": {
+        "operationId": "AdminController_listOutbox",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Outbox events the relay gave up on",
+        "tags": ["admin"]
+      }
+    },
+    "/admin/dlq/outbox/{eventId}/replay": {
+      "post": {
+        "operationId": "AdminController_replayOutbox",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Put an abandoned event back in the pending set",
+        "tags": ["admin"]
+      }
+    },
+    "/admin/dlq/{jobId}/replay": {
+      "post": {
+        "description": "The original reservation was refunded, so a replay re-charges the owner. Refused with INSUFFICIENT_CREDITS if they no longer have the credits.",
+        "operationId": "AdminController_replayJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Re-reserve and re-queue a failed job",
+        "tags": ["admin"]
+      }
+    },
+    "/admin/reconcile": {
+      "get": {
+        "operationId": "AdminController_reconcile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Per-bucket wallet/ledger reconciliation",
+        "tags": ["admin"]
+      }
+    },
+    "/assets/uploads": {
+      "post": {
+        "operationId": "AssetsController_requestUpload",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create an asset record and get a presigned upload URL",
+        "tags": ["assets"]
+      }
+    },
+    "/assets/{assetId}": {
+      "delete": {
+        "operationId": "AssetsController_remove",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Delete an asset",
+        "tags": ["assets"]
+      }
+    },
+    "/assets/{assetId}/confirm": {
+      "post": {
+        "operationId": "AssetsController_confirm",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm an upload by reading the real object size back",
+        "tags": ["assets"]
+      }
+    },
+    "/assets/{assetId}/download": {
+      "get": {
+        "operationId": "AssetsController_download",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assetId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Get a short-lived presigned download URL",
+        "tags": ["assets"]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Exchange credentials for a session",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Revoke the presented session",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The current token's claims",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Rotate the refresh token and issue a new access token",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create an account and grant the signup bonus",
+        "tags": ["auth"]
+      }
+    },
+    "/brands": {
+      "get": {
+        "operationId": "StudioController_listBrands",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List brands in a workspace",
+        "tags": ["studio"]
+      },
+      "post": {
+        "operationId": "StudioController_createBrand",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a brand (EDITOR+)",
+        "tags": ["studio"]
+      }
+    },
+    "/brands/{brandId}": {
+      "delete": {
+        "operationId": "StudioController_deleteBrand",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "brandId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Delete a brand (OWNER only)",
+        "tags": ["studio"]
+      },
+      "get": {
+        "operationId": "StudioController_getBrand",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "brandId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Fetch a brand",
+        "tags": ["studio"]
+      },
+      "patch": {
+        "operationId": "StudioController_updateBrand",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "brandId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Update a brand (EDITOR+)",
+        "tags": ["studio"]
+      }
+    },
+    "/brands/{brandId}/campaigns": {
+      "get": {
+        "operationId": "StudioController_listCampaigns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "brandId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List campaigns for a brand",
+        "tags": ["studio"]
+      }
+    },
+    "/campaigns": {
+      "post": {
+        "operationId": "StudioController_createCampaign",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a campaign (EDITOR+)",
+        "tags": ["studio"]
+      }
+    },
+    "/campaigns/{campaignId}/posts": {
+      "get": {
+        "operationId": "StudioController_listPosts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaignId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List posts in a campaign",
+        "tags": ["studio"]
+      }
+    },
+    "/credits": {
+      "get": {
+        "operationId": "CreditsController_getCredits",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Wallet balance and paginated credit ledger",
+        "tags": ["credits"]
+      }
+    },
+    "/docs-json": {
+      "get": {
+        "operationId": "OpenApiController_current",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The OpenAPI 3 document for this API",
+        "tags": ["meta"]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Liveness: the process is up",
+        "tags": ["health"]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Readiness: dependencies are reachable",
+        "tags": ["health"]
+      }
+    },
+    "/jobs/{jobId}": {
+      "get": {
+        "operationId": "JobsController_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Job status and completed stages",
+        "tags": ["jobs"]
+      }
+    },
+    "/jobs/{jobId}/events": {
+      "get": {
+        "operationId": "JobsController_events",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Server-sent progress events for a job",
+        "tags": ["jobs"]
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "UsersController_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The authenticated user profile",
+        "tags": ["users"]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "MetricsController_scrape",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Prometheus metrics",
+        "tags": ["metrics"]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "PublishingController_listNotifications",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "My notifications, newest first",
+        "tags": ["publishing"]
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "PublishingController_markAllRead",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Mark every notification read",
+        "tags": ["publishing"]
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "operationId": "PublishingController_unreadCount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "How many notifications are unread",
+        "tags": ["publishing"]
+      }
+    },
+    "/notifications/{notificationId}/read": {
+      "post": {
+        "operationId": "PublishingController_markRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notificationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Mark one notification read",
+        "tags": ["publishing"]
+      }
+    },
+    "/posts": {
+      "post": {
+        "operationId": "StudioController_createPost",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Create a post (EDITOR+)",
+        "tags": ["studio"]
+      }
+    },
+    "/posts/{postId}": {
+      "patch": {
+        "operationId": "StudioController_updatePost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Edit a post; increments its version (EDITOR+)",
+        "tags": ["studio"]
+      }
+    },
+    "/posts/{postId}/approve": {
+      "post": {
+        "operationId": "StudioController_approvePost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Approve a post (APPROVER+)",
+        "tags": ["studio"]
+      }
+    },
+    "/posts/{postId}/assets": {
+      "get": {
+        "operationId": "StudioController_listAssets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List a post's assets",
+        "tags": ["studio"]
+      }
+    },
+    "/posts/{postId}/generate": {
+      "post": {
+        "operationId": "JobsController_generate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Create a generation job; reserves credits in the same transaction",
+        "tags": ["jobs"]
+      }
+    },
+    "/posts/{postId}/publishes": {
+      "get": {
+        "operationId": "PublishingController_listPublishes",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "The publish history for a post",
+        "tags": ["publishing"]
+      }
+    },
+    "/posts/{postId}/schedule": {
+      "delete": {
+        "operationId": "PublishingController_cancel",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Cancel everything still pending for a post",
+        "tags": ["publishing"]
+      },
+      "post": {
+        "operationId": "PublishingController_schedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Schedule an approved post to one or more connected accounts",
+        "tags": ["publishing"]
+      }
+    },
+    "/social-accounts": {
+      "get": {
+        "operationId": "PublishingController_listAccounts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List the accounts a workspace publishes to",
+        "tags": ["publishing"]
+      },
+      "post": {
+        "operationId": "PublishingController_connect",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Connect a social account, or rotate its token",
+        "tags": ["publishing"]
+      }
+    },
+    "/social-accounts/{accountId}": {
+      "delete": {
+        "operationId": "PublishingController_disconnect",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Disconnect an account",
+        "tags": ["publishing"]
+      }
+    },
+    "/workspaces": {
+      "get": {
+        "operationId": "WorkspacesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List the workspaces I belong to",
+        "tags": ["workspaces"]
+      }
+    },
+    "/workspaces/{workspaceId}": {
+      "get": {
+        "operationId": "WorkspacesController_detail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Fetch a workspace I am a member of",
+        "tags": ["workspaces"]
+      }
+    },
+    "/workspaces/{workspaceId}/members": {
+      "get": {
+        "operationId": "WorkspacesController_members",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "List members (any member may read this)",
+        "tags": ["workspaces"]
+      },
+      "post": {
+        "operationId": "WorkspacesController_addMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Add or re-role a member (OWNER only)",
+        "tags": ["workspaces"]
+      }
+    },
+    "/workspaces/{workspaceId}/members/{userId}": {
+      "delete": {
+        "operationId": "WorkspacesController_removeMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Remove a member (OWNER only; never the last owner)",
+        "tags": ["workspaces"]
+      }
+    }
+  },
+  "servers": [],
+  "tags": []
+}
