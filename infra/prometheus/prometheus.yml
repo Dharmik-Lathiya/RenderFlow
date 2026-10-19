@@ -1,19 +1,55 @@
-# RenderFlow - Prometheus scrape configuration.
+# RenderFlow - Prometheus scrape configuration (Phase 9).
 #
-# Application targets (/metrics) are wired in as their services are added to
-# docker-compose.yml (Phase 4+). Scraping the queue/infra now keeps the
-# observability profile usable from Phase 0.
+# Application targets are wired here now that each app exposes /metrics. The API
+# is the one that carries the DATABASE-derived gauges (failure rate, stuck jobs,
+# refunds, ledger drift) because those are properties of a row, not of a process.
 
 global:
   scrape_interval: 15s
+  # Matches METRICS_INTERVAL_MS in .env.example. If the collector refreshes
+  # slower than Prometheus scrapes, consecutive scrapes return the same numbers
+  # and a short spike is never observed at all.
   evaluation_interval: 15s
   external_labels:
     stack: renderflow
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
 
 scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ['localhost:9090']
+
+  # The API carries every gauge derived from the database.
+  - job_name: renderflow-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api:4000']
+        labels:
+          service: api
+
+  # Workers report their process metrics (event loop lag, heap, GC). They do not
+  # run the collector, so they will not report the database-derived gauges -
+  # which is deliberate: one process answering for all rows beats seven each
+  # deriving the same numbers and disagreeing.
+  - job_name: renderflow-workers
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - 'content-worker:4001'
+          - 'media-worker:4002'
+          - 'publisher-worker:4003'
+          - 'analytics-worker:4004'
+          - 'outbox-relay:4005'
+          - 'reaper:4006'
+        labels:
+          service: worker
 
   - job_name: redis
     static_configs:

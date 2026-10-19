@@ -66,6 +66,29 @@ export const envSchema = z.object({
     .union([z.boolean(), z.string()])
     .default(true)
     .transform((value) => (typeof value === 'boolean' ? value : value !== 'false')),
+  /**
+   * Whether the collector polls the database to derive its gauges.
+   *
+   * SEPARATE from METRICS_ENABLED, which only controls prom-client's default
+   * PROCESS metrics. They are different questions: a deployment may want the
+   * business gauges without the process ones, or the reverse. Conflating them
+   * means the obvious way to switch off ~20 per-process collectors is also
+   * switching off the numbers that say whether the product is working - and, in
+   * the test suite, the way to keep it affordable is to disable the thing that
+   * actually matters.
+   */
+  METRICS_COLLECTOR_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .default(true)
+    .transform((value) => (typeof value === 'boolean' ? value : value !== 'false')),
+  /**
+   * How often the metrics collector re-derives its gauges from the database.
+   *
+   * Must be >= the Prometheus scrape interval, or two scrapes return the same
+   * numbers and a short-lived spike is never seen at all. Default 15s matches
+   * `global.scrape_interval` in infra/prometheus/prometheus.yml.
+   */
+  METRICS_INTERVAL_MS: z.coerce.number().int().min(1_000).default(15_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

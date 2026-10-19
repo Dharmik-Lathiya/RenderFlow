@@ -1,0 +1,16 @@
+apiVersion: 1
+
+providers:
+  - name: renderflow
+    orgId: 1
+    folder: RenderFlow
+    type: file
+    # Disabled by default: `allowUiUpdates: true` lets someone edit a dashboard in
+    # the UI, and then the next provisioning pass overwrites what they built.
+    # A dashboard that differs from git is a dashboard nobody can review.
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

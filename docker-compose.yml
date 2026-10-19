@@ -93,6 +93,10 @@ services:
       - '--storage.tsdb.retention.time=6h'
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # The alert rules the Phase 9 DoD asks for. Mounted separately because
+      # prometheus only reads rule_files at startup, so editing them without a
+      # restart does nothing.
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports:
       - '9090:9090'
     depends_on:
@@ -108,6 +112,9 @@ services:
       GF_USERS_ALLOW_SIGN_UP: 'false'
     volumes:
       - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      # Provisioned dashboards, so a dashboard is reviewable in git rather than
+      # being a thing someone exported once and forgot.
+      - ./infra/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafanadata:/var/lib/grafana
     ports:
       - '3001:3000'

@@ -1,0 +1,169 @@
+# RenderFlow alert rules (PROJECT.md section 14, Phase 9 DoD: "alerts defined
+# for stuck jobs, DLQ growth, ledger drift").
+#
+# The three the DoD names are marked DOD below. The rest exist because a phase
+# that stops at the three will page somebody at 3am about something that turned
+# out to be a deploy.
+#
+# Every rule has a `for:` clause. An alert with no `for` fires on a single
+# scrape, and Prometheus scrapes every 15 seconds - so a rule without one pages
+# on a query that was briefly slow, which is how people learn to ignore alerts.
+#
+# Load with:
+#   promtool check rules infra/prometheus/alerts.yml
+
+groups:
+  - name: renderflow-dod
+    interval: 30s
+    rules:
+      # --- DOD 1: stuck jobs -----------------------------------------------
+      - alert: RenderFlowStuckJobs
+        expr: renderflow_stuck_jobs > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value }} generation jobs are past every legitimate duration'
+          description: >-
+            Jobs have been unfinished for over 5 minutes, or completed without
+            their credits ever being captured. The second case means the work is
+            done and the user was never charged.
+          runbook: Check `GET /admin/dlq` for jobs given up on, and whether
+            publisher-worker or a media worker is running.
+
+      - alert: RenderFlowStuckJobsCritical
+        expr: renderflow_stuck_jobs > 10
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $value }} stuck jobs and rising'
+          description: >-
+            The queue is not draining. Almost always a worker that is not
+            running or a dependency it cannot reach.
+
+      # --- DOD 2: DLQ growth ----------------------------------------------
+      # Publishes that permanently failed, plus abandoned outbox events, which
+      # the relay stops retrying and which no dashboard counts on their own.
+      - alert: RenderFlowPublishFailures
+        expr: renderflow_publish_failures_window > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value }} publishes failed in the last hour'
+          description: >-
+            A publish that fails permanently means a post is queued for a time
+            it will never go out. Most often an expired social token - the user
+            sees the failure as a notification and has to reconnect the account.
+
+      - alert: RenderFlowOutboxAbandoned
+        # A GAUGE derived from outbox_events, not a counter: an abandoned event
+        # survives a relay restart, so a cumulative counter would both reset at
+        # the worst moment and stop firing once the number had been raised.
+        expr: renderflow_outbox_abandoned_events > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Outbox events abandoned by the relay'
+          description: >-
+            The relay gave up on events. They are still in `outbox_events` and
+            can be replayed from `GET /admin/dlq/outbox`.
+
+      # --- DOD 3: ledger drift --------------------------------------------
+      - alert: RenderFlowLedgerDrift
+        expr: renderflow_ledger_drift_users > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $value }} users have a wallet that disagrees with the ledger'
+          description: >-
+            A wallet balance and the credit ledger that should produce it
+            disagree. Money is involved: every such user has a balance that is
+            wrong in someone's favour.
+          runbook: >-
+            GET /admin/reconcile lists the drifted users and both derived values.
+            Do NOT adjust by hand until the cause is known - an adjustment moves
+            the wallet without adding a ledger row, which is drift of a new kind.
+
+  - name: renderflow-health
+    interval: 30s
+    rules:
+      - alert: RenderFlowHighFailureRate
+        # 10% of an hour's jobs is a lot. The window is long enough that one bad
+        # provider does not page, and short enough to catch a real outage.
+        expr: renderflow_job_failure_rate > 0.1 and renderflow_jobs_in_window > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value | humanizePercentage }} of jobs are failing'
+          description: >-
+            Failure rate over the last hour. Check whether a provider is
+            rejecting requests, and whether mock providers are running in an
+            environment that should not have them.
+
+      - alert: RenderFlowNoJobsAtAll
+        # An idle system and a broken pipeline look identical: both produce zero
+        # jobs. Only the second is an incident.
+        expr: renderflow_jobs_in_window == 0 and renderflow_queue_depth > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Jobs are queued but none have started'
+          description: >-
+            There is work waiting and nothing is consuming it. A worker is
+            almost certainly not running.
+
+      - alert: RenderFlowQueueBacklog
+        expr: renderflow_queue_depth{queue=~"content|media"} > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Queue {{ $labels.queue }} has {{ $value }} waiting jobs'
+          description: >-
+            Generation work is backing up. Add worker replicas or check whether
+            a provider is slow enough to hold the concurrency slots.
+
+      - alert: RenderFlowCollectorBroken
+        # The collector is best-effort by design, so a broken section leaves its
+        # gauges at their last value and a dashboard looks frozen rather than
+        # wrong. This is the only signal that the metrics themselves are lying.
+        #
+        # A gauge of 0 rather than a counter of failures: a counter is invisible
+        # until its first increment, so a collector broken from the moment it
+        # starts would report no failures at all.
+        expr: renderflow_collector_ok == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Metrics collection is failing ({{ $labels.section }})'
+          description: >-
+            A collector section is throwing. Everything else still reports, which
+            makes this easy to miss - the gauges for this section are stale, not
+            zero.
+
+      - alert: RenderFlowRefundSpike
+        expr: renderflow_credits_refunded_window > 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value }} credits refunded in the last hour'
+          description: >-
+            Either a provider is failing and users are being made whole, or
+            something is refunding work it should not.
+
+      - alert: RenderFlowTargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: '{{ $labels.job }} is not scrapeable'
+          description: 'Prometheus cannot scrape the target. Metrics are stale.'

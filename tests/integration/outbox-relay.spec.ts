@@ -221,10 +221,31 @@ describe('outbox relay', () => {
     // which is exactly the bug this test exists to catch.
     const queue = new InMemoryPublisher();
 
-    await Promise.all([
-      relayOnce(db, queue, { batchSize: 2 }),
-      relayOnce(db, queue, { batchSize: 2 }),
-    ]);
+    // DRAIN, rather than assuming one pass claims every row.
+    //
+    // Two relays of `batchSize: 2` look like they must partition four events -
+    // and they usually do - but SKIP LOCKED only hides rows locked at the
+    // instant of the scan. A relay that starts while the other is between
+    // "published" and "marked processed" re-claims those rows, spends its two
+    // slots on duplicates, and leaves later events for the next tick. That is
+    // the at-least-once behaviour documented on `relayOnce`: the row is not
+    // lost, it is picked up on the next pass, which is what the production loop
+    // does every interval.
+    //
+    // Asserting `published` after a SINGLE pass therefore asserted a partition
+    // guarantee the design explicitly disclaims, and failed roughly once in a
+    // few hundred runs under load. What matters - exactly-once enqueue and
+    // nothing left behind - is asserted below, and is asserted more strongly
+    // because the outbox is allowed to finish.
+    for (let tick = 0; tick < 5; tick += 1) {
+      await Promise.all([
+        relayOnce(db, queue, { batchSize: 2 }),
+        relayOnce(db, queue, { batchSize: 2 }),
+      ]);
+      if ((await countPending(db)) === 0) {
+        break;
+      }
+    }
 
     expect(queue.published).toHaveLength(4);
     expect(new Set(queue.published.map((m) => m.jobId)).size).toBe(4);

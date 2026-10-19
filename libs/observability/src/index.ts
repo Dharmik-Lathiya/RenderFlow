@@ -6,4 +6,5 @@
 
 export * from './logger';
 export * from './metrics';
+export * from './collector';
 export * from './process-runtime';

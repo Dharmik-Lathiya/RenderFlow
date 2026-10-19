@@ -64,6 +64,18 @@ export function resetDbForTests(): void {
 }
 
 /**
+ * The current handle, or null - WITHOUT creating one.
+ *
+ * `getDbHandle` is a factory as well as an accessor, so asking it a question
+ * creates a pool when there was none. A caller that wants to close the pool it
+ * opened needs to know whether it opened one; using `getDbHandle` for that would
+ * manufacture the very thing it is trying to clean up.
+ */
+export function peekDbHandle(): DbHandle | null {
+  return instance;
+}
+
+/**
  * A session-scoped Postgres advisory lock.
  *
  * Used by the reaper so only one instance sweeps at a time. Postgres is the

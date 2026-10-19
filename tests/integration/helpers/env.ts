@@ -23,7 +23,21 @@ export const TEST_ENV: NodeJS.ProcessEnv = {
   // Cheap argon2 so the suite is not dominated by hashing (~50ms each otherwise).
   ARGON2_MEMORY_COST: '8',
   ARGON2_TIME_COST: '1',
+  // Both OFF by default, for COST rather than correctness.
+  //
+  // The suite boots an application per describe block. Leaving prom-client's
+  // process metrics on means ~20 collectors per registry for the whole run, and
+  // leaving the collector on means every one of those applications polls the
+  // database every 15 seconds.
+  //
+  // The two switches are deliberately separate. `METRICS_ENABLED` only governs
+  // the process metrics; `METRICS_COLLECTOR_ENABLED` governs the business gauges.
+  // Conflating them would make the obvious way to switch off twenty per-process
+  // collectors also switch off the numbers that say whether the product works.
+  // `metrics-endpoint.spec.ts` opts the collector back in through
+  // `TestAppOptions.env`, and `metrics-collector.spec.ts` exercises it directly.
   METRICS_ENABLED: 'false',
+  METRICS_COLLECTOR_ENABLED: 'false',
 
   /**
    * Rate limits, relaxed for the suite.

@@ -565,6 +565,12 @@ importers:
       '@renderflow/common':
         specifier: workspace:*
         version: link:../common
+      '@renderflow/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@opentelemetry/api@1.9.1)(@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3))(@types/pg@8.23.1)(pg@8.23.1)(prisma@6.19.3(typescript@5.9.3))
       pino:
         specifier: ^10.4.0
         version: 10.4.0

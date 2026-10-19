@@ -9,11 +9,12 @@ import {
   RATE_LIMIT_STORE,
 } from '../../../apps/api/src/ratelimit/rate-limit.guard';
 import { loadRateLimitConfig } from '../../../apps/api/src/ratelimit/rate-limit.config';
+import { METRICS_CONFIG } from '../../../apps/api/src/metrics/metrics.tokens';
 import {
   InMemoryRateLimitStore,
   type RateLimitStore,
 } from '../../../apps/api/src/ratelimit/rate-limit.store';
-import { resetDbForTests } from '@renderflow/db';
+import { peekDbHandle, resetDbForTests } from '@renderflow/db';
 
 // `./env` applies the test environment as an import side effect and MUST stay
 // above the AppModule import, which validates process.env at module scope.
@@ -104,6 +105,28 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
       );
   }
 
+  // Same seam as RATE_LIMIT_CONFIG, and applied UNCONDITIONALLY.
+  //
+  // `ConfigModule.forRoot({ validate })` runs once, when AppModule is imported -
+  // which is at the top of this file, before any `createTestApp` call. The
+  // `Object.assign(process.env, ...)` below therefore lands too late to change
+  // what the schema already validated, and the schema's default wins. Overriding
+  // the module's own token is the only thing that actually reaches the app, so it
+  // has to happen for every instance rather than only for those passing `env`.
+  {
+    const metrics = env as unknown as {
+      METRICS_ENABLED?: string;
+      METRICS_COLLECTOR_ENABLED?: string;
+      METRICS_INTERVAL_MS?: string;
+    };
+
+    builder.overrideProvider(METRICS_CONFIG).useValue({
+      processEnabled: metrics.METRICS_ENABLED !== 'false',
+      collectorEnabled: metrics.METRICS_COLLECTOR_ENABLED !== 'false',
+      intervalMs: Number(metrics.METRICS_INTERVAL_MS ?? 15_000),
+    });
+  }
+
   if (options.rateLimitStore !== undefined) {
     builder.overrideProvider(RATE_LIMIT_STORE).useValue(options.rateLimitStore);
   } else {
@@ -129,6 +152,23 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
 
   await app.init();
 
+  // The pool this instance opened, captured now because every service resolves
+  // `getDb()` in its CONSTRUCTOR, which has already run by the time `init()`
+  // resolves.
+  //
+  // `close()` used to call `resetDbForTests()`, which forgets the singleton
+  // without ending the pool. Nothing then closed that pool, and a pool keeps its
+  // connections for `idleTimeoutMillis` (30s) - so a suite that ran for longer
+  // than half a minute accumulated one abandoned pool per application instance.
+  // With 23 suites in parallel that reached `max_connections = 100` and
+  // unrelated tests failed with "sorry, too many clients already": an error that
+  // names neither the harness nor the code that leaked.
+  //
+  // Anything that polls the database on a timer makes this much worse, because
+  // the pool never goes idle and so never releases a connection. That is how the
+  // Phase 9 metrics collector surfaced it.
+  const ownedHandle = peekDbHandle();
+
   const auth = app.get(AuthService);
 
   return {
@@ -138,7 +178,19 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestA
     rateLimits: (options.rateLimitStore as InMemoryRateLimitStore | undefined) ?? rateLimits,
     close: async () => {
       await app.close();
-      resetDbForTests();
+
+      // End ONLY the pool this app opened. A later app in the same worker may
+      // have installed its own by now, and ending that one instead would break
+      // the app still using it.
+      if (ownedHandle !== null) {
+        await ownedHandle.pool.end();
+      }
+
+      // Clear the singleton only while it is still ours, so closing an older
+      // app cannot orphan a newer app's pool.
+      if (peekDbHandle() === ownedHandle) {
+        resetDbForTests();
+      }
     },
   };
 }
