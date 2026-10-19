@@ -712,22 +712,22 @@ Each phase ends with a **Definition of Done (DoD)**. Do not start the next phase
 The single place to look for where the project stands. "Shipped" means the
 DoD's assertions are written and passing; "partial" means some of them are not.
 
-| #   | Phase                             | Status                                            | Verified how                                                                                                                                                                                  |
-| --- | --------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0   | Foundation                        | **Shipped**, one DoD item unverified              | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                            |
-| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified              | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                         |
-| 2   | Credit engine                     | **Shipped**                                       | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                   |
-| 3   | Brands, campaigns, posts, assets  | **Shipped**                                       | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                  |
-| 4   | Job pipeline with mock AI         | **Shipped**                                       | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                         |
-| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                                                     |
-| 6   | Real AI integration               | **Partial** - the DoD's first half unverified     | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                  |
-| 7   | Scheduling and publishing         | **Shipped**, mocks only                           | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.** |
-| 8   | Frontend (Next.js)                | Not started                                       | -                                                                                                                                                                                             |
-| 9   | Analytics, admin, observability   | Partially started                                 | The admin API (DLQ, replay, reconciliation) landed in Phase 5. No worker, dashboard or alert.                                                                                                 |
-| 10  | Hardening and launch polish       | Not started                                       | -                                                                                                                                                                                             |
+| #   | Phase                             | Status                                                | Verified how                                                                                                                                                                                  |
+| --- | --------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Foundation                        | **Shipped**, one DoD item unverified                  | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                            |
+| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified                  | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                         |
+| 2   | Credit engine                     | **Shipped**                                           | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                   |
+| 3   | Brands, campaigns, posts, assets  | **Shipped**                                           | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                  |
+| 4   | Job pipeline with mock AI         | **Shipped**                                           | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                         |
+| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented     | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                                                     |
+| 6   | Real AI integration               | **Partial** - the DoD's first half unverified         | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                  |
+| 7   | Scheduling and publishing         | **Shipped**, mocks only                               | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.** |
+| 8   | Frontend (Next.js)                | **Partial** - the browser half of the DoD             | 51 jsdom component tests; every screen built. Playwright specs written, never run (no browser/Docker).                                                                                        |
+| 9   | Analytics, admin, observability   | **Partial** - metrics and alerts; no analytics worker | 29 integration tests over the collector and `/metrics`; 11 alert rules and a 12-panel dashboard, both drift-tested. No panel has ever rendered (no Docker).                                   |
+| 10  | Hardening and launch polish       | Not started                                           | -                                                                                                                                                                                             |
 
-**7 of 11 phases shipped** (0-4, 7), **3 partial** (5, 6, 8), **1 partially
-started** (9, the admin API), **1 untouched** (10).
+**7 of 11 phases shipped** (0-4, 7), **4 partial** (5, 6, 8, 9), **1 untouched**
+(10).
 
 Phase 7 is counted as shipped because its DoD is met end to end — but only
 against a mock platform. Nothing has ever left the process to a real one, so the
@@ -1254,6 +1254,63 @@ Known gaps:
 - Prometheus metrics: queue depth, job duration, failure rate, refund count, ledger drift; Grafana dashboards; Bull Board.
 - **DoD:** dashboards show live data; alerts defined for stuck jobs, DLQ growth, ledger drift.
 
+Status: **partial.** The metrics half is built and tested. The analytics worker,
+the campaign dashboard, the admin console UI and Bull Board are not started.
+
+Built: `MetricsCollector` (libs/observability) deriving fourteen business gauges
+from the database on a timer, run by the API through `MetricsCollectorService`;
+every series renamed to carry the `renderflow_` prefix; eleven alert rules in
+`infra/prometheus/alerts.yml`; a twelve-panel dashboard in
+`infra/grafana/dashboards/platform.json` provisioned from git with
+`allowUiUpdates: false`; 29 integration tests (23 on the collector against real
+Postgres, 6 on the `/metrics` endpoint).
+
+Decisions:
+
+- **Facts that are properties of a ROW are DERIVED, not counted.** A counter
+  incremented in a handler resets when the process restarts and records nothing
+  at all while the process is down - so the dashboard goes blank exactly during
+  the incident it exists for. `jobs_total`, `credits_refunded_total` and
+  `publish_failures_total` were removed for that reason: each was incremented in
+  its own unit test and nowhere else, so they existed and always read zero.
+- **`collectorOk{section}` is a 1/0 gauge, not a failure counter.** A counter is
+  invisible until its first increment, so a section that fails from the moment it
+  starts reports no failures at all - the absence of data looks exactly like
+  health. It is set on both the success and failure paths.
+- **`METRICS_ENABLED` and `METRICS_COLLECTOR_ENABLED` are separate switches.**
+  The first controls prom-client's ~20 default PROCESS collectors, the second the
+  business gauges. Conflating them means the obvious way to save overhead is also
+  switching off the numbers that say whether the product works.
+- **The duration percentile is computed in SQL, not by a prom-client histogram.**
+  The collector only sees an aggregate, so it observed the batch mean once per
+  job per pass; histograms accumulate, so `_count` grew by the job count every 15
+  seconds and the buckets described a distribution that never existed.
+  `renderflow_job_duration_p95_seconds` is `PERCENTILE_CONT` over the real rows.
+- **The dashboard and the alerts are provisioned from git and drift-tested.**
+  `infra-metrics.spec.ts` renders every metric and fails on a name no dashboard,
+  alert or declared list mentions, and asserts every alert has a `for:` clause -
+  an alert without one fires on a single scrape.
+
+Known gaps:
+
+- **No panel has ever rendered.** There is no Docker here, so Prometheus and
+  Grafana have never started. What is verified is the metric names, the
+  expressions parsed out of the dashboard and alert files, and the values the
+  collector writes - not that a chart appears.
+- **Nothing pulls `post_metrics`.** The analytics worker, the campaign dashboard
+  and the "what to post next" suggestions are not started; `post_metrics` is
+  empty. The Phase 8 analytics page still has no API to read.
+- **Manual credit adjustment has no endpoint.** `adjust` exists in
+  `libs/credits` with a required reason and a per-adjustment reference id, and is
+  called only by tests. The audited admin route and its UI are not built.
+- **Bull Board is not installed.** It needs Redis, which this environment does
+  not have; it would be a UI over a queue nothing can currently enqueue to.
+  `GET /admin/dlq` and `GET /admin/dlq/outbox` remain the operator view.
+- **Queue depth comes from an injected `QueueDepthSource`.** The collector takes
+  one optionally and the API does not supply it, so `renderflow_queue_depth` is
+  absent from a real scrape and `RenderFlowQueueBacklog` cannot fire. Wiring it
+  needs the BullMQ client, which needs Redis.
+
 ### Phase 10: Hardening and launch polish
 
 - Security pass (OWASP, secrets, CORS, helmet, CSRF for cookies, upload validation, SSRF checks).
@@ -1341,8 +1398,31 @@ Known gaps:
 ## 14. Observability checklist
 
 - Structured logs with `requestId`, `userId`, `jobId`, `stage`.
-- Metrics: `jobs_total{status}`, `job_duration_seconds{stage}`, `queue_depth{queue}`, `credits_refunded_total`, `ledger_drift`, `publish_failures_total{platform}`.
-- Alerts: stuck jobs > 5 min, DLQ > 0, drift ≠ 0, publish failure rate > 10%.
+- Metrics, every name carrying the `renderflow_` prefix. The Phase 0 names were
+  emitted BARE because only `collectDefaultMetrics` was given the prefix, so a
+  dashboard referencing `renderflow_queue_depth` rendered an empty chart against
+  a real series called `queue_depth`.
+  - **Counters:** none for business facts, deliberately. `jobs_total`,
+    `credits_refunded_total` and `publish_failures_total` were removed: each was
+    incremented only in its own unit test, so it existed and always read zero.
+    Derive the fact from the row instead.
+  - **Derived gauges** (`MetricsCollector`, sampled every `METRICS_INTERVAL_MS`):
+    `jobs_by_status{status}`, `jobs_in_window`, `job_failure_rate`,
+    `job_duration_mean_seconds{stage}`, `job_duration_p95_seconds{stage}`,
+    `stuck_jobs`, `credits_refunded_window`, `ledger_drift`,
+    `ledger_drift_users`, `ledger_checked_users`, `publish_failures_window`,
+    `outbox_pending_events`, `outbox_abandoned_events`,
+    `collector_ok{section}`.
+  - **Injected:** `queue_depth{queue}`, from a `QueueDepthSource` the API does
+    not currently supply (it needs Redis, and `collector.ts` must not depend on
+    the BullMQ client).
+- Alerts (`infra/prometheus/alerts.yml`, eleven rules, each with a `for:`):
+  stuck jobs > 5 min and > 10, outbox abandoned > 0, ledger drift ≠ 0, job
+  failure rate > 10% over > 10 jobs, no jobs at all while queues are non-empty,
+  queue backlog > 100, publish failures > 0, refund spike > 20/hour, a collector
+  section returning 0, and the scrape target being down.
+- Dashboards: `infra/grafana/dashboards/platform.json`, twelve panels,
+  provisioned from git with `allowUiUpdates: false`.
 - Health endpoints: `/health/live`, `/health/ready` (DB, Redis, S3).
 
 ---

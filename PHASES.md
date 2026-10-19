@@ -4,7 +4,7 @@ The authoritative version of this table lives in [`PROJECT.md` §12](./PROJECT.m
 This file exists so progress can be read without scrolling a thousand lines of
 specification.
 
-**Last updated:** after Phase 7.
+**Last updated:** after Phase 9's metrics half.
 
 | #   | Phase                             | Status                                                     |
 | --- | --------------------------------- | ---------------------------------------------------------- |
@@ -16,11 +16,11 @@ specification.
 | 5   | Reliability layer                 | **Partial** — R5 (a real SIGKILL) not implemented          |
 | 6   | Real AI integration               | **Partial** — never run against a real provider key        |
 | 7   | Scheduling and publishing         | Shipped (mocks only — no real adapter, no OAuth, no email) |
-| 8   | Frontend (Next.js)                | Not started                                                |
-| 9   | Analytics, admin, observability   | Partially started — the admin API only                     |
+| 8   | Frontend (Next.js)                | **Partial** — the browser journey has never been run       |
+| 9   | Analytics, admin, observability   | **Partial** — metrics and alerts; no analytics worker      |
 | 10  | Hardening and launch polish       | Not started                                                |
 
-**7 shipped · 3 partial · 1 partially started · 1 untouched**
+**7 shipped · 4 partial · 1 untouched**
 
 ## What "partial" means here
 
@@ -81,6 +81,34 @@ on the interface rather than on the mock. What that buys is a guarantee about ou
 own behaviour — a worker killed mid-publish does not double-post, an expired
 token refreshes and succeeds — and it buys nothing about anyone else's.
 
+## Phase 9 is partial, and the missing half is the analytics
+
+The observability half is built: fourteen gauges derived from the database on a
+timer, eleven alert rules, a twelve-panel dashboard provisioned from git, and 29
+integration tests over the collector and the `/metrics` endpoint. Three counters
+were deleted on the way, because each was incremented only in its own unit test
+and always read zero in production — a series that exists and says nothing is
+worse than one that is absent.
+
+What is **not** built: the analytics worker that would fill `post_metrics`, the
+campaign dashboard, the "what to post next" suggestions, the admin console UI,
+an audited endpoint for `adjust`, and Bull Board. The `post_metrics` table is
+empty, so the Phase 8 analytics page still has no API to read.
+
+Two things deserve their own line because they are the kind of gap that a green
+build hides:
+
+- **No panel has ever rendered.** There is no Docker here, so Prometheus and
+  Grafana have never started. The metric names, the expressions parsed out of
+  the dashboard and the alert files, and the values the collector writes are all
+  tested; a chart appearing on a screen is not.
+- **`renderflow_queue_depth` is never set by the API.** The collector accepts a
+  `QueueDepthSource` and the API does not supply one, because that needs a
+  Redis client in the API process and this environment has no Redis. Two of the
+  eleven alerts — queue backlog and "no jobs at all" — therefore cannot fire
+  against a real deployment yet. They are defined and their expressions are
+  checked; they are not armed.
+
 ## Running the gates
 
 ```bash
@@ -100,7 +128,7 @@ TEST_DATABASE_URL=postgresql://renderflow:renderflow@127.0.0.1:5433/renderflow_t
 CHAOS_DATABASE_URL=... ./tests/chaos/run.sh        # R1-R4; R5 SKIPs without Redis
 ```
 
-Current state: **720 unit**, **353 integration**, smoke-phase1 11/11,
+Current state: **870 unit**, **452 integration**, smoke-phase1 11/11,
 smoke-phase4 33/33, chaos R1–R4 14/14.
 
 ## Commit map
@@ -113,3 +141,6 @@ smoke-phase4 33/33, chaos R1–R4 14/14.
 | 4     | `364a115`, `e55034d`, `0d3ceeb` — stage machine, runner, relay + endpoints      |
 | 5     | `28c0485` — lease, heartbeat, reaper, operator DLQ                              |
 | 6     | `8c9dc97`, `07e01ce`, `35ddcda` — providers, renderer, moderation, brand memory |
+| 7     | `8c9dc97`-era: publisher, scheduler, mock adapters                              |
+| 8     | `18544a5`, `2b49265`, `9479c53`, `9087bcc` — frontend, api-client, e2e harness  |
+| 9     | `feat(observability)` — collector, alert rules, dashboard (the metrics half)    |
