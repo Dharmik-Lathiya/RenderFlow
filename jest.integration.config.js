@@ -110,6 +110,16 @@ module.exports = {
     // Phase 7: the publisher. Its whole job is the no-double-post guarantee,
     // which is only meaningful against a real table and a real adapter.
     'libs/social/src/publisher.ts',
+    // Phase 7/9: the processor runs the publish claim loop, and the metrics sync
+    // writes post_metrics through SQL. Both are asserted end-to-end in
+    // tests/integration/publish-processor.spec.ts and metrics-sync.spec.ts, and
+    // the unit gate excludes them for the same reason.
+    'libs/social/src/processor.ts',
+    'libs/social/src/metrics-sync.ts',
+    // Phase 9: the business gauges are derived from the database by SQL; the
+    // collector's contract - sample, set, never throw - is only observable with
+    // a real connection (tests/integration/metrics-collector.spec.ts).
+    'libs/observability/src/collector.ts',
 
     // Excluded because the unit suite covers them with real assertions, not
     // hand-rolled fakes; counting them here would double-count while reporting a

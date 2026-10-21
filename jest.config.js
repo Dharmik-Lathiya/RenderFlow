@@ -135,6 +135,31 @@ module.exports = {
     // tests/integration/openapi.spec.ts; counting it here reports 0% for code that
     // is in fact exercised.
     '!src/common/openapi.ts',
+    // Phase 9: the pipeline files whose behavior is a SQL loop plus a timer.
+    // Each is collected by jest.integration.config.js and asserted against real
+    // Postgres and Redis; in this gate they report 0-50% for code that a unit
+    // test cannot reach without re-implementing the database.
+    //   - processor.ts       tests/integration/publish-processor.spec.ts
+    //   - worker-handler.ts  tests/integration/worker-handler.spec.ts
+    //   - relay.ts           tests/integration/outbox-relay.spec.ts
+    //   - publisher.ts       tests/integration/publish-processor.spec.ts
+    //   - metrics-sync.ts    tests/integration/metrics-sync.spec.ts
+    //   - collector.ts       tests/integration/metrics-collector.spec.ts
+    '!src/processor.ts',
+    '!src/worker-handler.ts',
+    '!src/relay.ts',
+    '!src/publisher.ts',
+    '!src/metrics-sync.ts',
+    '!src/collector.ts',
+    // A CLI entry point: it boots the application and prints the document, so
+    // there is no unit surface to hold to a coverage floor.
+    '!src/openapi-dump.ts',
+    // Drizzle's schema file is a declaration: column builders, CHECK constraints
+    // and `$defaultFn` callbacks. The callbacks are executed by Postgres
+    // operations, not by importing the module, so a unit gate can only report
+    // them as uncovered. Their real verification is the migration plus the
+    // integration suites that insert, reserve and reconcile against the schema.
+    '!src/schema.ts',
   ],
   coverageDirectory: '<rootDir>/coverage',
   coverageReporters: ['text-summary', 'lcov'],
