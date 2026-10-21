@@ -21,9 +21,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const api = useApi();
   const pathname = usePathname();
 
-  // Unauthenticated by definition: the login and register screens have no shell
-  // and no balance to show.
-  const bare = pathname === '/login' || pathname === '/register';
+  // Unauthenticated by definition: the landing, login and register screens have
+  // no shell and no balance to show.
+  const bare = pathname === '/' || pathname === '/login' || pathname === '/register';
 
   // `retry: false` so a signed-out visitor sees a link to sign in rather than an
   // error box on every page.
@@ -104,8 +104,11 @@ export function Shell({ children }: { children: ReactNode }) {
 const NAV: { href: string; label: string }[] = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/brands', label: 'Brands' },
+  { href: '/calendar', label: 'Calendar' },
+  { href: '/analytics', label: 'Analytics' },
   { href: '/notifications', label: 'Notifications' },
   { href: '/settings/accounts', label: 'Accounts' },
+  { href: '/admin', label: 'Admin' },
 ];
 
 /** `/` must not light up for every path, or the nav says "you are here" always. */
