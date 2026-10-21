@@ -23,8 +23,11 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY tsconfig.base.json ./
-COPY packages ./packages
-COPY apps ./apps
+# Only the web app and its workspace dependency belong in this image. Copying
+# all of apps/ makes pnpm resolve the workers' @renderflow/* dependencies too,
+# and those libs are intentionally absent from the web image.
+COPY packages/api-client ./packages/api-client
+COPY apps/web ./apps/web
 RUN pnpm turbo run build --filter=@renderflow/web...
 
 # ---- runtime ------------------------------------------------------------
