@@ -134,19 +134,30 @@ pnpm build
 ### Run
 
 ```bash
-pnpm dev          # all apps via turbo
+pnpm dev          # all apps via turbo; loads .env automatically
 docker compose up --build   # full stack
 ```
 
-| Service       | URL                                                 |
-| ------------- | --------------------------------------------------- |
-| Web dashboard | http://localhost:3000                               |
-| API           | http://localhost:4000/api/v1                        |
-| Health        | http://localhost:4000/health/live · `/health/ready` |
-| Metrics       | http://localhost:4000/metrics                       |
-| MinIO console | http://localhost:9001                               |
-| MailHog       | http://localhost:8025                               |
-| Grafana       | http://localhost:3001                               |
+`pnpm dev` watches the TypeScript sources directly. The API and workers run under
+`ts-node`, because Nest's decorator-based DI needs `emitDecoratorMetadata`, which
+Node's built-in type stripping does not emit. The root `.env` is loaded with
+Node's `--env-file-if-exists`, so a value already exported in your shell still
+wins.
+
+| Service        | URL                                                 |
+| -------------- | --------------------------------------------------- |
+| Public landing | http://localhost:3000                               |
+| Web dashboard  | http://localhost:3000/dashboard                     |
+| API            | http://localhost:4000/api/v1                        |
+| Health         | http://localhost:4000/health/live · `/health/ready` |
+| Metrics        | http://localhost:4000/metrics                       |
+| MinIO console  | http://localhost:9001                               |
+| MailHog        | http://localhost:8025                               |
+| Grafana        | http://localhost:3001                               |
+
+The landing page is server-rendered and needs no session; the application shell
+starts at `/dashboard`. The marketing design and its contrast checks live in
+`design-system/renderflow/`.
 
 ### Commands
 
@@ -156,6 +167,7 @@ pnpm typecheck     # tsc --noEmit across the workspace
 pnpm test          # unit
 pnpm test:coverage # unit + coverage gates
 pnpm test:int      # integration, against a real Postgres
+pnpm test:int:coverage # integration + coverage gate (what CI runs)
 pnpm test:e2e      # Playwright against the compose stack — from Phase 8
 pnpm test:chaos    # tests/chaos/run.sh — R1-R4; R5 needs Redis
 ```
@@ -275,4 +287,3 @@ Local development and CI run entirely on mocks.
 ## License
 
 Private project.
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    

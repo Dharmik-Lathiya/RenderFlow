@@ -467,23 +467,25 @@ but means a client sending garbage is charged against its IP's account budget. 1
 ## 10. API surface (REST, prefix `/api/v1`)
 
 ```
-POST   /auth/register          (grants 50 credits)        POST /auth/login | /auth/refresh | /auth/logout
-GET    /me                     GET /credits (balance + ledger, paginated)
-POST   /workspaces             GET /workspaces/:id/members
-POST   /brands                 GET/PATCH/DELETE /brands/:id
-POST   /campaigns              (goal) → creates PLAN job (reserve 2)
-GET    /campaigns/:id          GET /campaigns/:id/posts
-POST   /posts/:id/generate     (type: caption|poster|carousel|reel) → reserve + job
-POST   /posts/:id/regenerate-scene
-PATCH  /posts/:id              (edit caption etc.)
-POST   /posts/:id/approve      POST /posts/:id/schedule {scheduledAt, accountIds[]}
-POST   /posts/:id/cancel-schedule
-GET    /jobs/:id               GET /jobs/:id/events   (SSE live progress)
-GET    /social-accounts        POST /social-accounts/connect/:platform   (OAuth)
-GET    /analytics/campaigns/:id
-GET    /notifications          PATCH /notifications/:id/read
-Admin: GET /admin/dlq  POST /admin/dlq/:id/replay  POST /admin/credits/adjust  GET /admin/reconcile
-Health: GET /health/live  /health/ready   Metrics: GET /metrics
+Auth:      POST /auth/register (grants 50 credits) | /auth/login | /auth/refresh | /auth/logout
+           GET  /auth/me | GET /me
+Credits:   GET  /credits (balance + ledger, paginated)
+Workspace: GET  /workspaces | GET /workspaces/:id | GET/POST/DELETE /workspaces/:id/members[/:userId]
+Brands:    GET/POST /brands | GET/PATCH/DELETE /brands/:id | GET /brands/:id/campaigns
+Campaigns: POST /campaigns (goal; reserves 2) | GET /campaigns/:id | GET /campaigns/:id/posts
+Posts:     GET/POST /posts (GET filters scheduled posts by workspace and range)
+           GET/PATCH /posts/:id | POST /posts/:id/generate | POST /posts/:id/approve
+           POST/PATCH/DELETE /posts/:id/schedule | GET /posts/:id/publishes | GET /posts/:id/assets
+Jobs:      GET  /jobs/:id | GET /jobs/:id/events (SSE live progress)
+Assets:    POST /assets/uploads | POST /assets/:id/confirm | GET /assets/:id/download | DELETE /assets/:id
+Social:    GET/POST /social-accounts | DELETE /social-accounts/:id
+Notify:    GET  /notifications | GET /notifications/unread-count
+           POST /notifications/:id/read | POST /notifications/read-all
+Analytics: GET  /analytics/overview?workspaceId=:id | GET /analytics/campaigns/:id
+Admin:     GET  /admin/dlq | POST /admin/dlq/:jobId/replay
+           GET  /admin/dlq/outbox | POST /admin/dlq/outbox/:eventId/replay
+           GET  /admin/reconcile | POST /admin/credits/adjust
+Probes:    GET  /health/live | /health/ready | GET /metrics | GET /docs-json
 ```
 
 Errors use RFC 7807 style: `{ code, message, details }`. Codes include `INSUFFICIENT_CREDITS`, `MODERATION_REJECTED`, `IDEMPOTENCY_CONFLICT`, `ACCOUNT_TOKEN_EXPIRED`.
@@ -712,22 +714,22 @@ Each phase ends with a **Definition of Done (DoD)**. Do not start the next phase
 The single place to look for where the project stands. "Shipped" means the
 DoD's assertions are written and passing; "partial" means some of them are not.
 
-| #   | Phase                             | Status                                                | Verified how                                                                                                                                                                                  |
-| --- | --------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0   | Foundation                        | **Shipped**, one DoD item unverified                  | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                            |
-| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified                  | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                         |
-| 2   | Credit engine                     | **Shipped**                                           | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                   |
-| 3   | Brands, campaigns, posts, assets  | **Shipped**                                           | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                  |
-| 4   | Job pipeline with mock AI         | **Shipped**                                           | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                         |
-| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented     | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                                                     |
-| 6   | Real AI integration               | **Partial** - the DoD's first half unverified         | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                  |
-| 7   | Scheduling and publishing         | **Shipped**, mocks only                               | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.** |
-| 8   | Frontend (Next.js)                | **Partial** - the browser half of the DoD             | 51 jsdom component tests; every screen built. Playwright specs written, never run (no browser/Docker).                                                                                        |
-| 9   | Analytics, admin, observability   | **Partial** - metrics and alerts; no analytics worker | 29 integration tests over the collector and `/metrics`; 11 alert rules and a 12-panel dashboard, both drift-tested. No panel has ever rendered (no Docker).                                   |
-| 10  | Hardening and launch polish       | Not started                                           | -                                                                                                                                                                                             |
+| #   | Phase                             | Status                                            | Verified how                                                                                                                                                                                                                             |
+| --- | --------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Foundation                        | **Shipped**, one DoD item unverified              | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                                                                       |
+| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified              | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                                                                    |
+| 2   | Credit engine                     | **Shipped**                                       | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                                                              |
+| 3   | Brands, campaigns, posts, assets  | **Shipped**                                       | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                                                             |
+| 4   | Job pipeline with mock AI         | **Shipped**                                       | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                                                                    |
+| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                                                                                                |
+| 6   | Real AI integration               | **Partial** - the DoD's first half unverified     | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                                                             |
+| 7   | Scheduling and publishing         | **Shipped**, mocks only                           | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                            |
+| 8   | Frontend (Next.js)                | **Partial** - the browser half of the DoD         | 68 jsdom tests in 9 suites; every screen built, including the public landing page, calendar (drag plus a keyboard/date-field path), analytics and admin console. Playwright specs written, never run (no browser/Docker).                |
+| 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered           | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker). |
+| 10  | Hardening and launch polish       | **Partial** - security pass started               | Helmet security headers and an explicit-CORS assertion are in place. No k6 load test, backup/restore guide, chaos R5 or CI audit job yet.                                                                                                |
 
-**7 of 11 phases shipped** (0-4, 7), **4 partial** (5, 6, 8, 9), **1 untouched**
-(10).
+**6 of 11 phases shipped** (0-4, 7), **5 partial** (5, 6, 8, 9, 10), **0
+untouched**.
 
 Phase 7 is counted as shipped because its DoD is met end to end — but only
 against a mock platform. Nothing has ever left the process to a real one, so the
@@ -1201,10 +1203,13 @@ Known gaps:
 
 Status: **partial.** The screens, the accessibility semantics and the API
 integration are built and tested; the DoD's browser half has never been run.
-Screens built: sign in, register, dashboard (credit balance + brands), brand
-detail with the campaign form, campaign posts, post editor (generate → approve
-→ schedule), asset library, account settings, notification centre. 51 component
-tests run under jsdom.
+Screens built: public landing page (light editorial, server-rendered, no app
+shell), sign in, register, dashboard (credit balance + brands), brand detail
+with the campaign form and campaign analytics, campaign posts, post editor
+(generate → approve → schedule), month calendar with drag-to-reschedule and a
+date-field fallback, asset library, account settings, notification centre,
+workspace analytics overview and the admin console. 68 component tests in 9
+suites run under jsdom.
 
 Decisions:
 
@@ -1238,9 +1243,14 @@ Known gaps:
   reason for anything missing, so it cannot report a pass for work it did not do.
   What IS verified daily is the jsdom component layer, which covers behaviour and
   accessibility semantics but **not** layout, real SSE, or a real HTTP round trip.
-- **No calendar, no drag-to-reschedule, no analytics page.** The API supports
-  cancelling and re-scheduling; there is no calendar view and no drag
-  interaction. The analytics page has no API to read - that is Phase 9.
+- **The calendar drag is tested at the DOM-event level, not in a browser.**
+  jsdom dispatches `dragstart`/`dragover`/`drop`; it cannot show the chip landing
+  on the target day or a native drag image. Every card also exposes a date field,
+  which is the keyboard path and is tested directly.
+- **Analytics is snapshot-based.** The overview and campaign pages read
+  `post_metrics`, written by the analytics worker. A post published less than
+  `ANALYTICS_FIRST_SYNC_MS` ago (five minutes by default) has no row yet, and the
+  page shows zeros rather than inventing numbers.
 - **The OAuth flow is a token field.** `POST /social-accounts` accepts an
   already-obtained token and the screen labels it as exactly that. The
   authorization-code redirect is Phase 7's outstanding gap, unchanged.
@@ -1254,16 +1264,43 @@ Known gaps:
 - Prometheus metrics: queue depth, job duration, failure rate, refund count, ledger drift; Grafana dashboards; Bull Board.
 - **DoD:** dashboards show live data; alerts defined for stuck jobs, DLQ growth, ledger drift.
 
-Status: **partial.** The metrics half is built and tested. The analytics worker,
-the campaign dashboard, the admin console UI and Bull Board are not started.
+Status: **partial.** Both halves are built and covered by unit, integration and
+jsdom tests. The alert rules are defined and drift-tested; the dashboards have
+never rendered because there is no Docker in this environment.
 
-Built: `MetricsCollector` (libs/observability) deriving fourteen business gauges
-from the database on a timer, run by the API through `MetricsCollectorService`;
-every series renamed to carry the `renderflow_` prefix; eleven alert rules in
-`infra/prometheus/alerts.yml`; a twelve-panel dashboard in
-`infra/grafana/dashboards/platform.json` provisioned from git with
-`allowUiUpdates: false`; 29 integration tests (23 on the collector against real
-Postgres, 6 on the `/metrics` endpoint).
+Built:
+
+- `MetricsCollector` (libs/observability) derives fourteen business gauges from
+  the database on a timer, run by the API through `MetricsCollectorService`;
+  every series renamed to carry the `renderflow_` prefix. `BullQueueDepthSource`
+  supplies `renderflow_queue_depth` from BullMQ, opening Redis lazily so a
+  metrics-disabled deployment pays nothing.
+- `analytics-worker` pulls `post_metrics` from the platforms: one snapshot per
+  publish job per hour, keyed by `(publish_job_id, fetched_at)` so a retry
+  updates instead of duplicating. A Postgres advisory lock elects one leader
+  across replicas. The first snapshot is taken five minutes after publication
+  and refreshed every six hours (`ANALYTICS_FIRST_SYNC_MS`,
+  `ANALYTICS_REFRESH_MS`). Mock by default; `SOCIAL_PROVIDER=real` selects the
+  Instagram Graph adapter.
+- `GET /analytics/overview` (workspace totals, campaign summaries, daily series)
+  and `GET /analytics/campaigns/:id` (per-platform totals, post-type
+  performance, derived suggestions). The web app has a workspace overview, a
+  campaign analytics panel with an "up next" list, and a month calendar.
+- Admin console: DLQ and abandoned outbox views, replay for both, a
+  reconciliation report and credit adjustment. An adjustment writes the ledger
+  row and its `audit_logs` row in one transaction, is scoped to the operator's
+  workspaces (or a global `ADMIN`), and is idempotent on the optional reference
+  id.
+- Bull Board is opt-in (`BULL_BOARD_ENABLED=false` by default) and admin-only:
+  it shows every tenant's job payloads, so a deployment must choose to expose it.
+- Eleven alert rules in `infra/prometheus/alerts.yml` and a twelve-panel
+  dashboard in `infra/grafana/dashboards/platform.json`, provisioned from git
+  with `allowUiUpdates: false`.
+
+Tests: 8 metrics-sync, 10 analytics and 10 admin-adjust integration tests; 29
+existing collector and `/metrics` integration tests; 18 jsdom tests across the
+overview, campaign analytics, calendar and admin console; unit tests for the
+board guard and the queue-depth source.
 
 Decisions:
 
@@ -1290,6 +1327,18 @@ Decisions:
   `infra-metrics.spec.ts` renders every metric and fails on a name no dashboard,
   alert or declared list mentions, and asserts every alert has a `for:` clause -
   an alert without one fires on a single scrape.
+- **Metrics sync is an hourly upsert, not an append.** The poll can retry, and a
+  leader handover can overlap; both must converge on one row rather than a
+  duplicate snapshot. The unique index is the guarantee, not application logic.
+- **LinkedIn metrics report "unsupported", not zero.** The adapter would need the
+  organization and share URNs, which the publisher does not record. A missing
+  number stays distinguishable from a post nobody saw.
+- **Suggestions are derived from the campaign's own numbers, not generated by an
+  LLM.** They are free (no credit reservation), deterministic (a reload gives the
+  same advice) and cite the number they came from. An LLM narrative layer can sit
+  on top later; it would have to agree with the ranking underneath.
+- **Bull Board bypasses the Nest guard chain**, so it carries its own
+  `adminOnly` middleware and is mounted only after `cookieParser`.
 
 Known gaps:
 
@@ -1297,19 +1346,18 @@ Known gaps:
   Grafana have never started. What is verified is the metric names, the
   expressions parsed out of the dashboard and alert files, and the values the
   collector writes - not that a chart appears.
-- **Nothing pulls `post_metrics`.** The analytics worker, the campaign dashboard
-  and the "what to post next" suggestions are not started; `post_metrics` is
-  empty. The Phase 8 analytics page still has no API to read.
-- **Manual credit adjustment has no endpoint.** `adjust` exists in
-  `libs/credits` with a required reason and a per-adjustment reference id, and is
-  called only by tests. The audited admin route and its UI are not built.
-- **Bull Board is not installed.** It needs Redis, which this environment does
-  not have; it would be a UI over a queue nothing can currently enqueue to.
-  `GET /admin/dlq` and `GET /admin/dlq/outbox` remain the operator view.
-- **Queue depth comes from an injected `QueueDepthSource`.** The collector takes
-  one optionally and the API does not supply it, so `renderflow_queue_depth` is
-  absent from a real scrape and `RenderFlowQueueBacklog` cannot fire. Wiring it
-  needs the BullMQ client, which needs Redis.
+- **The real Instagram adapter has never been called.** The mock implements the
+  same interface and the request/response handling is tested, but no live token
+  has been used. LinkedIn is deliberately unsupported.
+- **The `analytics` queue is a wake-up that nothing enqueues yet.** The poll is
+  the real schedule, so a freshly published post still gets its first snapshot
+  after five minutes. Wiring the publisher to enqueue here would shorten that,
+  but the poll is what makes the numbers correct.
+- **Snapshots are hourly.** Time-of-day trends inside an hour are not available,
+  and the last six hours are refreshed rather than re-fetched.
+- **Bull Board's guard is unit-tested, but no test boots the board against a
+  real Redis.** Its mount path runs in `pnpm dev` with the flag on; the queue
+  payloads it renders are the same ones the admin endpoints already expose.
 
 ### Phase 10: Hardening and launch polish
 
@@ -1318,6 +1366,15 @@ Known gaps:
 - README with architecture diagram, **chaos demo GIF**, setup guide.
 - Optional: Razorpay/Stripe top-ups with webhook and idempotent `PURCHASE` ledger entries.
 - **DoD:** all test layers green in CI; load test targets met; README lets a stranger run the demo in 10 minutes.
+
+Status: **partial.** Much of the security pass is in place: `helmet` headers on
+every response (CSP off only because Swagger UI and Bull Board use inline
+assets), an explicit CORS allow-list that rejects `*` with cookie auth, a
+double-submit CSRF guard, httpOnly + SameSite cookies, argon2 passwords,
+AES-256-GCM social tokens, and upload MIME/size validation with a presigned PUT.
+Outstanding: the k6 load test and index review, a backup/restore runbook, chaos
+scenario R5 (a real SIGKILL), a CI dependency-audit job, SSRF hardening for any
+future user-supplied fetch, and the README chaos GIF.
 
 ---
 
