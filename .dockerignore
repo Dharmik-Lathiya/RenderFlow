@@ -8,6 +8,10 @@
 
 node_modules
 **/node_modules
+# Incremental compiler state describes files that .dockerignore then removes;
+# copying it makes tsc believe dist is current and emit nothing.
+*.tsbuildinfo
+**/*.tsbuildinfo
 dist
 **/dist
 coverage

@@ -42,6 +42,9 @@ COPY tsconfig.base.json ./
 COPY libs ./libs
 COPY apps ./apps
 COPY packages ./packages
+# A host checkout can contain incremental state that claims dist is current,
+# even though dist is deliberately absent from the image context.
+RUN find apps libs packages -name '*.tsbuildinfo' -delete
 RUN pnpm turbo run build --filter="${APP_NAME}..."
 # Prune dev dependencies but keep the pruned store for the runtime stage.
 # The deploy filter must name ONE project; the ellipsis is only valid for the

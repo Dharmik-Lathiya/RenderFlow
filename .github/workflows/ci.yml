@@ -196,8 +196,15 @@ jobs:
 
       - name: wait for infra
         run: |
-          docker compose exec -T postgres pg_isready -U renderflow -d renderflow
-          docker compose exec -T redis redis-cli ping
+          for attempt in $(seq 1 60); do
+            if docker compose exec -T postgres pg_isready -U renderflow -d renderflow \
+              && docker compose exec -T redis redis-cli ping; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          exit 1
 
       - name: apply migrations
         env:
