@@ -24,24 +24,31 @@ import styles from '../../components/ui.module.css';
 export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   const api = useApi();
 
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [touched, setTouched] = useState({ email: false, password: false });
+  const [touched, setTouched] = useState({ name: false, email: false, password: false });
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const body = { email: email.trim(), password };
+      const body =
+        mode === 'register'
+          ? { name: name.trim(), email: email.trim(), password }
+          : { email: email.trim(), password };
 
       return mode === 'register' ? api.auth.register(body) : api.auth.login(body);
     },
     // A full navigation, not a client-side push: the session is an httpOnly
     // cookie the server has to see, and a client-side route would render the
-    // dashboard before the cookie was visible to any server component.
+    // dashboard before the cookie was visible to any server component. `/` is
+    // the public landing page now, so signed-in users go straight to the
+    // dashboard they just created an account for.
     onSuccess: () => {
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     },
   });
 
+  const nameError = mode === 'register' && touched.name ? validateName(name) : undefined;
   const emailError = touched.email ? validateEmail(email) : undefined;
   const passwordError = touched.password ? validatePassword(password, mode) : undefined;
 
@@ -49,9 +56,15 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    setTouched({ email: true, password: true });
+    setTouched({ name: true, email: true, password: true });
 
-    if (validateEmail(email) !== undefined || validatePassword(password, mode) !== undefined) {
+    const invalidName = mode === 'register' && validateName(name) !== undefined;
+
+    if (
+      invalidName ||
+      validateEmail(email) !== undefined ||
+      validatePassword(password, mode) !== undefined
+    ) {
       return;
     }
 
@@ -68,6 +81,23 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
       >
         <form className={styles.authForm} onSubmit={onSubmit} noValidate>
           {mutation.isError && <ErrorNotice message={messageFor(mutation.error, mode)} />}
+
+          {mode === 'register' && (
+            <Field label="Name" id="name" error={nameError}>
+              {({ id, describedBy, invalid }) => (
+                <input
+                  id={id}
+                  type="text"
+                  autoComplete="name"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid || undefined}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  onBlur={() => setTouched((state) => ({ ...state, name: true }))}
+                />
+              )}
+            </Field>
+          )}
 
           <Field label="Email" id="email" error={emailError}>
             {({ id, describedBy, invalid }) => (
@@ -88,7 +118,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
             label="Password"
             id="password"
             error={passwordError}
-            hint={mode === 'register' ? 'At least 8 characters.' : undefined}
+            hint={
+              mode === 'register'
+                ? 'At least 10 characters, including upper and lower case and a number.'
+                : undefined
+            }
           >
             {({ id, describedBy, invalid }) => (
               <input
@@ -139,10 +173,43 @@ function messageFor(error: unknown, mode: 'login' | 'register'): string {
   }
 
   if (error.code === 'VALIDATION_FAILED') {
-    return error.message;
+    // The API returns `{ field: [messages] }`; a form has one place to show the
+    // first specific reason, which is more useful than the generic envelope.
+    return firstValidationMessage(error.details) ?? error.message;
   }
 
   return mode === 'register' ? 'Could not create the account.' : 'Could not sign in.';
+}
+
+function firstValidationMessage(details: unknown): string | undefined {
+  if (typeof details !== 'object' || details === null) {
+    return undefined;
+  }
+
+  for (const value of Object.values(details)) {
+    if (!Array.isArray(value)) {
+      continue;
+    }
+
+    const first = value.find((item): item is string => typeof item === 'string');
+    if (first !== undefined) {
+      return first;
+    }
+  }
+
+  return undefined;
+}
+
+function validateName(value: string): string | undefined {
+  if (value.trim() === '') {
+    return 'Enter your name.';
+  }
+
+  if (value.trim().length > 120) {
+    return 'Use 120 characters or fewer.';
+  }
+
+  return undefined;
 }
 
 function validateEmail(value: string): string | undefined {
@@ -162,8 +229,16 @@ function validatePassword(value: string, mode: 'login' | 'register'): string | u
     return 'Enter your password.';
   }
 
-  if (mode === 'register' && value.length < 8) {
-    return 'Use at least 8 characters.';
+  if (mode === 'login') {
+    return undefined;
+  }
+
+  if (value.length < 10) {
+    return 'Use at least 10 characters.';
+  }
+
+  if (!/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/\d/.test(value)) {
+    return 'Include upper and lower case letters and a number.';
   }
 
   return undefined;

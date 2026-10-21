@@ -44,28 +44,48 @@ export class PasswordPolicyError extends Error {
 }
 
 /**
+ * Every reason a password fails the policy, in a stable order.
+ *
+ * The HTTP DTO uses this to reject a weak password as a 400 with field details;
+ * `assertPasswordPolicy` uses the first issue as the exceptions safety net for
+ * non-HTTP callers such as the seeder. Keeping one list means the form, the
+ * validation response and the hash guard cannot disagree about what is allowed.
+ */
+export function passwordPolicyIssues(password: string): string[] {
+  if (typeof password !== 'string' || password.length === 0) {
+    return ['Password is required'];
+  }
+
+  const issues: string[] = [];
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    issues.push(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
+  // argon2 truncates very long input; reject rather than silently shorten.
+  if (password.length > MAX_PASSWORD_LENGTH) {
+    issues.push(`Password must be at most ${MAX_PASSWORD_LENGTH} characters`);
+  }
+  if (!/[a-z]/.test(password)) {
+    issues.push('Password must contain a lowercase letter');
+  }
+  if (!/[A-Z]/.test(password)) {
+    issues.push('Password must contain an uppercase letter');
+  }
+  if (!/\d/.test(password)) {
+    issues.push('Password must contain a digit');
+  }
+
+  return issues;
+}
+
+/**
  * Validates strength up front so a weak password is rejected before argon2 burns
  * ~50ms of CPU on it, and so the message can be specific.
  */
 export function assertPasswordPolicy(password: string): void {
-  if (typeof password !== 'string' || password.length === 0) {
-    throw new PasswordPolicyError('Password is required');
-  }
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    throw new PasswordPolicyError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-  }
-  // argon2 truncates very long input; reject rather than silently shorten.
-  if (password.length > MAX_PASSWORD_LENGTH) {
-    throw new PasswordPolicyError(`Password must be at most ${MAX_PASSWORD_LENGTH} characters`);
-  }
-  if (!/[a-z]/.test(password)) {
-    throw new PasswordPolicyError('Password must contain a lowercase letter');
-  }
-  if (!/[A-Z]/.test(password)) {
-    throw new PasswordPolicyError('Password must contain an uppercase letter');
-  }
-  if (!/\d/.test(password)) {
-    throw new PasswordPolicyError('Password must contain a digit');
+  const [first] = passwordPolicyIssues(password);
+  if (first !== undefined) {
+    throw new PasswordPolicyError(first);
   }
 }
 

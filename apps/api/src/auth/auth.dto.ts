@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from './password';
+import { MAX_PASSWORD_LENGTH, passwordPolicyIssues } from './password';
 
 /**
  * Auth DTOs. Validated with zod at the HTTP edge (AGENTS.md section 7).
@@ -24,7 +24,15 @@ const emailSchema = z
   .email()
   .transform(normalizeEmail);
 
-const passwordSchema = z.string().min(MIN_PASSWORD_LENGTH).max(MAX_PASSWORD_LENGTH);
+/**
+ * Registration enforces the full policy at the HTTP edge, so a weak password is
+ * a 400 with field details instead of reaching argon2 and surfacing as a 500.
+ */
+const passwordSchema = z.string().superRefine((value, context) => {
+  for (const message of passwordPolicyIssues(value)) {
+    context.addIssue({ code: 'custom', message });
+  }
+});
 
 export const registerSchema = z.object({
   email: emailSchema,

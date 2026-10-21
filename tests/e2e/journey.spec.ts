@@ -23,8 +23,9 @@ function uniqueEmail(): string {
 
 async function signUp(page: Page, email: string): Promise<void> {
   await page.goto('/register');
+  await page.getByLabel('Name').fill('Ada Lovelace');
   await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill('correct-horse-battery');
+  await page.getByLabel('Password').fill('Correct-Horse-Battery-1');
   await page.getByRole('button', { name: 'Create account' }).click();
 
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();

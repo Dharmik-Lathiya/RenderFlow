@@ -82,6 +82,26 @@ describe('password policy', () => {
   it('rejects empty input', () => {
     expect(() => assertPasswordPolicy('')).toThrow(/required/);
   });
+
+  it('is enforced by the register schema, so a weak password is a 400 not a 500', () => {
+    const result = registerSchema.safeParse({
+      email: 'ada@example.com',
+      password: 'alllowercase1',
+      name: 'Ada',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ['password'],
+            message: expect.stringMatching(/uppercase/i),
+          }),
+        ]),
+      );
+    }
+  });
 });
 
 describe('argon2 hashing', () => {

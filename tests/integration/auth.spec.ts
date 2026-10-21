@@ -237,6 +237,22 @@ describe('auth (Phase 1 DoD)', () => {
       await expect(countUsers(email)).resolves.toBe(0);
     });
 
+    it('rejects a long password that misses the character classes as a 400', async () => {
+      const email = uniqueEmail('weak-classes');
+
+      const res = await app
+        .http()
+        .post('/api/v1/auth/register')
+        .send({ email, password: 'alllowercase1', name: 'Weak Classes' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('VALIDATION_FAILED');
+      expect(res.body.details.password).toEqual(
+        expect.arrayContaining([expect.stringMatching(/uppercase/i)]),
+      );
+      await expect(countUsers(email)).resolves.toBe(0);
+    });
+
     it('validates the body and reports field-level details', async () => {
       const res = await app.http().post('/api/v1/auth/register').send({ email: 'not-an-email' });
 
