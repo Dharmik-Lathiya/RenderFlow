@@ -333,3 +333,192 @@
   max-width: 30rem;
   width: 100%;
 }
+
+/* --- analytics and calendar (Phase 9) ------------------------------------ */
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table td.numeric,
+.table th.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.statGrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.stat {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.statLabel {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0 0 var(--space-1);
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.suggestionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.suggestion {
+  border-left: 3px solid var(--accent);
+  padding-left: var(--space-3);
+}
+
+.suggestion h3 {
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+}
+
+.suggestion p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.monthHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.calendarWrap {
+  overflow-x: auto;
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(7rem, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-width: 49rem;
+}
+
+.calendarHead {
+  background: var(--bg-sunken);
+  color: var(--muted);
+  padding: var(--space-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.calendarCell {
+  background: var(--bg-raised);
+  min-height: 6.5rem;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.calendarCellMuted {
+  opacity: 0.45;
+}
+
+.calendarCellToday {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.calendarDay {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.calendarChips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.chip {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.78rem;
+  cursor: grab;
+}
+
+.chipDragging {
+  opacity: 0.5;
+}
+
+.chipMove {
+  display: flex;
+  gap: var(--space-1);
+  align-items: center;
+  margin-top: var(--space-1);
+}
+
+.chipMove input {
+  font-size: 0.7rem;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 4px;
+  max-width: 6.5rem;
+}
+
+.chipCancel {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0;
+  text-decoration: underline;
+}
