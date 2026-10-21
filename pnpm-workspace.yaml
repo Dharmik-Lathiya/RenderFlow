@@ -37,5 +37,8 @@ allowBuilds:
   # @nestjs/swagger's telemetry ping. Opted out explicitly: it phones home on
   # install, and a build tool should not need network access to be installed.
   '@scarf/scarf': false
-  '@parcel/watcher': set this to true or false
-  unrs-resolver: set this to true or false
+  # @parcel/watcher's native build is used by the dev file watcher; unrs-resolver
+  # links the native resolver used by ESLint. Both are legitimate, local build
+  # steps, not network telemetry.
+  '@parcel/watcher': true
+  unrs-resolver: true

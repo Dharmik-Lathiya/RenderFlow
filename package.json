@@ -17,7 +17,7 @@
     "db:push": "pnpm --filter @renderflow/db db:push",
     "db:seed": "pnpm --filter @renderflow/credits db:seed",
     "db:studio": "pnpm --filter @renderflow/db db:studio",
-    "dev": "turbo run dev",
+    "dev": "node --env-file-if-exists=.env node_modules/turbo/bin/turbo run dev --env-mode=loose",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "gen:api-client": "turbo run gen:api-client",
@@ -79,6 +79,7 @@
     "lint-staged": "^16.2.4",
     "prettier": "^3.6.2",
     "ts-jest": "^29.4.14",
+    "ts-node": "^10.9.2",
     "turbo": "^2.11.7",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4"
