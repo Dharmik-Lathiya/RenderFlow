@@ -90,6 +90,10 @@ export function queueForEvent(eventType: string, payload?: Record<string, unknow
     }
     case 'post.scheduled':
       return QUEUE_NAMES.PUBLISH;
+    case 'post.published':
+      // A wake-up, not the schedule: analytics-worker polls regardless, but
+      // this lets a freshly published post appear without waiting a full cycle.
+      return QUEUE_NAMES.ANALYTICS;
     case 'post.publish_failed':
       return QUEUE_NAMES.NOTIFICATIONS;
     default:

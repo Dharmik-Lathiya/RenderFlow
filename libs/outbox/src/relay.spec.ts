@@ -37,6 +37,13 @@ describe('queueForEvent', () => {
     expect(queueForEvent('post.scheduled')).toBe('publish');
   });
 
+  it('wakes analytics when a post publishes', () => {
+    // Without this route the event falls through to the content queue, so the
+    // analytics worker only ever sees its poll and a fresh post waits a full
+    // cycle before it has numbers.
+    expect(queueForEvent('post.published', { postId: 'post-1' })).toBe('analytics');
+  });
+
   it('routes publish failures to notifications', () => {
     expect(queueForEvent('post.publish_failed')).toBe('notifications');
   });
