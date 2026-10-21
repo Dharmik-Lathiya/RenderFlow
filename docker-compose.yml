@@ -44,7 +44,9 @@ services:
       retries: 12
 
   minio:
-    image: minio/minio:latest
+    # Docker Hub has started refusing anonymous pulls of this repository on
+    # some CI runners; Quay is MinIO's primary registry.
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: ['server', '/data', '--console-address', ':9001']
     environment:
@@ -65,7 +67,7 @@ services:
   minio-init:
     # One-shot bucket bootstrap: `depends_on: service_completed_successfully`
     # guarantees the bucket exists before the API or a worker boots.
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     depends_on:
       minio:
         condition: service_healthy

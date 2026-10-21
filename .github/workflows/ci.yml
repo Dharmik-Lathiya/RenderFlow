@@ -38,6 +38,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # eslint resolves @renderflow/* through their published `dist` types.
+      # A fresh checkout has no dist, so lint would report every workspace
+      # import as an error type. Build the packages first; typecheck and unit
+      # tests reuse these artifacts from the Turbo cache.
+      - name: build workspace packages
+        run: pnpm build
+
       - name: lint
         run: pnpm lint
 
@@ -72,6 +79,19 @@ jobs:
           --health-timeout 5s
           --health-retries 12
 
+      # The suites boot BullMQ queues. They do not need Redis to assert most
+      # behaviour, but a missing connection produces reconnect noise and can
+      # turn a real assertion failure into an unreadable log.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - uses: actions/checkout@v5
 
@@ -86,6 +106,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # The ffmpeg suite renders a real mp4 and is skipped when the binary is
+      # absent. Skipping it in CI silently lowered branch coverage below the
+      # gate, so install it rather than accepting a partial suite.
+      - name: install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: integration tests with coverage gate
         env:
           TEST_DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow_test
@@ -97,13 +123,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
       - uses: docker/setup-buildx-action@v3
 
+      - name: install
+        run: pnpm install --frozen-lockfile
+
       - name: build all packages
-        run: |
-          pnpm/action-setup@v4
-          pnpm install --frozen-lockfile
-          pnpm build
+        run: pnpm build
 
       - name: build api image
         uses: docker/build-push-action@v6
@@ -128,7 +163,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
       - uses: docker/setup-buildx-action@v3
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: install Playwright
+        run: pnpm --filter @renderflow/tests exec playwright install --with-deps chromium
 
       - name: start infra
         run: docker compose up -d postgres redis minio minio-init mailhog
@@ -146,11 +195,16 @@ jobs:
       - name: start application
         run: docker compose up -d api web
 
-      - name: install Playwright
+      - name: wait for web
         run: |
-          pnpm/action-setup@v4
-          pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
+          for attempt in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://localhost:3000/; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "web did not become ready in 120s" >&2
+          exit 1
 
       - name: Playwright
         run: pnpm test:e2e

@@ -12,6 +12,13 @@ export const TEST_ENV: NodeJS.ProcessEnv = {
   LOG_LEVEL: 'silent',
   DATABASE_URL: process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? '',
   REDIS_URL: 'redis://localhost:6379',
+  // AssetsService refuses to boot without credentials. Nothing in the suite
+  // uploads to S3, so these only satisfy configuration validation; a real
+  // MinIO is not part of the integration job.
+  S3_ENDPOINT: 'http://localhost:9000',
+  S3_ACCESS_KEY: 'renderflow-test',
+  S3_SECRET_KEY: 'renderflow-test-secret',
+  S3_BUCKET: 'renderflow-assets',
   CORS_ORIGINS: 'http://localhost:3000',
   WEB_BASE_URL: 'http://localhost:3000',
   // 60+ chars, which is what the config's minimum-length rule enforces.

@@ -8,6 +8,7 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/.next/**',
+      '**/.vercel/**',
       '**/coverage/**',
       '**/node_modules/**',
       '**/*.tsbuildinfo',
