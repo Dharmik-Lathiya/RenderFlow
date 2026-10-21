@@ -1,0 +1,25 @@
+# Keep the build context small and keep local/runtime state out of the image.
+.git
+.gitignore
+.vercel
+.env
+.env.*
+!.env.example
+
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+.turbo
+**/.turbo
+.next
+**/.next
+
+# Tests and local tooling are not inputs to either production image.
+tests
+scripts
+infra/grafana
+infra/prometheus
+design-system

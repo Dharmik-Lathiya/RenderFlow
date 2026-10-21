@@ -1,11 +1,71 @@
-# RenderFlow - Phase 0 infrastructure stack.
+# RenderFlow - full local stack.
 #
-#   docker compose up -d postgres redis minio mailhog     # infra only
-#   docker compose --profile observability up -d          # + prometheus/grafana
+#   pnpm db:migrate                                     # before first boot
+#   docker compose up --build                           # apps + infra
+#   docker compose up -d postgres redis minio mailhog   # infra only
+#   docker compose --profile observability up -d        # + prometheus/grafana
 #
-# Application services are added in later phases (see PROJECT.md section 12).
+# Compose reads the root `.env` for interpolation, so JWT and token-encryption
+# secrets stay out of this file. The application containers talk to services by
+# name (postgres, redis, minio); only the API and web ports are published.
 
 name: renderflow
+
+# Shared by every Node app container. The API and workers read the same
+# configuration in development, so a value changed for one cannot silently
+# diverge from the other.
+x-app-environment: &app-environment
+  NODE_ENV: development
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgresql://renderflow:renderflow@postgres:5432/renderflow
+  REDIS_URL: redis://redis:6379
+  CORS_ORIGINS: http://localhost:3000
+  WEB_BASE_URL: http://localhost:3000
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 7d
+  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?TOKEN_ENCRYPTION_KEY is required}
+  SIGNUP_BONUS_CREDITS: ${SIGNUP_BONUS_CREDITS:-50}
+  # The browser journey signs up several users from one address; production
+  # limits stay in .env.example.
+  RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+  RATE_LIMIT_LOGIN_IP: ${RATE_LIMIT_LOGIN_IP:-1000/15m}
+  RATE_LIMIT_LOGIN_ACCOUNT: ${RATE_LIMIT_LOGIN_ACCOUNT:-1000/1h}
+  RATE_LIMIT_REGISTER_IP: ${RATE_LIMIT_REGISTER_IP:-1000/1h}
+  RATE_LIMIT_REFRESH_IP: ${RATE_LIMIT_REFRESH_IP:-1000/15m}
+  S3_ENDPOINT: http://minio:9000
+  S3_REGION: us-east-1
+  S3_BUCKET: renderflow-assets
+  S3_ACCESS_KEY: minio
+  S3_SECRET_KEY: minio12345
+  S3_FORCE_PATH_STYLE: 'true'
+  AI_PROVIDER: mock
+  IMAGE_PROVIDER: mock
+  TTS_PROVIDER: mock
+  SOCIAL_PROVIDER: mock
+  SMTP_URL: smtp://mailhog:1025
+  QUEUE_PREFIX: ${QUEUE_PREFIX:-renderflow}
+  OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
+  OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
+  PUBLISH_POLL_MS: ${PUBLISH_POLL_MS:-1000}
+  REAPER_INTERVAL_SECONDS: ${REAPER_INTERVAL_SECONDS:-60}
+  ANALYTICS_POLL_MS: ${ANALYTICS_POLL_MS:-60000}
+  METRICS_COLLECTOR_ENABLED: ${METRICS_COLLECTOR_ENABLED:-true}
+  METRICS_INTERVAL_MS: ${METRICS_INTERVAL_MS:-15000}
+  BULL_BOARD_ENABLED: 'false'
+
+x-node-build: &node-build
+  context: .
+  dockerfile: infra/docker/node-app.Dockerfile
+
+x-app-dependencies: &app-dependencies
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  minio-init:
+    condition: service_completed_successfully
 
 services:
   postgres:
@@ -44,9 +104,10 @@ services:
       retries: 12
 
   minio:
-    # Docker Hub has started refusing anonymous pulls of this repository on
-    # some CI runners; Quay is MinIO's primary registry.
-    image: quay.io/minio/minio:latest
+    # MinIO removed its community images from Docker Hub and Quay in September
+    # 2026. pgsty publishes the maintained fork from the same source tree; pinned
+    # tags keep a CI pull reproducible.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     restart: unless-stopped
     command: ['server', '/data', '--console-address', ':9001']
     environment:
@@ -57,23 +118,22 @@ services:
       - '9001:9001' # console
     volumes:
       - miniodata:/data
-    healthcheck:
-      test: ['CMD-SHELL', 'curl -fsS http://localhost:9000/minio/health/live || exit 1']
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
+    # No healthcheck: the server image is distroless and ships neither curl nor
+    # mc. minio-init retries the alias instead, which is the dependency that
+    # actually matters.
 
   minio-init:
     # One-shot bucket bootstrap: `depends_on: service_completed_successfully`
     # guarantees the bucket exists before the API or a worker boots.
-    image: quay.io/minio/mc:latest
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
     depends_on:
       minio:
-        condition: service_healthy
+        condition: service_started
     entrypoint: >
       /bin/sh -c "
-      mc alias set renderflow http://minio:9000 minio minio12345 &&
+      until mc alias set renderflow http://minio:9000 minio minio12345; do
+        echo 'waiting for minio'; sleep 1;
+      done &&
       mc mb --ignore-existing renderflow/renderflow-assets &&
       echo 'bucket renderflow-assets ready'
       "
@@ -85,6 +145,102 @@ services:
     ports:
       - '1025:1025' # SMTP
       - '8025:8025' # web UI
+
+  # ---- application ------------------------------------------------------
+  #
+  # All Node services are built from the same multi-stage Dockerfile; the
+  # workspace package name selects which dist and dependency graph to deploy.
+
+  api:
+    build:
+      <<: *node-build
+      args:
+        APP_DIR: apps/api
+        APP_NAME: '@renderflow/api'
+    restart: unless-stopped
+    environment: *app-environment
+    ports:
+      - '4000:4000'
+    depends_on: *app-dependencies
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:4000/health/live || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  content-worker:
+    build:
+      <<: *node-build
+      args:
+        APP_DIR: apps/content-worker
+        APP_NAME: '@renderflow/content-worker'
+    restart: unless-stopped
+    environment: *app-environment
+    depends_on: *app-dependencies
+
+  media-worker:
+    build:
+      <<: *node-build
+      args:
+        APP_DIR: apps/media-worker
+        APP_NAME: '@renderflow/media-worker'
+    restart: unless-stopped
+    environment: *app-environment
+    depends_on: *app-dependencies
+
+  publisher-worker:
+    build:
+      <<: *node-build
+      args:
+        APP_DIR: apps/publisher-worker
+        APP_NAME: '@renderflow/publisher-worker'
+    restart: unless-stopped
+    environment: *app-environment
+    depends_on: *app-dependencies
+
+  analytics-worker:
+    build:
+      <<: *node-build
+      args:
+        APP_DIR: apps/analytics-worker
+        APP_NAME: '@renderflow/analytics-worker'
+    restart: unless-stopped
+    environment: *app-environment
+    depends_on: *app-dependencies
+
+  outbox-relay:
+    build:
+      <<: *node-build
+      args:
+        APP_DIR: apps/outbox-relay
+        APP_NAME: '@renderflow/outbox-relay'
+    restart: unless-stopped
+    environment: *app-environment
+    depends_on: *app-dependencies
+
+  reaper:
+    build:
+      <<: *node-build
+      args:
+        APP_DIR: apps/reaper
+        APP_NAME: '@renderflow/reaper'
+    restart: unless-stopped
+    environment: *app-environment
+    depends_on: *app-dependencies
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    depends_on:
+      api:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:latest

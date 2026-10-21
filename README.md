@@ -134,9 +134,15 @@ pnpm build
 ### Run
 
 ```bash
-pnpm dev          # all apps via turbo; loads .env automatically
-docker compose up --build   # full stack
+pnpm dev                    # all apps via turbo; loads .env automatically
+pnpm db:migrate             # once, before the first compose boot
+docker compose up --build   # full stack: api, web, and every worker
 ```
+
+The compose stack reads JWT and token-encryption secrets from the root `.env`
+through Compose interpolation; it refuses to start if any are missing. The API
+and web ports are the only ones published (4000 and 3000). Infrastructure-only
+work still uses the narrower command in Setup.
 
 `pnpm dev` watches the TypeScript sources directly. The API and workers run under
 `ts-node`, because Nest's decorator-based DI needs `emitDecoratorMetadata`, which

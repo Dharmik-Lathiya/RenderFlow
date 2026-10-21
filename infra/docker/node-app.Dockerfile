@@ -44,7 +44,9 @@ COPY apps ./apps
 COPY packages ./packages
 RUN pnpm turbo run build --filter="${APP_NAME}..."
 # Prune dev dependencies but keep the pruned store for the runtime stage.
-RUN pnpm --filter "${APP_NAME}..." deploy --prod /out
+# The deploy filter must name ONE project; the ellipsis is only valid for the
+# build above, where selecting the dependency graph is the point.
+RUN pnpm --filter "${APP_NAME}" deploy --prod /out
 
 # ---- runtime ------------------------------------------------------------
 FROM base AS runtime
@@ -54,9 +56,11 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+# `pnpm deploy` puts the deployed project at the ROOT of the target directory,
+# with its dependencies hoisted into /out/node_modules - not under /out/<app>.
 COPY --from=build /out/node_modules ./node_modules
-COPY --from=build /out/${APP_DIR}/dist ./dist
-COPY --from=build /out/${APP_DIR}/package.json ./package.json
+COPY --from=build /out/dist ./dist
+COPY --from=build /out/package.json ./package.json
 # Workspace libs are deployed alongside as @renderflow/* symlinks in node_modules.
 ENV NODE_ENV=production
 EXPOSE 4000

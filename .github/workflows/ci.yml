@@ -179,6 +179,18 @@ jobs:
       - name: install Playwright
         run: pnpm --filter @renderflow/tests exec playwright install --with-deps chromium
 
+      # Compose interpolates these into every app container. Generate them here
+      # instead of committing fixed test credentials; the values never leave the
+      # runner.
+      - name: compose env
+        run: |
+          cat > .env <<EOF
+          JWT_ACCESS_SECRET=$(openssl rand -base64 48)
+          JWT_REFRESH_SECRET=$(openssl rand -base64 48)
+          TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
+          SIGNUP_BONUS_CREDITS=50
+          EOF
+
       - name: start infra
         run: docker compose up -d postgres redis minio minio-init mailhog
 
@@ -193,7 +205,10 @@ jobs:
         run: pnpm db:migrate
 
       - name: start application
-        run: docker compose up -d api web
+        # The journey generates a caption and schedules it, so the content
+        # worker and the relay that routes its stage events are required. A
+        # poster/reel journey would also need media-worker.
+        run: docker compose up -d api web content-worker outbox-relay
 
       - name: wait for web
         run: |
