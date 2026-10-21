@@ -39,14 +39,19 @@ describe('domain paths are documented', () => {
     { method: 'GET', path: '/brands/{brandId}' },
     { method: 'GET', path: '/brands/{brandId}/campaigns' },
     { method: 'POST', path: '/campaigns' },
+    { method: 'GET', path: '/campaigns/{campaignId}' },
     { method: 'GET', path: '/campaigns/{campaignId}/posts' },
+    { method: 'GET', path: '/analytics/campaigns/{campaignId}' },
+    { method: 'GET', path: '/analytics/overview' },
     { method: 'POST', path: '/posts' },
+    { method: 'GET', path: '/posts' },
     { method: 'GET', path: '/posts/{postId}' },
     { method: 'PATCH', path: '/posts/{postId}' },
     { method: 'POST', path: '/posts/{postId}/approve' },
     { method: 'POST', path: '/posts/{postId}/generate' },
     { method: 'POST', path: '/posts/{postId}/schedule' },
     { method: 'DELETE', path: '/posts/{postId}/schedule' },
+    { method: 'PATCH', path: '/posts/{postId}/schedule' },
     { method: 'GET', path: '/posts/{postId}/publishes' },
     { method: 'GET', path: '/posts/{postId}/assets' },
     { method: 'GET', path: '/jobs/{jobId}' },
@@ -59,6 +64,12 @@ describe('domain paths are documented', () => {
     { method: 'GET', path: '/notifications/unread-count' },
     { method: 'POST', path: '/notifications/{notificationId}/read' },
     { method: 'POST', path: '/notifications/read-all' },
+    { method: 'GET', path: '/admin/dlq' },
+    { method: 'POST', path: '/admin/dlq/{jobId}/replay' },
+    { method: 'GET', path: '/admin/dlq/outbox' },
+    { method: 'POST', path: '/admin/dlq/outbox/{eventId}/replay' },
+    { method: 'GET', path: '/admin/reconcile' },
+    { method: 'POST', path: '/admin/credits/adjust' },
   ];
 
   it.each(USED)('$method $path is in the generated route map', ({ method, path }) => {
@@ -88,11 +99,6 @@ describe('domain paths are documented', () => {
     '/health/live': 'liveness is an infrastructure probe, not an app concern',
     '/health/ready': 'readiness is an infrastructure probe, not an app concern',
     '/metrics': 'Prometheus scrape, not an app concern',
-    '/admin/dlq': 'Phase 9 admin console',
-    '/admin/dlq/{jobId}/replay': 'Phase 9 admin console',
-    '/admin/dlq/outbox': 'Phase 9 admin console',
-    '/admin/dlq/outbox/{eventId}/replay': 'Phase 9 admin console',
-    '/admin/reconcile': 'Phase 9 admin console',
   };
 
   it('accounts for every documented path', () => {

@@ -5,6 +5,7 @@ import { createMetrics } from '@renderflow/observability';
 
 import { MetricsCollectorService, MetricsController, metricsConfigFrom } from './metrics.service';
 import { METRICS, METRICS_CONFIG, type MetricsConfig } from './metrics.tokens';
+import { BullQueueDepthSource, QUEUE_DEPTH_SOURCE } from './queue-depth.source';
 import type { Env } from '../config/env';
 
 /**
@@ -24,6 +25,10 @@ import type { Env } from '../config/env';
   controllers: [MetricsController],
   providers: [
     MetricsCollectorService,
+    {
+      provide: QUEUE_DEPTH_SOURCE,
+      useClass: BullQueueDepthSource,
+    },
     {
       provide: METRICS_CONFIG,
       inject: [ConfigService],
@@ -47,6 +52,6 @@ import type { Env } from '../config/env';
         }),
     },
   ],
-  exports: [METRICS, METRICS_CONFIG, MetricsCollectorService],
+  exports: [METRICS, METRICS_CONFIG, MetricsCollectorService, QUEUE_DEPTH_SOURCE],
 })
 export class MetricsModule {}

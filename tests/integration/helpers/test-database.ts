@@ -121,7 +121,7 @@ export async function truncateAll(db: TestDb): Promise<void> {
   // not here shows up as rows leaking between tests, which reads as a mystery
   // failing assertion rather than as an incomplete fixture.
   await db.execute(
-    'TRUNCATE TABLE notifications, publish_jobs, social_accounts, assets, posts, campaigns, brands, ' +
+    'TRUNCATE TABLE audit_logs, post_metrics, notifications, publish_jobs, social_accounts, assets, posts, campaigns, brands, ' +
       'workspace_members, workspaces, outbox_events, generation_jobs, job_checkpoints, brand_memory, ' +
       'pricing_rules, refresh_sessions, credit_ledger, wallets, users RESTART IDENTITY CASCADE',
   );

@@ -8,6 +8,7 @@ import {
   Header,
   Inject,
   Injectable,
+  Optional,
   Res,
   type OnApplicationShutdown,
   type OnModuleDestroy,
@@ -17,10 +18,15 @@ import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 
 import { getDb } from '@renderflow/db';
-import { MetricsCollector, type RenderFlowMetrics } from '@renderflow/observability';
+import {
+  MetricsCollector,
+  type QueueDepthSource,
+  type RenderFlowMetrics,
+} from '@renderflow/observability';
 
 import { Public } from '../auth/auth.guard';
 import { METRICS, METRICS_CONFIG, type MetricsConfig } from './metrics.tokens';
+import { QUEUE_DEPTH_SOURCE } from './queue-depth.source';
 import type { Env } from '../config/env';
 
 /**
@@ -45,6 +51,15 @@ export class MetricsCollectorService
   constructor(
     @Inject(METRICS) private readonly metrics: RenderFlowMetrics,
     @Inject(METRICS_CONFIG) private readonly config: MetricsConfig,
+    /**
+     * Optional: a process with no Redis (the integration suite, tests) still
+     * serves every database-derived gauge. Only `renderflow_queue_depth` is
+     * absent, and the collector's `collectorOk` says so rather than pretending
+     * the queues are empty.
+     */
+    @Optional()
+    @Inject(QUEUE_DEPTH_SOURCE)
+    private readonly queues?: QueueDepthSource,
   ) {}
 
   /**
@@ -66,6 +81,7 @@ export class MetricsCollectorService
       getDb: () => getDb(),
       metrics: this.metrics,
       intervalMs: this.config.intervalMs,
+      ...(this.queues === undefined ? {} : { queues: this.queues }),
     });
 
     this.collector.start();

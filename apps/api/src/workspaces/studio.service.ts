@@ -1,5 +1,5 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, lte, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { AppError, ERROR_CODES } from '@renderflow/common';
 import {
@@ -102,6 +102,19 @@ export const updatePostSchema = z
     hashtags: z.string().trim().max(2000).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'at least one field is required' });
+
+/**
+ * The calendar's query: scheduled posts in a workspace, optionally a window.
+ *
+ * `from`/`to` are instants with a timezone (`Z`), not calendar dates: a
+ * scheduled post is a point in time, and a range without an offset would mean
+ * different hours to the server and the browser.
+ */
+export const listPostsQuerySchema = z.object({
+  workspaceId: z.uuid(),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+});
 
 export type RequestUploadInput = z.infer<typeof requestUploadSchema>;
 
@@ -316,6 +329,54 @@ export class StudioService implements OnModuleInit {
       .from(posts)
       .where(eq(posts.campaignId, campaign.id))
       .orderBy(posts.createdAt);
+  }
+
+  /**
+   * Scheduled posts across a workspace, for the calendar.
+   *
+   * Only scheduled posts: an unscheduled draft has no place on a date grid, and
+   * returning them here would make the client responsible for filtering - and
+   * responsible for the access check that goes with it.
+   */
+  async listWorkspacePosts(
+    userId: string,
+    workspaceId: string,
+    range: { from?: string; to?: string },
+  ) {
+    await this.access.scope({
+      userId,
+      resource: 'workspace',
+      lookup: () => Promise.resolve({ workspaceId, value: null }),
+    });
+
+    const conditions = [eq(brands.workspaceId, workspaceId), isNotNull(posts.scheduledAt)];
+
+    if (range.from !== undefined) {
+      conditions.push(gte(posts.scheduledAt, new Date(range.from)));
+    }
+
+    if (range.to !== undefined) {
+      conditions.push(lte(posts.scheduledAt, new Date(range.to)));
+    }
+
+    return this.db
+      .select({
+        id: posts.id,
+        campaignId: posts.campaignId,
+        brandId: posts.brandId,
+        type: posts.type,
+        caption: posts.caption,
+        status: posts.status,
+        scheduledAt: posts.scheduledAt,
+        version: posts.version,
+        campaignGoal: campaigns.goal,
+        brandName: brands.name,
+      })
+      .from(posts)
+      .innerJoin(campaigns, eq(campaigns.id, posts.campaignId))
+      .innerJoin(brands, eq(brands.id, posts.brandId))
+      .where(and(...conditions))
+      .orderBy(posts.scheduledAt);
   }
 
   async createPost(userId: string, input: z.infer<typeof createPostSchema>) {
@@ -567,7 +628,15 @@ export class StudioService implements OnModuleInit {
 
   // --- shared lookups -----------------------------------------------------
 
-  private async getCampaign(userId: string, campaignId: string) {
+  /**
+   * The campaign row plus the workspace that owns it.
+   *
+   * Public because "a campaign you can list posts for must be readable" - the
+   * campaign page and its analytics panel both need goal/status/dates, and
+   * making callers reconstruct them from the post list was the same mistake the
+   * post editor had before `getPost` was exposed.
+   */
+  async getCampaign(userId: string, campaignId: string) {
     return this.access
       .scope({
         userId,
@@ -576,8 +645,7 @@ export class StudioService implements OnModuleInit {
           const rows = await db
             .select({
               workspaceId: brands.workspaceId,
-              id: campaigns.id,
-              brandId: campaigns.brandId,
+              campaign: campaigns,
             })
             .from(campaigns)
             .innerJoin(brands, eq(brands.id, campaigns.brandId))
@@ -585,7 +653,12 @@ export class StudioService implements OnModuleInit {
             .limit(1);
 
           const row = rows[0];
-          return row === undefined ? null : { workspaceId: row.workspaceId, value: row };
+          return row === undefined
+            ? null
+            : {
+                workspaceId: row.workspaceId,
+                value: { ...row.campaign, workspaceId: row.workspaceId },
+              };
         },
       })
       .then((scoped) => scoped.value);

@@ -9,6 +9,7 @@ import { AuthGuard, RolesGuard } from './auth/auth.guard';
 import { CSRF_OPTIONS, CsrfGuard } from './auth/csrf.guard';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { OpenApiModule } from './common/openapi';
 import { CreditsModule } from './credits/credits.module';
@@ -48,6 +49,7 @@ import { UsersModule } from './users/users.module';
     JobsModule,
     PublishingModule,
     AdminModule,
+    AnalyticsModule,
     MetricsModule,
   ],
   providers: [

@@ -6,6 +6,7 @@ import {
   Headers,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -16,7 +17,7 @@ import { z } from 'zod';
 import { CurrentUser } from '../auth/auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.guard';
 import { NotificationsService } from './notifications.service';
-import { PublishingService, scheduleSchema } from './publishing.service';
+import { PublishingService, rescheduleSchema, scheduleSchema } from './publishing.service';
 import { SocialAccountsService, connectAccountSchema } from './social-accounts.service';
 
 const uuidParam = new ParseUUIDPipe({ version: '4' });
@@ -76,6 +77,26 @@ export class PublishingController {
   @ApiOperation({ summary: 'Cancel everything still pending for a post' })
   cancel(@CurrentUser() user: AuthenticatedUser, @Param('postId', uuidParam) postId: string) {
     return this.publishing.cancel(user.id, postId);
+  }
+
+  @Patch('posts/:postId/schedule')
+  @ApiOperation({
+    summary: 'Move a scheduled post to a new time (APPROVER+)',
+    description:
+      'Updates `publish_jobs.scheduled_for` for every job that has not started. ' +
+      'The publisher claims from the row, so an earlier time is picked up by the ' +
+      'publisher poll and a later time ignores the stale delayed wake-up.',
+  })
+  reschedule(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('postId', uuidParam) postId: string,
+    @Body() body: unknown,
+  ) {
+    const parsed = rescheduleSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationFailedError({ scheduledAt: ['must be an ISO 8601 instant'] });
+    }
+    return this.publishing.reschedule(user.id, postId, parsed.data);
   }
 
   // --- connected accounts -------------------------------------------------

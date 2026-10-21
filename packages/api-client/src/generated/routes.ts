@@ -28,6 +28,9 @@ export interface ApiOperation {
 }
 
 export type RouteMap = {
+  readonly '/admin/credits/adjust': {
+    readonly post: ApiOperation;
+  };
   readonly '/admin/dlq': {
     readonly get: ApiOperation;
   };
@@ -41,6 +44,12 @@ export type RouteMap = {
     readonly post: ApiOperation;
   };
   readonly '/admin/reconcile': {
+    readonly get: ApiOperation;
+  };
+  readonly '/analytics/campaigns/{campaignId}': {
+    readonly get: ApiOperation;
+  };
+  readonly '/analytics/overview': {
     readonly get: ApiOperation;
   };
   readonly '/assets/uploads': {
@@ -85,6 +94,9 @@ export type RouteMap = {
   readonly '/campaigns': {
     readonly post: ApiOperation;
   };
+  readonly '/campaigns/{campaignId}': {
+    readonly get: ApiOperation;
+  };
   readonly '/campaigns/{campaignId}/posts': {
     readonly get: ApiOperation;
   };
@@ -125,6 +137,7 @@ export type RouteMap = {
     readonly post: ApiOperation;
   };
   readonly '/posts': {
+    readonly get: ApiOperation;
     readonly post: ApiOperation;
   };
   readonly '/posts/{postId}': {
@@ -145,6 +158,7 @@ export type RouteMap = {
   };
   readonly '/posts/{postId}/schedule': {
     readonly post: ApiOperation;
+    readonly patch: ApiOperation;
     readonly delete: ApiOperation;
   };
   readonly '/social-accounts': {
@@ -171,11 +185,14 @@ export type RouteMap = {
 
 /** Every documented path, for the drift test in `routes.spec.ts`. */
 export const ROUTE_PATHS = [
+  '/admin/credits/adjust',
   '/admin/dlq',
   '/admin/dlq/outbox',
   '/admin/dlq/outbox/{eventId}/replay',
   '/admin/dlq/{jobId}/replay',
   '/admin/reconcile',
+  '/analytics/campaigns/{campaignId}',
+  '/analytics/overview',
   '/assets/uploads',
   '/assets/{assetId}',
   '/assets/{assetId}/confirm',
@@ -189,6 +206,7 @@ export const ROUTE_PATHS = [
   '/brands/{brandId}',
   '/brands/{brandId}/campaigns',
   '/campaigns',
+  '/campaigns/{campaignId}',
   '/campaigns/{campaignId}/posts',
   '/credits',
   '/docs-json',
@@ -220,6 +238,16 @@ export const ROUTE_PATHS = [
 export type RoutePath = (typeof ROUTE_PATHS)[number];
 
 export const ROUTES: RouteMap = {
+  '/admin/credits/adjust': {
+    post: {
+      summary: 'Grant or remove credits, audited',
+      pathParams: [],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
   '/admin/dlq': {
     get: {
       summary: 'Jobs that exhausted their attempts and were refunded',
@@ -265,6 +293,26 @@ export const ROUTES: RouteMap = {
       summary: 'Per-bucket wallet/ledger reconciliation',
       pathParams: [],
       query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/analytics/campaigns/{campaignId}': {
+    get: {
+      summary: 'Totals, latest per-publication metrics, a daily series and next-post suggestions',
+      pathParams: [{ name: 'campaignId', required: true }],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/analytics/overview': {
+    get: {
+      summary: 'Workspace-wide totals, by campaign',
+      pathParams: [],
+      query: ['workspaceId'],
       hasBody: false,
       response: undefined as unknown,
       request: undefined as unknown,
@@ -424,6 +472,16 @@ export const ROUTES: RouteMap = {
       request: undefined as unknown,
     },
   },
+  '/campaigns/{campaignId}': {
+    get: {
+      summary: 'Fetch one campaign',
+      pathParams: [{ name: 'campaignId', required: true }],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
   '/campaigns/{campaignId}/posts': {
     get: {
       summary: 'List posts in a campaign',
@@ -555,6 +613,14 @@ export const ROUTES: RouteMap = {
     },
   },
   '/posts': {
+    get: {
+      summary: 'Scheduled posts across a workspace, for the calendar',
+      pathParams: [],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
     post: {
       summary: 'Create a post (EDITOR+)',
       pathParams: [],
@@ -625,6 +691,14 @@ export const ROUTES: RouteMap = {
   '/posts/{postId}/schedule': {
     post: {
       summary: 'Schedule an approved post to one or more connected accounts',
+      pathParams: [{ name: 'postId', required: true }],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+    patch: {
+      summary: 'Move a scheduled post to a new time (APPROVER+)',
       pathParams: [{ name: 'postId', required: true }],
       query: [],
       hasBody: true,

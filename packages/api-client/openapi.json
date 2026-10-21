@@ -22,6 +22,20 @@
   },
   "openapi": "3.0.0",
   "paths": {
+    "/admin/credits/adjust": {
+      "post": {
+        "description": "Requires a reason. Retrying with the same `referenceId` does not apply the adjustment twice; the ledger’s unique reference is the mechanism.",
+        "operationId": "AdminController_adjust",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Grant or remove credits, audited",
+        "tags": ["admin"]
+      }
+    },
     "/admin/dlq": {
       "get": {
         "operationId": "AdminController_listJobs",
@@ -122,6 +136,50 @@
         },
         "summary": "Per-bucket wallet/ledger reconciliation",
         "tags": ["admin"]
+      }
+    },
+    "/analytics/campaigns/{campaignId}": {
+      "get": {
+        "operationId": "AnalyticsController_campaign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaignId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Totals, latest per-publication metrics, a daily series and next-post suggestions",
+        "tags": ["analytics"]
+      }
+    },
+    "/analytics/overview": {
+      "get": {
+        "operationId": "AnalyticsController_overview",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspaceId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Workspace-wide totals, by campaign",
+        "tags": ["analytics"]
       }
     },
     "/assets/uploads": {
@@ -398,6 +456,28 @@
         "tags": ["studio"]
       }
     },
+    "/campaigns/{campaignId}": {
+      "get": {
+        "operationId": "StudioController_getCampaign",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaignId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Fetch one campaign",
+        "tags": ["studio"]
+      }
+    },
     "/campaigns/{campaignId}/posts": {
       "get": {
         "operationId": "StudioController_listPosts",
@@ -621,6 +701,17 @@
       }
     },
     "/posts": {
+      "get": {
+        "operationId": "StudioController_listWorkspacePosts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Scheduled posts across a workspace, for the calendar",
+        "tags": ["studio"]
+      },
       "post": {
         "operationId": "StudioController_createPost",
         "parameters": [],
@@ -782,6 +873,27 @@
           }
         },
         "summary": "Cancel everything still pending for a post",
+        "tags": ["publishing"]
+      },
+      "patch": {
+        "description": "Updates `publish_jobs.scheduled_for` for every job that has not started. The publisher claims from the row, so an earlier time is picked up by the publisher poll and a later time ignores the stale delayed wake-up.",
+        "operationId": "PublishingController_reschedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "postId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Move a scheduled post to a new time (APPROVER+)",
         "tags": ["publishing"]
       },
       "post": {

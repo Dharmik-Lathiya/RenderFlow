@@ -71,6 +71,13 @@
       "when": 1791831222489,
       "tag": "0010_publish_partial_index",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792430678750,
+      "tag": "0011_nappy_zarek",
+      "breakpoints": true
     }
   ]
 }

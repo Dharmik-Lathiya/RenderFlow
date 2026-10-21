@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "dev": "node --watch src/main.ts",
+    "dev": "node --no-experimental-strip-types --watch -r ts-node/register/transpile-only src/main.ts",
     "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -20,7 +20,8 @@
     "@renderflow/common": "workspace:*",
     "@renderflow/queue": "workspace:*",
     "@renderflow/observability": "workspace:*",
-    "@renderflow/db": "workspace:*"
+    "@renderflow/db": "workspace:*",
+    "@renderflow/social": "workspace:*"
   },
   "devDependencies": {},
   "engines": {

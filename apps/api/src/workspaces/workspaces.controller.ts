@@ -23,6 +23,7 @@ import {
   createBrandSchema,
   createCampaignSchema,
   createPostSchema,
+  listPostsQuerySchema,
   updateBrandSchema,
   updatePostSchema,
 } from './studio.service';
@@ -187,6 +188,15 @@ export class StudioController {
     return this.studio.listPosts(user.id, campaignId);
   }
 
+  @Get('campaigns/:campaignId')
+  @ApiOperation({ summary: 'Fetch one campaign' })
+  getCampaign(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('campaignId', uuidParam) campaignId: string,
+  ) {
+    return this.studio.getCampaign(user.id, campaignId);
+  }
+
   @Post('posts')
   @ApiOperation({ summary: 'Create a post (EDITOR+)' })
   async createPost(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
@@ -195,6 +205,16 @@ export class StudioController {
       throw new ValidationFailedError(formatIssues(parsed.error));
     }
     return this.studio.createPost(user.id, parsed.data);
+  }
+
+  @Get('posts')
+  @ApiOperation({ summary: 'Scheduled posts across a workspace, for the calendar' })
+  async listWorkspacePosts(@CurrentUser() user: AuthenticatedUser, @Query() query: unknown) {
+    const parsed = listPostsQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      throw new ValidationFailedError(formatIssues(parsed.error));
+    }
+    return this.studio.listWorkspacePosts(user.id, parsed.data.workspaceId, parsed.data);
   }
 
   @Get('posts/:postId')

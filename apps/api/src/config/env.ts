@@ -89,6 +89,18 @@ export const envSchema = z.object({
    * `global.scrape_interval` in infra/prometheus/prometheus.yml.
    */
   METRICS_INTERVAL_MS: z.coerce.number().int().min(1_000).default(15_000),
+
+  /**
+   * Mounts the Bull Board queue UI at `/api/v1/admin/queues`.
+   *
+   * Opt-in, not on by default: the board shows every tenant's job payloads, so
+   * a deployment that has not decided who may see that should not expose it.
+   * Access requires a global `ADMIN` access token even when it is enabled.
+   */
+  BULL_BOARD_ENABLED: z
+    .union([z.boolean(), z.string()])
+    .default(false)
+    .transform((value) => (typeof value === 'boolean' ? value : value !== 'false')),
 });
 
 export type Env = z.infer<typeof envSchema>;

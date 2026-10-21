@@ -38,6 +38,17 @@ export const scheduleSchema = z.object({
   accountIds: z.array(z.uuid()).min(1).max(10),
 });
 
+/**
+ * Rescheduling takes only a time.
+ *
+ * The accounts are already decided by the live publish jobs; re-sending them
+ * would let a drag on the calendar silently change WHO the post goes to, which
+ * is a different decision from moving it.
+ */
+export const rescheduleSchema = z.object({
+  scheduledAt: z.coerce.date(),
+});
+
 export interface ScheduleResult {
   postId: string;
   scheduledAt: string;
@@ -178,6 +189,14 @@ export class PublishingService implements OnModuleInit {
     }
 
     const jobs = await this.db.transaction(async (tx) => {
+      // The post-level time is what the calendar reads. Written in the SAME
+      // transaction as the jobs: a calendar that shows a post as scheduled when
+      // its delivery rows failed to insert is worse than no calendar.
+      await tx
+        .update(posts)
+        .set({ scheduledAt, updatedAt: new Date() })
+        .where(eq(posts.id, postId));
+
       const inserted = await tx
         .insert(publishJobs)
         .values(
@@ -292,6 +311,77 @@ export class PublishingService implements OnModuleInit {
   }
 
   /**
+   * Moves everything still scheduled for a post to a new time.
+   *
+   * This is what the calendar's drag-to-reschedule calls. It updates the ROW,
+   * not a queue message, because the row is what the publisher claims from
+   * (`publisher.ts` filters `scheduled_for <= now`):
+   *
+   *  - moving a post EARLIER is picked up by the publisher's one-second poll,
+   *    which is the mechanism a lost Redis message already relies on;
+   *  - moving one LATER leaves the old delayed entry in place, but a wake-up
+   *    that arrives early finds `scheduled_for` in the future and claims
+   *    nothing. A wake-up is not a deadline.
+   *
+   * Rows already PUBLISHING are skipped: the publisher is mid-flight and the
+   * time it is publishing at is no longer a question this endpoint can answer.
+   */
+  async reschedule(
+    userId: string,
+    postId: string,
+    input: z.infer<typeof rescheduleSchema>,
+  ): Promise<{ postId: string; scheduledAt: string; updated: number }> {
+    const scoped = await this.access.scope({
+      userId,
+      resource: 'post',
+      required: 'APPROVER',
+      lookup: async (db) => {
+        const rows = await db
+          .select({ workspaceId: brands.workspaceId, id: posts.id })
+          .from(posts)
+          .innerJoin(brands, eq(brands.id, posts.brandId))
+          .where(eq(posts.id, postId))
+          .limit(1);
+
+        const row = rows[0];
+        return row === undefined ? null : { workspaceId: row.workspaceId, value: row };
+      },
+    });
+
+    if (input.scheduledAt.getTime() <= Date.now()) {
+      throw new AppError(ERROR_CODES.VALIDATION_FAILED, 'scheduledAt must be in the future');
+    }
+
+    const updated = await this.db.transaction(async (tx) => {
+      const moved = await tx
+        .update(publishJobs)
+        .set({ scheduledFor: input.scheduledAt, updatedAt: new Date() })
+        .where(
+          and(
+            eq(publishJobs.postId, scoped.value.id),
+            inArray(publishJobs.status, ['PENDING', 'SCHEDULED']),
+          ),
+        )
+        .returning({ id: publishJobs.id });
+
+      if (moved.length > 0) {
+        await tx
+          .update(posts)
+          .set({ scheduledAt: input.scheduledAt, updatedAt: new Date() })
+          .where(eq(posts.id, scoped.value.id));
+      }
+
+      return moved;
+    });
+
+    return {
+      postId: scoped.value.id,
+      scheduledAt: input.scheduledAt.toISOString(),
+      updated: updated.length,
+    };
+  }
+
+  /**
    * Cancels everything still pending for a post.
    *
    * Only rows that have not started are touched. A PUBLISHING job is in flight -
@@ -316,13 +406,41 @@ export class PublishingService implements OnModuleInit {
       },
     });
 
-    const cancelled = await this.db
-      .update(publishJobs)
-      .set({ status: 'FAILED', error: 'cancelled before publishing', updatedAt: new Date() })
-      .where(
-        and(eq(publishJobs.postId, postId), inArray(publishJobs.status, ['PENDING', 'SCHEDULED'])),
-      )
-      .returning({ id: publishJobs.id });
+    const cancelled = await this.db.transaction(async (tx) => {
+      const rows = await tx
+        .update(publishJobs)
+        .set({ status: 'FAILED', error: 'cancelled before publishing', updatedAt: new Date() })
+        .where(
+          and(
+            eq(publishJobs.postId, postId),
+            inArray(publishJobs.status, ['PENDING', 'SCHEDULED']),
+          ),
+        )
+        .returning({ id: publishJobs.id });
+
+      // The calendar reads the post's own time. Clearing it only when nothing is
+      // left to deliver keeps a partially cancelled post (one target already
+      // PUBLISHING) on the calendar at the time it still matters.
+      const remaining = await tx
+        .select({ id: publishJobs.id })
+        .from(publishJobs)
+        .where(
+          and(
+            eq(publishJobs.postId, postId),
+            inArray(publishJobs.status, ['PENDING', 'SCHEDULED', 'PUBLISHING']),
+          ),
+        )
+        .limit(1);
+
+      if (remaining.length === 0) {
+        await tx
+          .update(posts)
+          .set({ scheduledAt: null, updatedAt: new Date() })
+          .where(eq(posts.id, postId));
+      }
+
+      return rows;
+    });
 
     return { cancelled: cancelled.length };
   }

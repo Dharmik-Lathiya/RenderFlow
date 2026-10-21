@@ -12,10 +12,10 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
-import { AppError, ERROR_CODES, ValidationFailedError } from '@renderflow/common';
+import { ValidationFailedError } from '@renderflow/common';
 
 import { CurrentUser, type AuthenticatedUser } from '../auth/auth.guard';
-import { AdminService, replaySchema } from './admin.service';
+import { AdminService, adjustSchema, replaySchema, type OperatorScope } from './admin.service';
 
 const uuidParam = new ParseUUIDPipe({ version: '4' });
 
@@ -33,27 +33,25 @@ export class AdminController {
   /**
    * Who may call these.
    *
-   * A workspace OWNER. Deliberately not a global admin role: this system has no
-   * global role, and inventing one that bypassed tenancy would contradict the
-   * rule every other endpoint follows (AGENTS.md section 10).
+   * Two kinds of operator, both real:
    *
-   * Recorded limitation: these queries are NOT yet filtered by workspace, so an
-   * owner sees the whole queue. That is wrong for a multi-tenant product and is
-   * called out in PROJECT.md's Phase 5 gaps rather than quietly shipped.
+   *  - a global `ADMIN` (`users.role`), who sees every workspace;
+   *  - a workspace `OWNER`, who sees only the workspaces they own.
+   *
+   * The earlier version treated every owner as global. That was wrong for a
+   * multi-tenant product - it let one customer's owner replay another's job and
+   * read their failure - and it is why the service now scopes in SQL and
+   * re-checks before every mutation.
    */
-  private async assertOperator(user: AuthenticatedUser): Promise<void> {
-    if (!(await this.admin.isOperator(user.id))) {
-      throw new AppError(ERROR_CODES.FORBIDDEN, 'Workspace OWNER role required', {
-        details: { required: 'OWNER' },
-      });
-    }
+  private async assertOperator(user: AuthenticatedUser): Promise<OperatorScope> {
+    return this.admin.requireOperator(user.id);
   }
 
   @Get('dlq')
   @ApiOperation({ summary: 'Jobs that exhausted their attempts and were refunded' })
   async listJobs(@CurrentUser() user: AuthenticatedUser, @Query('limit') limit?: string) {
-    await this.assertOperator(user);
-    return { jobs: await this.admin.listJobs(bounded(limit, 25, 100)) };
+    const scope = await this.assertOperator(user);
+    return { jobs: await this.admin.listJobs(scope, bounded(limit, 25, 100)) };
   }
 
   @Post('dlq/:jobId/replay')
@@ -69,22 +67,22 @@ export class AdminController {
     @Param('jobId', uuidParam) jobId: string,
     @Body() body: unknown,
   ) {
-    await this.assertOperator(user);
+    const scope = await this.assertOperator(user);
 
     const parsed = replaySchema.safeParse(body ?? {});
     if (!parsed.success) {
       throw new ValidationFailedError({ body: 'must be an object with an optional `reason`' });
     }
 
-    return this.admin.replayJob(jobId, parsed.data.reason);
+    return this.admin.replayJob(scope, jobId, parsed.data.reason);
   }
 
   @Get('dlq/outbox')
   @ApiOperation({ summary: 'Outbox events the relay gave up on' })
   async listOutbox(@CurrentUser() user: AuthenticatedUser, @Query('limit') limit?: string) {
-    await this.assertOperator(user);
+    const scope = await this.assertOperator(user);
     const maxAttempts = Number(process.env.OUTBOX_MAX_ATTEMPTS ?? 10);
-    return { events: await this.admin.listOutbox(maxAttempts, bounded(limit, 50, 200)) };
+    return { events: await this.admin.listOutbox(scope, maxAttempts, bounded(limit, 50, 200)) };
   }
 
   @Post('dlq/outbox/:eventId/replay')
@@ -94,15 +92,45 @@ export class AdminController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('eventId', uuidParam) eventId: string,
   ) {
-    await this.assertOperator(user);
-    return this.admin.replayOutboxEvent(eventId);
+    const scope = await this.assertOperator(user);
+    return this.admin.replayOutboxEvent(scope, eventId);
   }
 
   @Get('reconcile')
   @ApiOperation({ summary: 'Per-bucket wallet/ledger reconciliation' })
   async reconcile(@CurrentUser() user: AuthenticatedUser) {
-    await this.assertOperator(user);
-    return this.admin.reconcile();
+    const scope = await this.assertOperator(user);
+    return this.admin.reconcile(scope);
+  }
+
+  /**
+   * Manual credit adjustment (PROJECT.md section 10).
+   *
+   * A POST because it moves money. The body carries a mandatory reason and an
+   * optional idempotency reference; both are recorded in the ledger and the
+   * audit log.
+   */
+  @Post('credits/adjust')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Grant or remove credits, audited',
+    description:
+      'Requires a reason. Retrying with the same `referenceId` does not apply the ' +
+      'adjustment twice; the ledger’s unique reference is the mechanism.',
+  })
+  async adjust(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {
+    const scope = await this.assertOperator(user);
+
+    const parsed = adjustSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationFailedError(
+        Object.fromEntries(
+          parsed.error.issues.map((issue) => [issue.path.join('.') || '(body)', [issue.message]]),
+        ),
+      );
+    }
+
+    return this.admin.adjustCredits(scope, parsed.data);
   }
 }
 

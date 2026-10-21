@@ -4,46 +4,62 @@ import type { RenderFlowClient, RenderFlowClientOptions } from './client';
 import type { RequestOptions } from './types';
 import { createRenderFlowClient } from './client';
 import {
+  adjustCreditsRequestSchema,
+  adjustCreditsResponseSchema,
   authResponseSchema,
   brandSchema,
+  campaignAnalyticsSchema,
   campaignSchema,
   connectAccountRequestSchema,
   createBrandRequestSchema,
   createCampaignRequestSchema,
   createPostRequestSchema,
   creditsResponseSchema,
+  dlqJobSchema,
   generateRequestSchema,
   generateResponseSchema,
   jobSchema,
   meResponseSchema,
   memberSchema,
   notificationSchema,
+  outboxEventSchema,
   postSchema,
   presignedUploadSchema,
   publishJobSchema,
+  reconcileReportSchema,
   scheduleRequestSchema,
   scheduleResponseSchema,
+  scheduledPostSchema,
   socialAccountSchema,
   updatePostRequestSchema,
+  workspaceAnalyticsSchema,
   workspaceSchema,
+  type AdjustCreditsRequest,
+  type AdjustCreditsResponse,
   type AuthResponse,
   type Brand,
   type Campaign,
+  type CampaignAnalytics,
   type ConnectAccountRequest,
   type CreditsResponse,
+  type DlqJob,
   type GenerateRequest,
   type GenerateResponse,
   type Job,
   type Member,
   type MeResponse,
   type Notification,
+  type OutboxEvent,
   type Post,
   type PresignedUpload,
   type PublishJob,
+  type ReconcileReport,
   type ScheduleRequest,
   type ScheduleResponse,
+  type ScheduledPost,
   type SocialAccount,
   type Workspace,
+  type WorkspaceAnalytics,
 } from './schemas';
 import { ApiClientError } from './client';
 
@@ -115,7 +131,9 @@ export interface DomainClient {
 
   campaigns: {
     create(body: unknown, options?: RequestOptions): Promise<Campaign>;
+    detail(campaignId: string, options?: RequestOptions): Promise<Campaign>;
     posts(campaignId: string, options?: RequestOptions): Promise<Post[]>;
+    analytics(campaignId: string, options?: RequestOptions): Promise<CampaignAnalytics>;
   };
 
   posts: {
@@ -136,8 +154,43 @@ export interface DomainClient {
       options?: RequestOptions,
     ): Promise<ScheduleResponse>;
     cancelSchedule(postId: string, options?: RequestOptions): Promise<{ cancelled: number }>;
+    reschedule(
+      postId: string,
+      scheduledAt: string,
+      options?: RequestOptions,
+    ): Promise<{ postId: string; scheduledAt: string; updated: number }>;
     publishes(postId: string, options?: RequestOptions): Promise<PublishJob[]>;
     assets(postId: string, options?: RequestOptions): Promise<unknown[]>;
+    scheduled(
+      workspaceId: string,
+      range?: { from?: string; to?: string },
+      options?: RequestOptions,
+    ): Promise<ScheduledPost[]>;
+  };
+
+  analytics: {
+    overview(workspaceId: string, options?: RequestOptions): Promise<WorkspaceAnalytics>;
+  };
+
+  admin: {
+    dlq(limit?: number, options?: RequestOptions): Promise<DlqJob[]>;
+    replayJob(
+      jobId: string,
+      reason?: string,
+      options?: RequestOptions,
+    ): Promise<{ jobId: string; requeued: boolean }>;
+    outbox(limit?: number, options?: RequestOptions): Promise<OutboxEvent[]>;
+    replayOutbox(
+      eventId: string,
+      options?: RequestOptions,
+    ): Promise<{ eventId: string; replayed: boolean }>;
+    reconcile(
+      options?: RequestOptions,
+    ): Promise<{ checked: number; drifted: number; drift: ReconcileReport[] }>;
+    adjustCredits(
+      body: AdjustCreditsRequest,
+      options?: RequestOptions,
+    ): Promise<AdjustCreditsResponse>;
   };
 
   jobs: {
@@ -217,11 +270,32 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
     campaigns: {
       create: (body, opts) =>
         parse(() => transport.post('/campaigns', body, opts), campaignSchema, 'campaigns.create'),
+      detail: (campaignId, opts) =>
+        parse(
+          () => transport.get(`/campaigns/${campaignId}`, opts),
+          campaignSchema,
+          'campaigns.detail',
+        ),
       posts: (campaignId, opts) =>
         parse(
           () => transport.get(`/campaigns/${campaignId}/posts`, opts),
           asArray(postSchema),
           'campaigns.posts',
+        ),
+      analytics: (campaignId, opts) =>
+        parse(
+          () => transport.get(`/analytics/campaigns/${campaignId}`, opts),
+          campaignAnalyticsSchema,
+          'campaigns.analytics',
+        ),
+    },
+
+    analytics: {
+      overview: (workspaceId, opts) =>
+        parse(
+          () => transport.get('/analytics/overview', { ...opts, query: { workspaceId } }),
+          workspaceAnalyticsSchema,
+          'analytics.overview',
         ),
     },
 
@@ -266,6 +340,16 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
           'cancelled',
         ),
       }),
+      reschedule: (postId, scheduledAt, opts) =>
+        parse(
+          () => transport.patch(`/posts/${postId}/schedule`, { scheduledAt }, opts),
+          z.object({
+            postId: z.string(),
+            scheduledAt: z.string(),
+            updated: z.number().int(),
+          }),
+          'posts.reschedule',
+        ),
       publishes: (postId, opts) =>
         parse(
           () => transport.get(`/posts/${postId}/publishes`, opts),
@@ -273,6 +357,12 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
           'posts.publishes',
         ),
       assets: (postId, opts) => transport.get(`/posts/${postId}/assets`, opts),
+      scheduled: (workspaceId, range = {}, opts) =>
+        parse(
+          () => transport.get('/posts', { ...opts, query: { workspaceId, ...range } }),
+          asArray(scheduledPostSchema),
+          'posts.scheduled',
+        ),
     },
 
     jobs: {
@@ -321,8 +411,72 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
       markAllRead: (opts): Promise<{ updated: number }> =>
         transport.post('/notifications/read-all', undefined, opts),
     },
+
+    admin: {
+      dlq: async (limit = 25, opts) => {
+        const parsed = await parse(
+          () => transport.get('/admin/dlq', { ...opts, query: { limit } }),
+          dlqResponseSchema,
+          'admin.dlq',
+        );
+        return parsed.jobs;
+      },
+      replayJob: (jobId, reason, opts) =>
+        parse(
+          () =>
+            transport.post(
+              `/admin/dlq/${jobId}/replay`,
+              reason === undefined ? {} : { reason },
+              opts,
+            ),
+          replayJobResponseSchema,
+          'admin.replayJob',
+        ),
+      outbox: async (limit = 50, opts) => {
+        const parsed = await parse(
+          () => transport.get('/admin/dlq/outbox', { ...opts, query: { limit } }),
+          outboxResponseSchema,
+          'admin.outbox',
+        );
+        return parsed.events;
+      },
+      replayOutbox: (eventId, opts) =>
+        parse(
+          () => transport.post(`/admin/dlq/outbox/${eventId}/replay`, undefined, opts),
+          replayOutboxResponseSchema,
+          'admin.replayOutbox',
+        ),
+      reconcile: (opts) =>
+        parse(
+          () => transport.get('/admin/reconcile', opts),
+          reconcileResponseSchema,
+          'admin.reconcile',
+        ),
+      adjustCredits: (body, opts) =>
+        parse(
+          () => transport.post('/admin/credits/adjust', body, opts),
+          adjustCreditsResponseSchema,
+          'admin.adjustCredits',
+        ),
+    },
   };
 }
+
+/**
+ * The three list endpoints that wrap their array in an object with a name.
+ *
+ * `asArray` exists for the `{ items }` convention; these use `jobs`/`events`, so
+ * they get schemas of their own rather than a loosened `asArray`.
+ */
+const dlqResponseSchema = z.object({ jobs: z.array(dlqJobSchema) });
+const outboxResponseSchema = z.object({ events: z.array(outboxEventSchema) });
+const reconcileResponseSchema = z.object({
+  checked: z.number().int(),
+  drifted: z.number().int(),
+  drift: z.array(reconcileReportSchema),
+});
+const replayJobResponseSchema = z.object({ jobId: z.string(), requeued: z.boolean() });
+const replayOutboxResponseSchema = z.object({ eventId: z.string(), replayed: z.boolean() });
 
 /**
  * Accepts either a bare array or `{ items: [...] }`.
@@ -380,30 +534,42 @@ function withIdempotency(
 
 export { ApiClientError };
 export type {
+  AdjustCreditsRequest,
+  AdjustCreditsResponse,
   AuthResponse,
   Brand,
   Campaign,
+  CampaignAnalytics,
   ConnectAccountRequest,
   CreditsResponse,
+  DlqJob,
   GenerateRequest,
   GenerateResponse,
   Job,
   MeResponse,
   Notification,
+  OutboxEvent,
   Post,
   PublishJob,
+  ReconcileReport,
   ScheduleRequest,
   ScheduleResponse,
+  ScheduledPost,
   SocialAccount,
   Workspace,
+  WorkspaceAnalytics,
 };
 
 export {
+  adjustCreditsRequestSchema,
+  campaignAnalyticsSchema,
   connectAccountRequestSchema,
   createBrandRequestSchema,
   createCampaignRequestSchema,
   createPostRequestSchema,
   generateRequestSchema,
   scheduleRequestSchema,
+  scheduledPostSchema,
   updatePostRequestSchema,
+  workspaceAnalyticsSchema,
 };

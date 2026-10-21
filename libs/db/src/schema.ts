@@ -587,7 +587,87 @@ export const publishJobs = pgTable(
     externalPostIdx: index('publish_jobs_external_post_id_idx')
       .on(table.externalPostId)
       .where(sql`${table.externalPostId} IS NOT NULL`),
+    /**
+     * The analytics sync's poll: published, has an external id, oldest first.
+     *
+     * Partial for the same reason as `dueIdx`: the sync only ever asks about
+     * PUBLISHED rows, and a full index would grow with every attempt that never
+     * made it out.
+     */
+    metricsIdx: index('publish_jobs_metrics_idx')
+      .on(table.publishedAt)
+      .where(sql`${table.status} = 'PUBLISHED' AND ${table.externalPostId} IS NOT NULL`),
     nonNegativeAttempts: check('publish_jobs_attempts_non_negative', sql`${table.attempts} >= 0`),
+  }),
+);
+
+/**
+ * Platform metrics for a published post (PROJECT.md sections 6 and 12 Phase 9).
+ *
+ * A SNAPSHOT table, not a mutable "current numbers" row: engagement grows, and
+ * a dashboard that can only see today's total cannot answer "did last week's
+ * reel do better than this week's". The sync upserts one row per publish job per
+ * hour bucket, so re-running it is idempotent (the unique index is the
+ * mechanism) while the history stays.
+ *
+ * `fetched_at` is therefore a BUCKET, not the instant of the API call. That is
+ * what makes "run the sync twice" a no-op instead of two rows a second apart.
+ */
+export const postMetrics = pgTable(
+  'post_metrics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    publishJobId: uuid('publish_job_id')
+      .notNull()
+      .references(() => publishJobs.id, { onDelete: 'cascade' }),
+    likes: integer('likes').notNull().default(0),
+    comments: integer('comments').notNull().default(0),
+    reach: integer('reach').notNull().default(0),
+    clicks: integer('clicks').notNull().default(0),
+    fetchedAt: timestamp('fetched_at', { withTimezone: true, mode: 'date' }).notNull(),
+  },
+  (table) => ({
+    /** The upsert target AND the latest-snapshot lookup. */
+    jobFetchedIdx: uniqueIndex('post_metrics_job_fetched_idx').on(
+      table.publishJobId,
+      table.fetchedAt,
+    ),
+    /** The dashboard's "latest per post" query, newest first. */
+    fetchedIdx: index('post_metrics_fetched_at_idx').on(table.fetchedAt),
+    nonNegative: check(
+      'post_metrics_non_negative',
+      sql`${table.likes} >= 0 AND ${table.comments} >= 0 AND ${table.reach} >= 0 AND ${table.clicks} >= 0`,
+    ),
+  }),
+);
+
+/**
+ * Operator audit trail (PROJECT.md section 6).
+ *
+ * The credit ledger already records WHAT moved and WHY; this records WHO acted
+ * through which endpoint, including actions that do not move credits (a replay,
+ * a manual reconciliation). Without it, "an operator did this" is a claim the
+ * system cannot support.
+ *
+ * `actor_id` is `set null` rather than `cascade`: deleting a user must not erase
+ * the record of what they did while an operator.
+ */
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Stable verb, e.g. `credits.adjust`, `dlq.replay`. */
+    action: varchar('action', { length: 80 }).notNull(),
+    /** Entity kind, e.g. `user`, `job`, `outbox_event`. */
+    entity: varchar('entity', { length: 40 }).notNull(),
+    entityId: varchar('entity_id', { length: 64 }),
+    meta: jsonb('meta').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    actorIdx: index('audit_logs_actor_id_idx').on(table.actorId),
+    createdAtIdx: index('audit_logs_created_at_idx').on(table.createdAt),
   }),
 );
 
@@ -860,6 +940,15 @@ export const posts = pgTable(
   (table) => ({
     campaignIdx: index('posts_campaign_id_idx').on(table.campaignId),
     brandIdx: index('posts_brand_id_idx').on(table.brandId),
+    /**
+     * The calendar's query: one workspace's scheduled posts in a date window.
+     *
+     * The campaign/brand join narrows the workspace, so the index leads on the
+     * column the range filter uses.
+     */
+    scheduledIdx: index('posts_scheduled_at_idx')
+      .on(table.scheduledAt)
+      .where(sql`${table.scheduledAt} IS NOT NULL`),
     versionPositive: check('posts_version_positive', sql`${table.version} >= 1`),
   }),
 );
@@ -1018,6 +1107,12 @@ export type NewJobCheckpoint = typeof jobCheckpoints.$inferInsert;
 
 export type OutboxEvent = typeof outboxEvents.$inferSelect;
 export type NewOutboxEvent = typeof outboxEvents.$inferInsert;
+
+export type PostMetric = typeof postMetrics.$inferSelect;
+export type NewPostMetric = typeof postMetrics.$inferInsert;
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
 
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
 export type CreditEntryType = (typeof creditEntryTypeEnum.enumValues)[number];
