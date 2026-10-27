@@ -6,16 +6,16 @@ publishes to social platforms on schedule. Usage is credit based — new account
 **50 free credits**, credits are reserved before work starts and refunded if
 generation fails.
 
-> **Status: 5 of 11 phases shipped** (0–4), 2 partial (5, 6). The credit
-> engine, the studio APIs and the generation pipeline are done and verified
-> against a real database; scheduling, publishing and the frontend have not
-> started.
+> **Status: 7 of 11 phases shipped** (0–4, 7, 8), 4 partial (5, 6, 9, 10). The
+> credit engine, studio APIs, generation pipeline, scheduling, publishing and
+> the browser frontend are built. The full browser journey passes locally
+> (14/14, Chromium and a Pixel 7 viewport) and runs in CI against compose.
 >
-> Two things are deliberately unverified rather than quietly counted as done:
-> the chaos suite cannot kill a real worker (no Redis), and **no generation has
-> ever been run against a real AI provider key** (no network). See [`PHASES.md`](./PHASES.md)
-> for the per-phase table and [`PROJECT.md`](./PROJECT.md) §12 for the plan and
-> §13 for the test matrix.
+> The remaining gaps are deliberately unverified rather than quietly counted as
+> done: no real AI provider or social platform has been called, chaos R5 needs a
+> real SIGKILL, and no Grafana panel has rendered because this environment has no
+> Docker daemon. See [`PHASES.md`](./PHASES.md) for the per-phase table and
+> [`PROJECT.md`](./PROJECT.md) §12 for the plan and §13 for the test matrix.
 
 ---
 
@@ -128,6 +128,7 @@ pnpm install
 cp .env.example .env
 docker compose up -d postgres redis minio minio-init mailhog
 pnpm db:migrate
+pnpm db:seed                # pricing_rules; without it generation returns 500
 pnpm build
 ```
 
@@ -174,7 +175,7 @@ pnpm test          # unit
 pnpm test:coverage # unit + coverage gates
 pnpm test:int      # integration, against a real Postgres
 pnpm test:int:coverage # integration + coverage gate (what CI runs)
-pnpm test:e2e      # Playwright against the compose stack — from Phase 8
+pnpm test:e2e      # Playwright against a running web + API (pnpm dev or compose)
 pnpm test:chaos    # tests/chaos/run.sh — R1-R4; R5 needs Redis
 ```
 
@@ -269,7 +270,8 @@ pnpm test:chaos
 Gates: `libs/credits` and the state machines ≥ 95 %, overall ≥ 80 %. Mocks are used
 for every external API — tests never call a real provider.
 
-Current: **217 unit tests passing**, 87 % lines / 82.8 % branches overall.
+Current: **994 unit tests** and **482 integration tests** passing; 93.8 % lines /
+85.2 % branches overall (unit).
 
 ---
 
@@ -284,6 +286,7 @@ Copy `.env.example` to `.env`. Notable values:
 | `TTS_PROVIDER`             | `mock`              | `mock` \| `elevenlabs` \| `openai`        |
 | `SIGNUP_BONUS_CREDITS`     | `50`                | free credits at signup                    |
 | `FAIL_STAGE` / `FAIL_RATE` | –                   | mock-provider failure injection for tests |
+| `MOCK_LATENCY_MS`          | `0`                 | artificial mock latency; E2E uses 1500ms  |
 | `S3_ENDPOINT`              | `http://minio:9000` | S3/MinIO                                  |
 
 Local development and CI run entirely on mocks.

@@ -44,6 +44,9 @@ x-app-environment: &app-environment
   IMAGE_PROVIDER: mock
   TTS_PROVIDER: mock
   SOCIAL_PROVIDER: mock
+  # Deterministic latency, so the browser journey can observe live progress on a
+  # fast runner. Zero keeps ordinary local runs instant.
+  MOCK_LATENCY_MS: ${MOCK_LATENCY_MS:-0}
   SMTP_URL: smtp://mailhog:1025
   QUEUE_PREFIX: ${QUEUE_PREFIX:-renderflow}
   OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}

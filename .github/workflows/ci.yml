@@ -189,6 +189,9 @@ jobs:
           JWT_REFRESH_SECRET=$(openssl rand -base64 48)
           TOKEN_ENCRYPTION_KEY=$(openssl rand -base64 32)
           SIGNUP_BONUS_CREDITS=50
+          # The journey asserts the progress bar before completion. The mocks are
+          # otherwise fast enough to finish before React paints it.
+          MOCK_LATENCY_MS=1500
           EOF
 
       - name: start infra
@@ -206,10 +209,22 @@ jobs:
           docker compose ps
           exit 1
 
+      # The seed script imports the built credits package. An empty
+      # pricing_rules table makes POST /posts/:id/generate return 500 before the
+      # progress UI exists, which looks like a browser bug instead of a missing
+      # fresh-install step.
+      - name: build workspace packages
+        run: pnpm build
+
       - name: apply migrations
         env:
           DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow
         run: pnpm db:migrate
+
+      - name: seed pricing rules
+        env:
+          DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow
+        run: pnpm db:seed
 
       - name: start application
         # The journey generates a caption and schedules it, so the content
