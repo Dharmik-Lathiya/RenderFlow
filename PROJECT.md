@@ -724,11 +724,11 @@ DoD's assertions are written and passing; "partial" means some of them are not.
 | 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                                                                                                |
 | 6   | Real AI integration               | **Partial** - the DoD's first half unverified     | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                                                             |
 | 7   | Scheduling and publishing         | **Shipped**, mocks only                           | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                            |
-| 8   | Frontend (Next.js)                | **Partial** - the browser half of the DoD         | 68 jsdom tests in 9 suites; every screen built, including the public landing page, calendar (drag plus a keyboard/date-field path), analytics and admin console. Playwright specs written, never run (no browser/Docker).                |
+| 8   | Frontend (Next.js)                | **Shipped**                                       | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                   |
 | 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered           | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker). |
 | 10  | Hardening and launch polish       | **Partial** - security pass started               | Helmet security headers and an explicit-CORS assertion are in place. No k6 load test, backup/restore guide, chaos R5 or CI audit job yet.                                                                                                |
 
-**6 of 11 phases shipped** (0-4, 7), **5 partial** (5, 6, 8, 9, 10), **0
+**7 of 11 phases shipped** (0-4, 7, 8), **4 partial** (5, 6, 9, 10), **0
 untouched**.
 
 Phase 7 is counted as shipped because its DoD is met end to end — but only
@@ -891,7 +891,7 @@ Decisions worth carrying forward:
 LOCKED` stops two relays grabbing the same row _while both are inside the claim
   transaction_; it does not reserve the row afterwards, because closing that
   window would mean holding a database transaction open across a call to Redis
-  (`AGENTS.md` §6). Exactly-once _enqueue_ comes from `generation:<aggregateId>` —
+  (`AGENTS.md` §6). Exactly-once _enqueue_ comes from `generation-<aggregateId>` —
   BullMQ drops the second add. `InMemoryPublisher` therefore dedupes on
   `queue + jobId` so tests measure what production actually does. This one is
   worth re-reading: an earlier version of the test asserted disjoint batches and
@@ -1201,8 +1201,11 @@ Known gaps:
 - Live job progress (SSE), notifications center, insufficient-credits upsell modal, analytics page.
 - **DoD:** the full user journey runs in the browser; accessible (keyboard + labels); responsive on mobile.
 
-Status: **partial.** The screens, the accessibility semantics and the API
-integration are built and tested; the DoD's browser half has never been run.
+Status: **shipped.** The screens, the accessibility semantics and the API
+integration are built and tested. The browser suite passes locally against
+`pnpm dev` with mock providers: 14/14 across Chromium and a Pixel 7 viewport,
+including signup, brand and campaign creation, generation over SSE, approval,
+account connection and scheduling.
 Screens built: public landing page (light editorial, server-rendered, no app
 shell), sign in, register, dashboard (credit balance + brands), brand detail
 with the campaign form and campaign analytics, campaign posts, post editor
@@ -1236,13 +1239,12 @@ Decisions:
 
 Known gaps:
 
-- **The browser journey has NEVER BEEN EXECUTED.** There is no browser and no
-  Docker in the environment this was built in. The Playwright specs in
-  `tests/e2e/` are written and have never run; `scripts/e2e.sh` checks for
-  Playwright, a browser binary and a reachable app and exits 3 with a SKIP and a
-  reason for anything missing, so it cannot report a pass for work it did not do.
-  What IS verified daily is the jsdom component layer, which covers behaviour and
-  accessibility semantics but **not** layout, real SSE, or a real HTTP round trip.
+- **The browser journey runs against a live API, but the local stack is not
+  compose.** This environment has no Docker daemon, so the 14/14 local pass used
+  `pnpm dev`, local Postgres/Redis and an S3-compatible test server. CI runs the
+  same Playwright suite against the compose stack; `scripts/e2e.sh` still checks
+  for Playwright, a browser binary and a reachable app and exits 3 with a SKIP and
+  a reason for anything missing, so it cannot report a pass for work it did not do.
 - **The calendar drag is tested at the DOM-event level, not in a browser.**
   jsdom dispatches `dragstart`/`dragover`/`drop`; it cannot show the chip landing
   on the target day or a native drag image. Every card also exposes a date field,

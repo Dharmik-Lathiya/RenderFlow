@@ -3,17 +3,15 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright configuration for the browser journey.
  *
- * **These specs have never been executed in this environment.** There is no
- * browser and no Docker here, so no compose stack to drive. They are written to
- * run where those exist, and `scripts/e2e.sh` reports them as SKIP rather than as
- * a pass - the same rule `tests/chaos/run.sh` follows, because a harness that
- * reports green for what it did not do teaches people to trust it when it is
- * wrong.
+ * The suite runs against a real web server and API. Locally that is `pnpm dev`
+ * (or the compose stack); CI starts compose first. `scripts/e2e.sh` reports SKIP
+ * rather than a pass when Playwright, a browser, or the app is missing - the same
+ * rule `tests/chaos/run.sh` follows, because a harness that reports green for
+ * what it did not do teaches people to trust it when it is wrong.
  *
- * What IS verified here, every day, is the component layer under jsdom - the
- * .spec.tsx files under apps/web/src. That covers behaviour and accessibility
- * semantics; it does not cover layout, real SSE, or a real HTTP round trip. The
- * split is the honest one.
+ * These tests cover what jsdom cannot: layout, real SSE, and real HTTP round
+ * trips. The component-layer .spec.tsx files under apps/web/src remain the fast
+ * feedback loop for behaviour and accessibility semantics.
  */
 export default defineConfig({
   testDir: '.',

@@ -4,28 +4,29 @@ The authoritative version of this table lives in [`PROJECT.md` §12](./PROJECT.m
 This file exists so progress can be read without scrolling a thousand lines of
 specification.
 
-**Last updated:** after Phase 9's metrics half.
+**Last updated:** after the browser journey went green and the Phase 10 security
+pass started.
 
-| #   | Phase                             | Status                                                     |
-| --- | --------------------------------- | ---------------------------------------------------------- |
-| 0   | Foundation                        | Shipped (`docker compose up` unverified — no Docker here)  |
-| 1   | Auth, users, wallet, signup bonus | Shipped (same one gap)                                     |
-| 2   | Credit engine                     | Shipped                                                    |
-| 3   | Brands, campaigns, posts, assets  | Shipped                                                    |
-| 4   | Job pipeline with mock AI         | Shipped                                                    |
-| 5   | Reliability layer                 | **Partial** — R5 (a real SIGKILL) not implemented          |
-| 6   | Real AI integration               | **Partial** — never run against a real provider key        |
-| 7   | Scheduling and publishing         | Shipped (mocks only — no real adapter, no OAuth, no email) |
-| 8   | Frontend (Next.js)                | **Partial** — the browser journey has never been run       |
-| 9   | Analytics, admin, observability   | **Partial** — metrics and alerts; no analytics worker      |
-| 10  | Hardening and launch polish       | Not started                                                |
+| #   | Phase                             | Status                                                       |
+| --- | --------------------------------- | ------------------------------------------------------------ |
+| 0   | Foundation                        | Shipped (`docker compose up` unverified — no Docker here)    |
+| 1   | Auth, users, wallet, signup bonus | Shipped (same one gap)                                       |
+| 2   | Credit engine                     | Shipped                                                      |
+| 3   | Brands, campaigns, posts, assets  | Shipped                                                      |
+| 4   | Job pipeline with mock AI         | Shipped                                                      |
+| 5   | Reliability layer                 | **Partial** — R5 (a real SIGKILL) not implemented            |
+| 6   | Real AI integration               | **Partial** — never run against a real provider key          |
+| 7   | Scheduling and publishing         | Shipped (mocks only — no real adapter, no OAuth, no email)   |
+| 8   | Frontend (Next.js)                | Shipped — 14/14 browser journeys pass locally                |
+| 9   | Analytics, admin, observability   | **Partial** — analytics built; no Grafana panel has rendered |
+| 10  | Hardening and launch polish       | **Partial** — security pass started                          |
 
-**7 shipped · 4 partial · 1 untouched**
+**7 shipped · 4 partial · 0 untouched**
 
 ## What "partial" means here
 
-Both partial phases are missing the same kind of thing: the part that can only be
-proven against infrastructure this environment does not have.
+Each partial phase is missing proof or work that needs infrastructure or
+credentials this environment does not have.
 
 - **Phase 5** needs Redis. `tests/chaos/run.sh` reproduces the exact database
   state a `kill -9` leaves behind — `PROCESSING`, an unrenewed lease, partial
@@ -36,31 +37,28 @@ proven against infrastructure this environment does not have.
   against a stub transport, and the renderer produces real mp4s with real ffmpeg.
   What has never happened is a call to a live provider API, so their rate limits,
   outages and pricing are unknown.
+- **Phase 9** has its analytics worker, campaign analytics, admin console, Bull
+  Board, queue-depth metric, alerts and dashboard. The Prometheus and Grafana
+  containers have never started here, so no panel has rendered. The expressions
+  are drift-tested; a chart on a screen is not.
+- **Phase 10** has helmet, an explicit CORS allow-list, double-submit CSRF,
+  encrypted social tokens, upload validation and presigned PUT. It still lacks a
+  k6 load test, an index review, a backup/restore runbook, chaos R5, a CI
+  dependency-audit job and the README chaos GIF.
 
-Neither gap is hidden by a green build. Both are stated in `PROJECT.md` beside the
-code they affect.
+None of these gaps are hidden by a green build. They are stated in `PROJECT.md`
+beside the code they affect.
 
-## Phase 8 is partial, and the missing half is the DoD
+## Phase 8 is shipped
 
-The screens are built, the accessibility semantics are tested, and the API
-integration is real. What has never happened is **a browser running the
-journey** — there is no browser and no Docker in the environment this was built
-in.
+The screens, accessibility semantics and API integration are built. The browser
+suite now runs against a live API and passed 14/14 locally across Chromium and a
+Pixel 7 viewport: registration, the 50-credit badge, brand and campaign creation,
+generation with live SSE progress, approval, account connection and scheduling.
+The same suite runs in CI against the compose stack.
 
-The Playwright specs in `tests/e2e/` are written and have never run.
-`scripts/e2e.sh` follows the rule `tests/chaos/run.sh` already follows: it
-checks for Playwright, for a browser binary and for a reachable app, and on any
-of them missing prints `SKIP` with the reason and exits 3. It never reports a
-pass for work it did not do.
-
-```bash
-./scripts/e2e.sh          # → PASS: 0   SKIP: 2, exit 3
-```
-
-What that means for confidence: the jsdom suite covers behaviour and
-accessibility semantics every day. It does **not** cover layout, real SSE, or a
-real HTTP round trip. Those three are exactly what the unrun specs cover, and
-they are the gap.
+The jsdom component tests remain the fast feedback loop. The browser journey adds
+what jsdom cannot: layout, real SSE, and real HTTP round trips.
 
 ## Phase 7 is shipped, but only against mocks
 
@@ -81,34 +79,6 @@ on the interface rather than on the mock. What that buys is a guarantee about ou
 own behaviour — a worker killed mid-publish does not double-post, an expired
 token refreshes and succeeds — and it buys nothing about anyone else's.
 
-## Phase 9 is partial, and the missing half is the analytics
-
-The observability half is built: fourteen gauges derived from the database on a
-timer, eleven alert rules, a twelve-panel dashboard provisioned from git, and 29
-integration tests over the collector and the `/metrics` endpoint. Three counters
-were deleted on the way, because each was incremented only in its own unit test
-and always read zero in production — a series that exists and says nothing is
-worse than one that is absent.
-
-What is **not** built: the analytics worker that would fill `post_metrics`, the
-campaign dashboard, the "what to post next" suggestions, the admin console UI,
-an audited endpoint for `adjust`, and Bull Board. The `post_metrics` table is
-empty, so the Phase 8 analytics page still has no API to read.
-
-Two things deserve their own line because they are the kind of gap that a green
-build hides:
-
-- **No panel has ever rendered.** There is no Docker here, so Prometheus and
-  Grafana have never started. The metric names, the expressions parsed out of
-  the dashboard and the alert files, and the values the collector writes are all
-  tested; a chart appearing on a screen is not.
-- **`renderflow_queue_depth` is never set by the API.** The collector accepts a
-  `QueueDepthSource` and the API does not supply one, because that needs a
-  Redis client in the API process and this environment has no Redis. Two of the
-  eleven alerts — queue backlog and "no jobs at all" — therefore cannot fire
-  against a real deployment yet. They are defined and their expressions are
-  checked; they are not armed.
-
 ## Running the gates
 
 ```bash
@@ -128,8 +98,10 @@ TEST_DATABASE_URL=postgresql://renderflow:renderflow@127.0.0.1:5433/renderflow_t
 CHAOS_DATABASE_URL=... ./tests/chaos/run.sh        # R1-R4; R5 SKIPs without Redis
 ```
 
-Current state: **870 unit**, **452 integration**, smoke-phase1 11/11,
-smoke-phase4 33/33, chaos R1–R4 14/14.
+Last full local gate: lint, typecheck, build and format clean; **994 unit**,
+**482 integration**, **14/14 browser journeys**. The browser run used `pnpm dev`,
+local Postgres/Redis and an S3-compatible test server because this environment has
+no Docker daemon; CI runs the same suite against compose.
 
 ## Commit map
 
@@ -143,4 +115,4 @@ smoke-phase4 33/33, chaos R1–R4 14/14.
 | 6     | `8c9dc97`, `07e01ce`, `35ddcda` — providers, renderer, moderation, brand memory |
 | 7     | `8c9dc97`-era: publisher, scheduler, mock adapters                              |
 | 8     | `18544a5`, `2b49265`, `9479c53`, `9087bcc` — frontend, api-client, e2e harness  |
-| 9     | `feat(observability)` — collector, alert rules, dashboard (the metrics half)    |
+| 9     | `feat(observability)` — collector, alert rules, dashboard, analytics, admin     |

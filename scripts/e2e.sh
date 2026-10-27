@@ -10,10 +10,8 @@
 #   ./scripts/e2e.sh              # run, or report SKIP
 #   E2E_BASE_URL=... ./scripts/e2e.sh
 #
-# The specs themselves have NEVER been executed in the environment this was
-# written in: there is no browser and no Docker. That is stated in
-# tests/e2e/playwright.config.ts and in PROJECT.md section 12, and it is not
-# something a green unit suite papers over.
+# The specs run against a real web server and API. Locally that is `pnpm dev`;
+# CI starts the compose stack. A green unit suite does not stand in for them.
 
 set -uo pipefail
 

@@ -4,8 +4,9 @@ import { expect, test, type Page } from '@playwright/test';
  * The full user journey (PROJECT.md section 12, Phase 8 DoD: "the full user
  * journey runs in the browser").
  *
- * NOT EXECUTED in this environment - no browser, no Docker. See
- * `playwright.config.ts` and `scripts/e2e.sh`, which reports these as SKIP.
+ * Runs against a real web server and API (local `pnpm dev`, or the compose
+ * stack in CI). `scripts/e2e.sh` reports SKIP rather than a pass when Playwright,
+ * a browser, or the app is missing.
  *
  * The journey, in the order a person does it:
  *   sign up -> see 50 credits -> create a brand -> plan a campaign -> write a
@@ -39,7 +40,7 @@ test.describe('the full journey', () => {
 
     // The signup bonus is the product's first promise.
     await expect(page.getByRole('heading', { name: 'Credits' })).toBeVisible();
-    await expect(page.getByText('50')).toBeVisible();
+    await expect(page.getByText('50 credits', { exact: true })).toBeVisible();
 
     // Onboarding.
     await page.getByRole('link', { name: /create your first brand/i }).click();
@@ -58,6 +59,8 @@ test.describe('the full journey', () => {
     await page.getByLabel('Caption').fill('Rain again. The spring collection is nearly here.');
     await page.getByRole('button', { name: 'Create draft' }).click();
     await page.getByRole('link', { name: /Rain again/ }).click();
+    await page.waitForURL(/\/posts\/[0-9a-f-]+$/);
+    const postUrl = page.url();
 
     // Generation, with live progress.
     await page.getByRole('button', { name: 'Caption' }).click();
@@ -75,8 +78,9 @@ test.describe('the full journey', () => {
     await page.getByRole('button', { name: 'Connect' }).click();
     await expect(page.getByText('ext-1')).toBeVisible();
 
-    await page.goto(`/posts`);
-    await page.getByLabel('Accounts').getByRole('checkbox').check();
+    // Scheduling belongs to the post, so return to it after connecting the account.
+    await page.goto(postUrl);
+    await page.getByRole('group', { name: 'Accounts' }).getByRole('checkbox').check();
     await page.getByLabel('Publish at').fill('2099-01-01T09:00');
     await page.getByRole('button', { name: 'Schedule' }).click();
     await expect(page.getByText('SCHEDULED')).toBeVisible();
