@@ -90,7 +90,7 @@ describe('outbox relay', () => {
 
     expect(outcome).toMatchObject({ published: 3, failed: 0 });
     expect(publisher.published.map((m) => m.jobId).sort()).toEqual(
-      jobIds.map((id) => `generation:${id}`).sort(),
+      jobIds.map((id) => `generation-${id}`).sort(),
     );
 
     const after = await rows();
@@ -138,11 +138,18 @@ describe('outbox relay', () => {
     await emit(1);
     const publisher = new InMemoryPublisher();
     publisher.failNext(1);
+    const errors: Array<{ eventType: string; aggregateId: string }> = [];
 
-    const failed = await relayOnce(db, publisher);
+    const failed = await relayOnce(db, publisher, {
+      onPublishError: (event) => errors.push(event),
+    });
 
     expect(failed).toMatchObject({ published: 0, failed: 1 });
     expect((await rows())[0]).toMatchObject({ processedAt: null, attempts: 1 });
+    // The reason is observable, not just a failed count. A silent publish
+    // failure is how a bad BullMQ job id stranded every generation unnoticed.
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ eventType: 'job.created' });
 
     const retried = await relayOnce(db, publisher);
 
@@ -198,7 +205,7 @@ describe('outbox relay', () => {
 
     // Ordering matters because downstream stages depend on ordering of events.
     // The claim is `ORDER BY created_at`, so the sequence survives.
-    expect(publisher.published.map((m) => m.jobId)).toEqual(jobIds.map((id) => `generation:${id}`));
+    expect(publisher.published.map((m) => m.jobId)).toEqual(jobIds.map((id) => `generation-${id}`));
   });
 
   it('respects the batch size', async () => {
@@ -290,7 +297,7 @@ describe('outbox relay', () => {
 
     expect(publisher.calls).toHaveLength(2);
     expect(publisher.published).toHaveLength(1);
-    expect(publisher.published[0]?.jobId).toBe(`generation:${jobId}`);
+    expect(publisher.published[0]?.jobId).toBe(`generation-${jobId}`);
   });
 
   it('leaves a job untouched: publishing an event runs nothing', async () => {

@@ -20,12 +20,16 @@ export interface FactoryOptions {
 const DEFAULT_PREFIX = 'renderflow';
 
 /**
- * Job ids are deterministic (`generation:<jobId>`, `publish:<publishJobId>`).
+ * Job ids are deterministic (`generation-<jobId>`, `publish-<publishJobId>`).
  * BullMQ drops a duplicate add, which is a second line of defence behind the
  * outbox for the "relay retried" case.
+ *
+ * The separator MUST NOT be `:`. BullMQ reserves the colon for its own Redis
+ * keys and rejects a custom id that contains one (`Custom Id cannot contain :`),
+ * which would make every relay publish fail.
  */
 export function deterministicJobId(prefix: string, aggregateId: string): string {
-  return `${prefix}:${aggregateId}`;
+  return `${prefix}-${aggregateId}`;
 }
 
 /** Retry/backoff options for a job enqueued on `preset`'s queue. */

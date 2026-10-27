@@ -39,6 +39,19 @@ async function main(): Promise<void> {
     batchSize: queueConfig.relayBatchSize,
     pollIntervalMs: queueConfig.relayPollIntervalMs,
     maxAttempts: queueConfig.relayMaxAttempts,
+    onPublishError: (event, error) => {
+      worker.logger.error(
+        {
+          app: APP_NAME,
+          eventId: event.id,
+          eventType: event.eventType,
+          aggregateId: event.aggregateId,
+          attempts: event.attempts,
+          err: error,
+        },
+        'outbox event publish failed',
+      );
+    },
   });
 
   // Drains run in registration order on SIGTERM: stop claiming, close the queue

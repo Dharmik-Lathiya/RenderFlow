@@ -229,7 +229,7 @@ export class PublishingService implements OnModuleInit {
       }
 
       // One outbox event PER publish job, so `aggregate_id` is the publish job
-      // and the relay's deterministic `generation:<aggregateId>` job id is unique
+      // and the relay's deterministic `generation-<aggregateId>` job id is unique
       // per target. One event for the whole post would give three targets a
       // single queue entry, and BullMQ would drop two of them.
       for (const job of inserted) {

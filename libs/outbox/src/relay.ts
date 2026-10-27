@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 import { QUEUE_NAMES, queueForJobStage, type QueueName } from '@renderflow/common';
 import { outboxEvents, type Database, type DbTransaction } from '@renderflow/db';
+import { deterministicJobId } from '@renderflow/queue';
 
 /**
  * The outbox relay (PROJECT.md section 6 and 9, AGENTS.md rule 6: "No direct
@@ -49,6 +50,21 @@ export interface OutboxRelayOptions {
   maxAttempts?: number;
   /** Injectable clock so tests do not sleep. */
   now?: () => number;
+  /**
+   * Called when a publish fails, before the row is retried. The row itself only
+   * carries an attempt count; without this hook the relay returns `failed: 1`
+   * and the reason is lost. That is exactly how a colon in every BullMQ job id
+   * went unnoticed while the queue silently drained nothing.
+   */
+  onPublishError?: (event: OutboxErrorEvent, error: unknown) => void;
+}
+
+export interface OutboxErrorEvent {
+  id: string;
+  aggregateType: string;
+  aggregateId: string;
+  eventType: string;
+  attempts: number;
 }
 
 export interface RelayOutcome {
@@ -159,7 +175,7 @@ interface OutboxRow {
  * AGENTS.md forbids outright.
  *
  * So the duplicate is real, and the design leans on the deterministic job id
- * instead: `generation:<aggregateId>` is the same for both publishes, and BullMQ
+ * instead: `generation-<aggregateId>` is the same for both publishes, and BullMQ
  * drops the second add. Exactly-once *enqueue* comes from the id, not from the
  * lock. `InMemoryPublisher` therefore dedupes on jobId too, so a test measures
  * the behaviour production actually has.
@@ -232,8 +248,9 @@ export async function relayOnce(
       await publisher.publish({
         queue: queueForEvent(event.eventType, event.payload),
         // Deterministic, so republishing after a crash between publish and
-        // mark-processed cannot enqueue the same work twice.
-        jobId: `generation:${event.aggregateId}`,
+        // mark-processed cannot enqueue the same work twice. The helper uses a
+        // hyphen because BullMQ rejects a custom id containing a colon.
+        jobId: deterministicJobId('generation', event.aggregateId),
         payload: event.payload,
         ...(delayMs === undefined ? {} : { delayMs }),
       });
@@ -244,10 +261,11 @@ export async function relayOnce(
         .where(eq(outboxEvents.id, event.id));
 
       published += 1;
-    } catch {
+    } catch (error: unknown) {
       // Left unprocessed with an incremented attempt count, so the next poll
-      // retries it. Swallowing the error is the point: one bad event must not
-      // stop the relay draining the rest of the batch.
+      // retries it. Reporting through the hook is not optional: a silently
+      // swallowed publish failure looks identical to an idle queue.
+      options.onPublishError?.(event, error);
       failed += 1;
     }
   }
@@ -332,7 +350,7 @@ function sleep(ms: number): Promise<void> {
  *
  * The queue is part of the key because BullMQ scopes job ids per queue - and it
  * has to be. A reel's stages route to `content` and then to `media`, all keyed on
- * `generation:<jobId>`; deduping on the id alone would swallow the very hand-off
+ * `generation-<jobId>`; deduping on the id alone would swallow the very hand-off
  * that lets media-worker ever run.
  */
 export class InMemoryPublisher implements JobPublisher {

@@ -47,19 +47,19 @@ describe('BullMqPublisher', () => {
   it('adds the payload to the named queue', async () => {
     const publisher = new BullMqPublisher(factory);
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: { jobId: 'a' } });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: { jobId: 'a' } });
 
     expect(queues[0]?.add).toHaveBeenCalledWith(
       'content',
       { jobId: 'a' },
-      { jobId: 'generation:a' },
+      { jobId: 'generation-a' },
     );
   });
 
   it('creates the queue with its documented retry preset', async () => {
     const publisher = new BullMqPublisher(factory);
 
-    await publisher.publish({ queue: 'media', jobId: 'generation:a', payload: {} });
+    await publisher.publish({ queue: 'media', jobId: 'generation-a', payload: {} });
 
     // The preset decides attempts and backoff. A publisher that passed the wrong
     // one - or none - would silently change every worker's retry behaviour.
@@ -69,9 +69,9 @@ describe('BullMqPublisher', () => {
   it('reuses one connection per queue instead of one per message', async () => {
     const publisher = new BullMqPublisher(factory);
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: {} });
-    await publisher.publish({ queue: 'content', jobId: 'generation:b', payload: {} });
-    await publisher.publish({ queue: 'content', jobId: 'generation:c', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-b', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-c', payload: {} });
 
     expect(createQueue).toHaveBeenCalledTimes(1);
     expect(queues[0]?.add).toHaveBeenCalledTimes(3);
@@ -80,8 +80,8 @@ describe('BullMqPublisher', () => {
   it('opens a separate connection per distinct queue', async () => {
     const publisher = new BullMqPublisher(factory);
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: {} });
-    await publisher.publish({ queue: 'media', jobId: 'generation:a', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: {} });
+    await publisher.publish({ queue: 'media', jobId: 'generation-a', payload: {} });
 
     expect(created.map((c) => c.name)).toEqual(['content', 'media']);
   });
@@ -92,31 +92,31 @@ describe('BullMqPublisher', () => {
     // generation.
     const publisher = new BullMqPublisher(factory);
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: {} });
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: {} });
 
     const ids = (queues[0]?.add.mock.calls as [string, unknown, { jobId: string }][]).map(
       (call) => call[2].jobId,
     );
-    expect(ids).toEqual(['generation:a', 'generation:a']);
+    expect(ids).toEqual(['generation-a', 'generation-a']);
   });
 
   it('propagates a publish failure so the relay can retry', async () => {
     const publisher = new BullMqPublisher(factory);
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: {} });
     (queues[0]?.add as jest.Mock).mockRejectedValueOnce(new Error('redis down'));
 
     // Swallowing this would mark the event processed with nothing delivered, and
     // the generation would silently never run.
     await expect(
-      publisher.publish({ queue: 'content', jobId: 'generation:b', payload: {} }),
+      publisher.publish({ queue: 'content', jobId: 'generation-b', payload: {} }),
     ).rejects.toThrow('redis down');
   });
 
   it('closes every connection it opened', async () => {
     const publisher = new BullMqPublisher(factory);
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: {} });
-    await publisher.publish({ queue: 'media', jobId: 'generation:a', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: {} });
+    await publisher.publish({ queue: 'media', jobId: 'generation-a', payload: {} });
 
     await publisher.close();
 
@@ -127,11 +127,11 @@ describe('BullMqPublisher', () => {
     // Closing has to clear the cache, or a worker that drains, shuts down and is
     // somehow still running would hand out a closed queue.
     const publisher = new BullMqPublisher(factory);
-    await publisher.publish({ queue: 'content', jobId: 'generation:a', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-a', payload: {} });
     await publisher.close();
     createQueue.mockClear();
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:b', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-b', payload: {} });
 
     expect(createQueue).toHaveBeenCalledTimes(1);
   });

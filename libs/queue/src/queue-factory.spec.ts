@@ -26,7 +26,15 @@ describe('connectionOptionsFor', () => {
   });
 
   it('applies the default prefix', () => {
-    expect(deterministicJobId('generation', 'job-1')).toBe('generation:job-1');
+    expect(deterministicJobId('generation', 'job-1')).toBe('generation-job-1');
+  });
+
+  it('never uses a colon, which BullMQ rejects in a custom job id', () => {
+    // BullMQ stores jobs under `<prefix>:<queue>:<id>` and refuses a custom id
+    // containing `:`. The failure is at publish time, inside the outbox relay,
+    // where it stranded every generation until this was caught end to end.
+    expect(deterministicJobId('generation', 'job-1')).not.toContain(':');
+    expect(deterministicJobId('publish', 'job-2')).not.toContain(':');
   });
 });
 

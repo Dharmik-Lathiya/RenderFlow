@@ -422,7 +422,7 @@ async function checkpointStages(db: Database, jobId: string): Promise<Set<JobSta
  *    stage. Without it the job stops here, halfway, with credits reserved and
  *    nothing left to finish it.
  *  - The `aggregateId` is the job id, so the relay's deterministic job id
- *    (`generation:<jobId>`) collapses the repeated events a retry produces into a
+ *    (`generation-<jobId>`) collapses the repeated events a retry produces into a
  *    single enqueue.
  */
 async function recordStage(

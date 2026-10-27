@@ -288,7 +288,7 @@ describe('publishing API', () => {
     const jobIds = await db.select({ id: publishJobs.id }).from(publishJobs);
 
     // `aggregate_id` is the publish job, so the relay's deterministic
-    // `generation:<aggregateId>` id is unique per target.
+    // `generation-<aggregateId>` id is unique per target.
     expect(new Set(events.map((e) => e.aggregateId))).toEqual(new Set(jobIds.map((j) => j.id)));
   });
 

@@ -114,32 +114,32 @@ describe('InMemoryPublisher', () => {
   it('records what it published', async () => {
     const publisher = new InMemoryPublisher();
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:1', payload: { a: 1 } });
+    await publisher.publish({ queue: 'content', jobId: 'generation-1', payload: { a: 1 } });
 
     expect(publisher.published).toEqual([
-      { queue: 'content', jobId: 'generation:1', payload: { a: 1 } },
+      { queue: 'content', jobId: 'generation-1', payload: { a: 1 } },
     ]);
   });
 
   it('keeps every call but enqueues a repeated jobId only once', async () => {
     const publisher = new InMemoryPublisher();
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:1', payload: {} });
-    await publisher.publish({ queue: 'content', jobId: 'generation:1', payload: {} });
-    await publisher.publish({ queue: 'content', jobId: 'generation:2', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-1', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-1', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-2', payload: {} });
 
     // Mirrors BullMQ's behaviour on a duplicate jobId. If this class recorded
     // both, every test of the relay's delivery guarantee would be measuring a
     // publisher production does not have.
     expect(publisher.calls).toHaveLength(3);
-    expect(publisher.published.map((m) => m.jobId)).toEqual(['generation:1', 'generation:2']);
+    expect(publisher.published.map((m) => m.jobId)).toEqual(['generation-1', 'generation-2']);
   });
 
   it('dedupes per queue, not per jobId alone', async () => {
     const publisher = new InMemoryPublisher();
 
-    await publisher.publish({ queue: 'content', jobId: 'generation:1', payload: {} });
-    await publisher.publish({ queue: 'media', jobId: 'generation:1', payload: {} });
+    await publisher.publish({ queue: 'content', jobId: 'generation-1', payload: {} });
+    await publisher.publish({ queue: 'media', jobId: 'generation-1', payload: {} });
 
     // BullMQ scopes job ids per queue. It has to: a reel's stages route to
     // `content` and then to `media` under the same id, and deduping on the id
