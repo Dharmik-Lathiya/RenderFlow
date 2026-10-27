@@ -35,7 +35,7 @@ const SCHEDULED = [
   },
 ];
 
-const WORKSPACES = [{ id: 'w1', name: 'Acme', ownerId: 'u1' }];
+const WORKSPACES = [{ id: 'w1', name: 'Acme', ownerId: 'u1', role: 'OWNER' }];
 
 describe('Calendar', () => {
   it('shows each scheduled post on its day with its time and brand', async () => {

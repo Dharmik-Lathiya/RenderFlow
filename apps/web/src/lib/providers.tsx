@@ -30,6 +30,32 @@ export function useApi(): DomainClient {
 }
 
 /**
+ * Echoes the API's non-httpOnly CSRF cookie back as a header.
+ *
+ * The cookie is deliberately readable by JS: that is the "double submit" half of
+ * the CSRF defence. Without this, every POST/PATCH/DELETE from the browser is
+ * rejected with CSRF_TOKEN_INVALID even though the session cookie is valid.
+ */
+export function readCsrfCookie(): string | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  for (const part of document.cookie.split('; ')) {
+    const separator = part.indexOf('=');
+    if (separator === -1) {
+      continue;
+    }
+
+    if (part.slice(0, separator) === 'rf_csrf') {
+      return decodeURIComponent(part.slice(separator + 1));
+    }
+  }
+
+  return null;
+}
+
+/**
  * Builds a client for tests and for the browser.
  *
  * `fetchImpl` is the seam. Production passes nothing and gets the platform
@@ -44,6 +70,7 @@ export function createBrowserApiClient(
     // is what authenticates every request. Without it the browser silently omits
     // the cookie and the API answers 401 - which looks exactly like bad auth.
     withCredentials: true,
+    getCsrfToken: readCsrfCookie,
     ...overrides,
   });
 }

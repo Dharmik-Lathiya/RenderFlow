@@ -536,6 +536,23 @@ describe('auth (Phase 1 DoD)', () => {
       expect(res.body).not.toHaveProperty('passwordHash');
     });
 
+    it('returns the profile and wallet from GET /auth/me', async () => {
+      const email = uniqueEmail('auth-me');
+      const register = await app
+        .http()
+        .post('/api/v1/auth/register')
+        .send({ email, password: UNIQUE_PASSWORD, name: 'Session Bootstrap' });
+
+      const res = await app.http().get('/api/v1/auth/me').set(authHeaders(register));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        user: { email, name: 'Session Bootstrap', role: 'MEMBER' },
+        wallet: { available: 50, reserved: 0 },
+      });
+      expect(res.body).not.toHaveProperty('user.passwordHash');
+    });
+
     it('accepts a bearer token, which is what a mobile client uses', async () => {
       const email = uniqueEmail('bearer');
       const register = await app
@@ -660,6 +677,12 @@ describe('auth (Phase 1 DoD)', () => {
     });
 
     it('rejects unauthenticated access with 401', async () => {
+      await expect(
+        app
+          .http()
+          .get('/api/v1/auth/me')
+          .then((r) => r.status),
+      ).resolves.toBe(401);
       await expect(
         app
           .http()

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Job } from '@renderflow/api-client';
 
 import { Badge, Button, LiveRegion } from '../../../components/ui';
+import { API_BASE_URL, eventStreamUrl } from '../../../lib/api-url';
 import styles from '../../../components/ui.module.css';
 
 /**
@@ -87,7 +88,7 @@ export function useJobProgress(jobId: string | null): JobProgress {
         return;
       }
       poll = setInterval(() => {
-        void fetch(`/api/v1/jobs/${jobId}`, { credentials: 'include' })
+        void fetch(`${API_BASE_URL}/jobs/${jobId}`, { credentials: 'include' })
           .then((response) => (response.ok ? response.json() : null))
           .then((body: unknown) => {
             if (body !== null && typeof body === 'object') {
@@ -108,7 +109,9 @@ export function useJobProgress(jobId: string | null): JobProgress {
       startPolling();
       setConnecting(false);
     } else {
-      source = new EventSource(`/api/v1/jobs/${jobId}/events`, { withCredentials: true });
+      source = new EventSource(eventStreamUrl(`/jobs/${jobId}/events`), {
+        withCredentials: true,
+      });
 
       source.addEventListener('progress', (event) => {
         try {

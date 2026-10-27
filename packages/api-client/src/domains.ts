@@ -123,7 +123,7 @@ export interface DomainClient {
   };
 
   brands: {
-    list(options?: RequestOptions): Promise<Brand[]>;
+    list(workspaceId: string, options?: RequestOptions): Promise<Brand[]>;
     create(body: unknown, options?: RequestOptions): Promise<Brand>;
     detail(brandId: string, options?: RequestOptions): Promise<Brand>;
     campaigns(brandId: string, options?: RequestOptions): Promise<Campaign[]>;
@@ -254,7 +254,12 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
     },
 
     brands: {
-      list: (opts) => parse(() => transport.get('/brands', opts), asArray(brandSchema), 'brands'),
+      list: (workspaceId, opts) =>
+        parse(
+          () => transport.get('/brands', { ...opts, query: { workspaceId } }),
+          asArray(brandSchema),
+          'brands',
+        ),
       create: (body, opts) =>
         parse(() => transport.post('/brands', body, opts), brandSchema, 'brands.create'),
       detail: (brandId, opts) =>

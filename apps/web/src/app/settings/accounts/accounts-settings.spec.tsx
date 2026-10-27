@@ -26,7 +26,7 @@ const ACCOUNT = {
   needsReconnect: false,
 };
 
-const WORKSPACES = [{ id: 'w1', name: 'Acme', ownerId: 'u1' }];
+const WORKSPACES = [{ id: 'w1', name: 'Acme', ownerId: 'u1', role: 'OWNER' }];
 
 describe('AccountsSettings', () => {
   it('lists what is connected', async () => {

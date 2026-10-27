@@ -128,7 +128,17 @@ export function NewBrand() {
 export function BrandList() {
   const api = useApi();
 
-  const brands = useQuery({ queryKey: ['brands'], queryFn: () => api.brands.list() });
+  const workspaces = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: () => api.workspaces.list(),
+    retry: false,
+  });
+  const workspaceId = workspaces.data?.[0]?.id;
+  const brands = useQuery({
+    queryKey: ['brands', workspaceId],
+    queryFn: () => (workspaceId === undefined ? Promise.resolve([]) : api.brands.list(workspaceId)),
+    enabled: workspaceId !== undefined,
+  });
 
   return (
     <>
@@ -142,7 +152,7 @@ export function BrandList() {
           </Link>
         }
       >
-        {brands.isLoading && <Spinner label="Loading brands" />}
+        {(workspaces.isLoading || brands.isLoading) && <Spinner label="Loading brands" />}
 
         {brands.isError && (
           <ErrorNotice message="Could not load brands." onRetry={() => void brands.refetch()} />

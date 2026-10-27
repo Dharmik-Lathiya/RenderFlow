@@ -27,6 +27,14 @@ export class CreditsService implements OnModuleInit {
     this.db = getDb();
   }
 
+  /**
+   * The wallet alone, for callers that bootstrap a session (the auth profile
+   * endpoint) and do not need the ledger page.
+   */
+  async getWallet(userId: string): Promise<WalletBalance> {
+    return getBalance(this.db, userId);
+  }
+
   async getCredits(userId: string, page: number, pageSize: number): Promise<CreditsResponse> {
     const [wallet, ledger, totalRows] = await Promise.all([
       getBalance(this.db, userId),

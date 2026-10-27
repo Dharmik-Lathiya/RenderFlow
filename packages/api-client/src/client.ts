@@ -34,9 +34,16 @@ export interface RenderFlowClientOptions {
   /** Default per-request timeout in ms. Default 30000. */
   timeoutMs?: number;
   headers?: Record<string, string>;
+  /**
+   * CSRF token source for cookie-authenticated writes. The API sets a
+   * non-httpOnly `rf_csrf` cookie; the browser reads it and echoes the value in
+   * `x-csrf-token`. Mobile/bearer clients can omit this.
+   */
+  getCsrfToken?: () => string | null | Promise<string | null>;
 }
 
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
+export const CSRF_HEADER = 'x-csrf-token';
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** Thrown for any non-2xx response. Carries the API's stable error code. */
@@ -115,6 +122,7 @@ export function createRenderFlowClient(options: RenderFlowClientOptions): Render
     withCredentials = true,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     headers: baseHeaders = {},
+    getCsrfToken,
   } = options;
 
   if (typeof fetchImpl !== 'function') {
@@ -160,6 +168,16 @@ export function createRenderFlowClient(options: RenderFlowClientOptions): Render
     const token = getToken ? await getToken() : null;
     if (token) {
       headers.Authorization = `Bearer ${token}`;
+    }
+
+    // Cookie auth carries the session, but the server also requires a
+    // double-submit CSRF token for every unsafe method. A GET must not need one;
+    // a POST without it is rejected by CsrfGuard before it reaches a handler.
+    if (getCsrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
+      const csrfToken = await getCsrfToken();
+      if (csrfToken !== null && csrfToken !== '') {
+        headers[CSRF_HEADER] = csrfToken;
+      }
     }
 
     // Compose the caller's signal with our timeout signal.

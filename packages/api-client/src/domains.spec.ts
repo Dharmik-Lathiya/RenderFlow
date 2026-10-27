@@ -89,7 +89,7 @@ describe('domain paths are documented', () => {
    */
   const DELIBERATELY_UNWIRED: Record<string, string> = {
     '/auth/refresh': 'handled by the transport, which refreshes on a 401',
-    '/me': 'duplicate of /auth/me, kept for the mobile client',
+    '/me': 'profile only; /auth/me returns the profile and wallet the shell needs',
     '/workspaces/{workspaceId}': 'the list is enough for the dashboard; detail adds a round trip',
     '/workspaces/{workspaceId}/members/{userId}': 'member removal is Phase 9 admin work',
     '/assets/{assetId}': 'asset deletion is not in the Phase 8 journey',
@@ -149,6 +149,28 @@ describe('response validation', () => {
     await expect(api.credits.balance()).resolves.toEqual({ wallet });
   });
 
+  it('parses the credential response registration actually returns', async () => {
+    const body = {
+      user: { id: 'u1', email: 'ada@example.com', name: 'Ada', role: 'MEMBER' },
+      accessToken: 'access',
+      accessTokenExpiresInSeconds: 900,
+      csrfToken: 'csrf',
+    };
+    const api = clientReturning(body);
+
+    await expect(api.auth.register({})).resolves.toEqual(body);
+  });
+
+  it('parses the profile and wallet returned by GET /auth/me', async () => {
+    const body = {
+      user: { id: 'u1', email: 'ada@example.com', name: 'Ada', role: 'MEMBER' },
+      wallet,
+    };
+    const api = clientReturning(body);
+
+    await expect(api.auth.me()).resolves.toEqual(body);
+  });
+
   it('rejects a response the client cannot understand', async () => {
     // The server dropped `available`. Every component reading it would get
     // undefined and fail somewhere unrelated; here it fails here, and says so.
@@ -163,15 +185,14 @@ describe('response validation', () => {
   });
 
   it('accepts a list wrapped in items', async () => {
-    const api = clientReturning({ items: [{ id: 'w1', name: 'Acme', ownerId: 'u1' }] });
+    const workspace = { id: 'w1', name: 'Acme', ownerId: 'u1', role: 'OWNER' };
+    const api = clientReturning({ items: [workspace] });
 
-    await expect(api.workspaces.list()).resolves.toEqual([
-      { id: 'w1', name: 'Acme', ownerId: 'u1' },
-    ]);
+    await expect(api.workspaces.list()).resolves.toEqual([workspace]);
   });
 
   it('accepts a bare list', async () => {
-    const api = clientReturning([{ id: 'w1', name: 'Acme', ownerId: 'u1' }]);
+    const api = clientReturning([{ id: 'w1', name: 'Acme', ownerId: 'u1', role: 'OWNER' }]);
 
     await expect(api.workspaces.list()).resolves.toHaveLength(1);
   });

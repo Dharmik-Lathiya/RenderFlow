@@ -26,6 +26,7 @@ import { z } from 'zod';
 export const userSchema = z.object({
   id: z.string(),
   email: z.string().email(),
+  name: z.string(),
   role: z.string(),
 });
 
@@ -43,15 +44,26 @@ export const creditsResponseSchema = z.object({
 // --- auth -----------------------------------------------------------------
 
 export const registerRequestSchema = z.object({
+  name: z.string().trim().min(1).max(120),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(10),
 });
 
-export const loginRequestSchema = registerRequestSchema;
+export const loginRequestSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
 
+/**
+ * Register/login/refresh return credentials, not a wallet. The previous shape
+ * claimed `{ user, wallet }`, so the client rejected a successful registration
+ * as an invalid response and the form showed a generic failure.
+ */
 export const authResponseSchema = z.object({
   user: userSchema,
-  wallet: walletSchema,
+  accessToken: z.string(),
+  accessTokenExpiresInSeconds: z.number().int().positive(),
+  csrfToken: z.string(),
 });
 
 export const meResponseSchema = z.object({
@@ -64,7 +76,8 @@ export const meResponseSchema = z.object({
 export const workspaceSchema = z.object({
   id: z.string(),
   name: z.string(),
-  ownerId: z.string(),
+  ownerId: z.string().optional(),
+  role: z.string(),
 });
 
 export const memberSchema = z.object({

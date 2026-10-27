@@ -11,9 +11,11 @@ import { renderWithProviders, stubApi, userEvent } from '../../test/harness';
  */
 
 const ME = {
-  user: { id: 'u1', email: 'sam@example.com', role: 'MEMBER' },
+  user: { id: 'u1', email: 'sam@example.com', name: 'Sam', role: 'MEMBER' },
   wallet: { available: 50, reserved: 0 },
 };
+
+const WORKSPACES = [{ id: 'w1', name: "Sam's workspace", ownerId: 'u1', role: 'OWNER' }];
 
 describe('Dashboard', () => {
   it('shows the credit balance before anything else', async () => {
@@ -21,6 +23,7 @@ describe('Dashboard', () => {
     // after composing a reel has already wasted the attempt.
     const { client } = stubApi({
       'GET /auth/me': { body: ME },
+      'GET /workspaces': { body: WORKSPACES },
       'GET /brands': {
         body: [
           {
@@ -44,6 +47,7 @@ describe('Dashboard', () => {
   it('warns when credits are running low', async () => {
     const { client } = stubApi({
       'GET /auth/me': { body: { ...ME, wallet: { available: 3, reserved: 0 } } },
+      'GET /workspaces': { body: WORKSPACES },
       'GET /brands': { body: [] },
     });
 
@@ -57,6 +61,7 @@ describe('Dashboard', () => {
     // look wrong during a generation.
     const { client } = stubApi({
       'GET /auth/me': { body: { ...ME, wallet: { available: 20, reserved: 30 } } },
+      'GET /workspaces': { body: WORKSPACES },
       'GET /brands': { body: [] },
     });
 
@@ -78,6 +83,7 @@ describe('Dashboard', () => {
   it('points a new user at creating a brand', async () => {
     const { client } = stubApi({
       'GET /auth/me': { body: ME },
+      'GET /workspaces': { body: WORKSPACES },
       'GET /brands': { body: [] },
     });
 
@@ -92,6 +98,7 @@ describe('Dashboard', () => {
   it('links to each brand the user has', async () => {
     const { client } = stubApi({
       'GET /auth/me': { body: ME },
+      'GET /workspaces': { body: WORKSPACES },
       'GET /brands': {
         body: [
           {
@@ -126,6 +133,7 @@ describe('Dashboard', () => {
     let attempt = 0;
     const { client } = stubApi({
       'GET /auth/me': { body: ME },
+      'GET /workspaces': { body: WORKSPACES },
       'GET /brands': () => {
         attempt += 1;
         return attempt === 1

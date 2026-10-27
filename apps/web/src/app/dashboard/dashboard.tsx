@@ -26,12 +26,18 @@ export function Dashboard() {
   const api = useApi();
 
   const me = useQuery({ queryKey: ['me'], queryFn: () => api.auth.me(), retry: false });
-  const brands = useQuery({
-    queryKey: ['brands'],
-    queryFn: () => api.brands.list(),
-    // Both need the same session; without this the brands request goes out
-    // before the 401 that would have cancelled it.
+  const workspaces = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: () => api.workspaces.list(),
     enabled: me.isSuccess,
+  });
+  const workspaceId = workspaces.data?.[0]?.id;
+  const brands = useQuery({
+    queryKey: ['brands', workspaceId],
+    queryFn: () => (workspaceId === undefined ? Promise.resolve([]) : api.brands.list(workspaceId)),
+    // Brands belong to a workspace, and the API refuses a list without one.
+    // Waiting for the workspace also prevents a request that can only 400.
+    enabled: workspaceId !== undefined,
   });
 
   if (me.isLoading) {

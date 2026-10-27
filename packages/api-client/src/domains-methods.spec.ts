@@ -66,8 +66,9 @@ const CASES: Case[] = [
     name: 'auth.register',
     method: 'POST',
     path: '/auth/register',
-    body: { email: 'ada@example.test', password: 'correct-horse' },
-    call: (api) => api.auth.register({ email: 'ada@example.test', password: 'correct-horse' }),
+    body: { name: 'Ada', email: 'ada@example.test', password: 'Correct-Horse-1' },
+    call: (api) =>
+      api.auth.register({ name: 'Ada', email: 'ada@example.test', password: 'Correct-Horse-1' }),
   },
   {
     name: 'auth.login',
@@ -96,7 +97,13 @@ const CASES: Case[] = [
     path: '/workspaces/w1/members',
     call: (api) => api.workspaces.members('w1'),
   },
-  { name: 'brands.list', method: 'GET', path: '/brands', call: (api) => api.brands.list() },
+  {
+    name: 'brands.list',
+    method: 'GET',
+    path: '/brands',
+    query: { workspaceId: 'w1' },
+    call: (api) => api.brands.list('w1'),
+  },
   {
     name: 'brands.create',
     method: 'POST',

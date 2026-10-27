@@ -39,7 +39,7 @@ const OVERVIEW = {
   ],
 };
 
-const WORKSPACES = [{ id: 'w1', name: 'Acme', ownerId: 'u1' }];
+const WORKSPACES = [{ id: 'w1', name: 'Acme', ownerId: 'u1', role: 'OWNER' }];
 
 describe('AnalyticsOverview', () => {
   it('shows workspace totals and links each campaign to its page', async () => {

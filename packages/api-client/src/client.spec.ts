@@ -1,4 +1,9 @@
-import { ApiClientError, IDEMPOTENCY_KEY_HEADER, createRenderFlowClient } from './client';
+import {
+  ApiClientError,
+  CSRF_HEADER,
+  IDEMPOTENCY_KEY_HEADER,
+  createRenderFlowClient,
+} from './client';
 import type { LivenessResponse, Paginated } from './types';
 
 const BASE_URL = 'http://api.test/api/v1';
@@ -105,6 +110,34 @@ describe('createRenderFlowClient', () => {
     expect(
       (calls[0]?.init.headers as Record<string, string>)[IDEMPOTENCY_KEY_HEADER],
     ).toBeUndefined();
+  });
+
+  it('echoes the CSRF token on writes', async () => {
+    const { impl, calls } = fakeFetch([jsonResponse({ id: 'brand-1' })]);
+    const client = createRenderFlowClient({
+      baseUrl: BASE_URL,
+      fetchImpl: impl,
+      getCsrfToken: () => 'csrf-123',
+    });
+
+    await client.post('/brands', { name: 'Acme' });
+
+    expect((calls[0]?.init.headers as Record<string, string>)[CSRF_HEADER]).toBe('csrf-123');
+  });
+
+  it('does not require a CSRF token for reads', async () => {
+    const { impl, calls } = fakeFetch([jsonResponse({})]);
+    const client = createRenderFlowClient({
+      baseUrl: BASE_URL,
+      fetchImpl: impl,
+      getCsrfToken: () => {
+        throw new Error('reads must not read the CSRF cookie');
+      },
+    });
+
+    await client.get('/me');
+
+    expect((calls[0]?.init.headers as Record<string, string>)[CSRF_HEADER]).toBeUndefined();
   });
 
   it('attaches a bearer token when a token source is provided (mobile)', async () => {

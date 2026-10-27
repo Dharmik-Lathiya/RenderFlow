@@ -1,11 +1,13 @@
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
-import type { UserRole } from '@renderflow/common';
+import type { WalletBalance } from '@renderflow/credits';
 import { z } from 'zod';
 
 import { ValidationFailedError } from '@renderflow/common';
 
+import { CreditsService } from '../credits/credits.service';
 import { RATE_LIMIT_RULES, RateLimit } from '../ratelimit/rate-limit.guard';
+import { UsersService, type MeResponse } from '../users/users.service';
 import { CSRF_COOKIE, REFRESH_TOKEN_COOKIE } from './auth.config';
 import { loginSchema, registerSchema, type AuthResponse, type RegisterDto } from './auth.dto';
 import { AuthService, type IssuedSession, type SessionMetadata } from './auth.service';
@@ -21,9 +23,10 @@ import {
 /**
  * Auth routes.
  *
- * All `@Public()` because there is no session yet. CSRF still applies to
+ * Register, login, refresh and logout are `@Public()` because there is no access
+ * token yet (refresh/logout use the refresh cookie). CSRF still applies to
  * `refresh` and `logout`, which are state-changing; only login/register are
- * exempt (see CsrfGuard).
+ * exempt (see CsrfGuard). `me` is deliberately authenticated.
  *
  * Every endpoint that can be reached without a session is rate limited, keyed
  * on the source IP. Login additionally gets a per-submitted-email limit:
@@ -33,12 +36,16 @@ import {
  */
 @ApiTags('auth')
 @Controller('auth')
-@Public()
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly users: UsersService,
+    private readonly credits: CreditsService,
+  ) {}
 
   /** POST /api/v1/auth/register - creates the user and grants the signup bonus. */
   @Post('register')
+  @Public()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create an account and grant the signup bonus' })
   // Tightest limit here: each accepted call mints a user AND grants credits, so
@@ -61,6 +68,7 @@ export class AuthController {
 
   /** POST /api/v1/auth/login */
   @Post('login')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Exchange credentials for a session' })
   @RateLimit(
@@ -82,6 +90,7 @@ export class AuthController {
 
   /** POST /api/v1/auth/refresh - rotates the refresh token. */
   @Post('refresh')
+  @Public()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate the refresh token and issue a new access token' })
   @RateLimit({ name: RATE_LIMIT_RULES.REFRESH_IP, scope: 'ip' })
@@ -96,6 +105,7 @@ export class AuthController {
 
   /** POST /api/v1/auth/logout - revokes the session and clears cookies. */
   @Post('logout')
+  @Public()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Revoke the presented session' })
   async logout(
@@ -106,12 +116,28 @@ export class AuthController {
     clearSessionCookies(response);
   }
 
-  /** GET /api/v1/auth/me - the token's claims; GET /me returns the full profile. */
+  /**
+   * GET /api/v1/auth/me - the signed-in user's profile and wallet.
+   *
+   * This is the session bootstrap the web shell needs: one authenticated call
+   * that answers both "who am I?" and "how many credits do I have?". A
+   * token-claims-only response here forced the UI to guess at the wallet shape.
+   */
   @Get('me')
-  @ApiOperation({ summary: "The current token's claims" })
-  me(@CurrentUser() user: AuthenticatedUser): { id: string; role: UserRole } {
-    return { id: user.id, role: user.role };
+  @ApiOperation({ summary: "The signed-in user's profile and wallet" })
+  async me(@CurrentUser() user: AuthenticatedUser): Promise<AuthMeResponse> {
+    const [profile, wallet] = await Promise.all([
+      this.users.getMe(user.id),
+      this.credits.getWallet(user.id),
+    ]);
+
+    return { user: profile, wallet };
   }
+}
+
+export interface AuthMeResponse {
+  user: MeResponse;
+  wallet: WalletBalance;
 }
 
 /**
