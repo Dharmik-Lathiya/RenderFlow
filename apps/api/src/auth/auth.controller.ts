@@ -9,7 +9,18 @@ import { CreditsService } from '../credits/credits.service';
 import { RATE_LIMIT_RULES, RateLimit } from '../ratelimit/rate-limit.guard';
 import { UsersService, type MeResponse } from '../users/users.service';
 import { CSRF_COOKIE, REFRESH_TOKEN_COOKIE } from './auth.config';
-import { loginSchema, registerSchema, type AuthResponse, type RegisterDto } from './auth.dto';
+import {
+  forgotPasswordSchema,
+  loginSchema,
+  registerSchema,
+  resetPasswordSchema,
+  verifyEmailSchema,
+  type AuthResponse,
+  type ForgotPasswordDto,
+  type RegisterDto,
+  type ResetPasswordDto,
+  type VerifyEmailDto,
+} from './auth.dto';
 import { AuthService, type IssuedSession, type SessionMetadata } from './auth.service';
 import { CurrentUser, Public, type AuthenticatedUser } from './auth.guard';
 import {
@@ -132,6 +143,64 @@ export class AuthController {
     ]);
 
     return { user: profile, wallet };
+  }
+
+  /**
+   * POST /api/v1/auth/forgot-password - sends a reset link if the account exists.
+   *
+   * 202 for every well-formed address, registered or not. A 404 here would tell an
+   * attacker which addresses have accounts, and this endpoint is unauthenticated
+   * by definition.
+   */
+  @Post('forgot-password')
+  @Public()
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Send a password reset link (always 202)' })
+  @RateLimit({ name: RATE_LIMIT_RULES.FORGOT_PASSWORD_IP, scope: 'ip' })
+  async forgotPassword(@Body() body: unknown): Promise<{ status: 'accepted' }> {
+    const dto: ForgotPasswordDto = parseBody(forgotPasswordSchema, body);
+    await this.auth.requestPasswordReset(dto.email);
+    return { status: 'accepted' };
+  }
+
+  /**
+   * POST /api/v1/auth/reset-password - consumes a one-shot token.
+   *
+   * Public because the whole point is that the user cannot sign in. The token is
+   * the credential; it is single-use, expiring, and stored only as a digest.
+   */
+  @Post('reset-password')
+  @Public()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Set a new password using a reset token' })
+  @RateLimit({ name: RATE_LIMIT_RULES.RESET_PASSWORD_IP, scope: 'ip' })
+  async resetPassword(@Body() body: unknown): Promise<void> {
+    const dto: ResetPasswordDto = parseBody(resetPasswordSchema, body);
+    await this.auth.resetPassword(dto.token, dto.password);
+  }
+
+  /** POST /api/v1/auth/verify-email - marks the address verified. */
+  @Post('verify-email')
+  @Public()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Confirm an email address with a verification token' })
+  @RateLimit({ name: RATE_LIMIT_RULES.VERIFY_EMAIL_IP, scope: 'ip' })
+  async verifyEmail(@Body() body: unknown): Promise<void> {
+    const dto: VerifyEmailDto = parseBody(verifyEmailSchema, body);
+    await this.auth.verifyEmail(dto.token);
+  }
+
+  /**
+   * POST /api/v1/auth/resend-verification - sends a fresh link to the caller.
+   *
+   * Authenticated, so there is no address to enumerate. `204` whether or not a
+   * mail was sent, because "already verified" is not an error the UI must handle.
+   */
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Re-send the email verification link' })
+  async resendVerification(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    await this.auth.requestEmailVerification(user.id);
   }
 }
 

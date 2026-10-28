@@ -64,6 +64,9 @@ export type RouteMap = {
   readonly '/assets/{assetId}/download': {
     readonly get: ApiOperation;
   };
+  readonly '/auth/forgot-password': {
+    readonly post: ApiOperation;
+  };
   readonly '/auth/login': {
     readonly post: ApiOperation;
   };
@@ -77,6 +80,15 @@ export type RouteMap = {
     readonly post: ApiOperation;
   };
   readonly '/auth/register': {
+    readonly post: ApiOperation;
+  };
+  readonly '/auth/resend-verification': {
+    readonly post: ApiOperation;
+  };
+  readonly '/auth/reset-password': {
+    readonly post: ApiOperation;
+  };
+  readonly '/auth/verify-email': {
     readonly post: ApiOperation;
   };
   readonly '/brands': {
@@ -102,6 +114,12 @@ export type RouteMap = {
   };
   readonly '/credits': {
     readonly get: ApiOperation;
+  };
+  readonly '/credits/pricing': {
+    readonly get: ApiOperation;
+  };
+  readonly '/credits/top-up': {
+    readonly post: ApiOperation;
   };
   readonly '/docs-json': {
     readonly get: ApiOperation;
@@ -197,11 +215,15 @@ export const ROUTE_PATHS = [
   '/assets/{assetId}',
   '/assets/{assetId}/confirm',
   '/assets/{assetId}/download',
+  '/auth/forgot-password',
   '/auth/login',
   '/auth/logout',
   '/auth/me',
   '/auth/refresh',
   '/auth/register',
+  '/auth/resend-verification',
+  '/auth/reset-password',
+  '/auth/verify-email',
   '/brands',
   '/brands/{brandId}',
   '/brands/{brandId}/campaigns',
@@ -209,6 +231,8 @@ export const ROUTE_PATHS = [
   '/campaigns/{campaignId}',
   '/campaigns/{campaignId}/posts',
   '/credits',
+  '/credits/pricing',
+  '/credits/top-up',
   '/docs-json',
   '/health/live',
   '/health/ready',
@@ -358,6 +382,16 @@ export const ROUTES: RouteMap = {
       request: undefined as unknown,
     },
   },
+  '/auth/forgot-password': {
+    post: {
+      summary: 'Send a password reset link (always 202)',
+      pathParams: [],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
   '/auth/login': {
     post: {
       summary: 'Exchange credentials for a session',
@@ -380,7 +414,7 @@ export const ROUTES: RouteMap = {
   },
   '/auth/me': {
     get: {
-      summary: "The current token's claims",
+      summary: "The signed-in user's profile and wallet",
       pathParams: [],
       query: [],
       hasBody: false,
@@ -401,6 +435,36 @@ export const ROUTES: RouteMap = {
   '/auth/register': {
     post: {
       summary: 'Create an account and grant the signup bonus',
+      pathParams: [],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/auth/resend-verification': {
+    post: {
+      summary: 'Re-send the email verification link',
+      pathParams: [],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/auth/reset-password': {
+    post: {
+      summary: 'Set a new password using a reset token',
+      pathParams: [],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/auth/verify-email': {
+    post: {
+      summary: 'Confirm an email address with a verification token',
       pathParams: [],
       query: [],
       hasBody: true,
@@ -498,6 +562,26 @@ export const ROUTES: RouteMap = {
       pathParams: [],
       query: ['page', 'pageSize'],
       hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/credits/pricing': {
+    get: {
+      summary: 'Active credit prices and the signup bonus',
+      pathParams: [],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/credits/top-up': {
+    post: {
+      summary: 'Buy a credit pack (stub provider; disabled by default)',
+      pathParams: [],
+      query: [],
+      hasBody: true,
       response: undefined as unknown,
       request: undefined as unknown,
     },

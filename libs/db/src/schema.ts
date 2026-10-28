@@ -131,8 +131,11 @@ export const creditLedger = pgTable(
     entryType: creditEntryTypeEnum('entry_type').notNull(),
     /**
      * Signed: grants are positive, RESERVE/CAPTURE are negative. Credits are
-     * integers only, which is what keeps SUM(ledger) exactly equal to
-     * available + reserved.
+     * integers only.
+     *
+     * NOTE: `available + reserved` is NOT `SUM(amount)` - a reservation moves
+     * credits between buckets without changing the total. Reconciliation compares
+     * per bucket; see `libs/credits/src/balance.ts` and PROJECT.md section 5.10.
      */
     amount: integer('amount').notNull(),
 
@@ -204,6 +207,48 @@ export const refreshSessions = pgTable(
     tokenHashIdx: uniqueIndex('refresh_sessions_token_hash_key').on(table.tokenHash),
     userIdx: index('refresh_sessions_user_id_idx').on(table.userId),
     expiresIdx: index('refresh_sessions_expires_at_idx').on(table.expiresAt),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// auth_tokens
+// ---------------------------------------------------------------------------
+
+/**
+ * One-shot, expiring tokens for password reset and email verification.
+ *
+ * A single table with a `purpose` column rather than one per flow: both are
+ * "prove you hold this random string, once, before it expires", and two tables
+ * would mean two copies of the consume-once logic - which is the part that has to
+ * be right.
+ *
+ * Only the SHA-256 digest is stored. A leaked database therefore contains no
+ * usable reset link, exactly like `refresh_sessions`.
+ */
+export const authTokenPurposeEnum = pgEnum('auth_token_purpose', [
+  'PASSWORD_RESET',
+  'EMAIL_VERIFICATION',
+]);
+
+export const authTokens = pgTable(
+  'auth_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    purpose: authTokenPurposeEnum('purpose').notNull(),
+    tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+    /** Set by the guarded UPDATE that consumes it; never unset. */
+    usedAt: timestamp('used_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    // The consume lookup is by digest, and a duplicate would let two rows claim
+    // the same link.
+    tokenHashIdx: uniqueIndex('auth_tokens_token_hash_key').on(table.tokenHash),
+    userPurposeIdx: index('auth_tokens_user_purpose_idx').on(table.userId, table.purpose),
   }),
 );
 
@@ -835,8 +880,11 @@ export const brands = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
-    /** FK to assets is added after `assets` exists, to avoid a cycle. */
-    logoAssetId: uuid('logo_asset_id'),
+    // There is deliberately no `logo_asset_id` here. It was declared as a bare
+    // uuid whose foreign key to `assets` was never added, and nothing ever read
+    // or wrote it - so it could point at a row that no longer existed. Brand
+    // logos arrive as a real column WITH their constraint in the same migration
+    // that implements the feature.
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' })
       .notNull()

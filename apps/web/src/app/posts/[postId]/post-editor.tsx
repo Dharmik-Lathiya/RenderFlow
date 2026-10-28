@@ -246,7 +246,8 @@ function InsufficientCreditsDialog({ message, onClose }: { message: string; onCl
           <Button variant="primary" onClick={onClose}>
             Got it
           </Button>
-          <Link href="/brands">
+          {/* Real prices, rather than the brands list this used to point at. */}
+          <Link href="/pricing">
             <Button variant="secondary">See plans</Button>
           </Link>
         </div>

@@ -21,9 +21,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const api = useApi();
   const pathname = usePathname();
 
-  // Unauthenticated by definition: the landing, login and register screens have
-  // no shell and no balance to show.
-  const bare = pathname === '/' || pathname === '/login' || pathname === '/register';
+  // Unauthenticated by definition: the public pages have no shell and no balance
+  // to show. A list rather than three comparisons because the marketing site now
+  // has more than one page, and a forgotten route here renders the app sidebar -
+  // complete with "Signed out." - across a public page.
+  const bare = isPublicPath(pathname);
 
   // `retry: false` so a signed-out visitor sees a link to sign in rather than an
   // error box on every page.
@@ -99,6 +101,31 @@ export function Shell({ children }: { children: ReactNode }) {
       </main>
     </div>
   );
+}
+
+/**
+ * Routes that render without the app shell.
+ *
+ * Prefix-matched for the account-recovery screens so a token in the path (a
+ * future `/reset-password/<token>`) stays bare too.
+ */
+const PUBLIC_PATHS = [
+  '/',
+  '/login',
+  '/register',
+  '/pricing',
+  '/about',
+  '/contact',
+  '/security',
+  '/terms',
+  '/privacy',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-email',
+] as const;
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 const NAV: { href: string; label: string }[] = [

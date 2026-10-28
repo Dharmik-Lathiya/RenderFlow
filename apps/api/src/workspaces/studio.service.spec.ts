@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
+import { AppError } from '@renderflow/common';
+
 import {
   ALLOWED_UPLOAD_MIME,
   MAX_UPLOAD_BYTES,
+  assertPostApprovable,
   createBrandSchema,
   createPostSchema,
+  postEditDecision,
   requestUploadSchema,
   updateBrandSchema,
+  type PostStatus,
 } from './studio.service';
 
 /**
@@ -211,6 +216,49 @@ describe('ALLOWED_UPLOAD_MIME', () => {
 
   it('sets a ceiling an ordinary upload fits under', () => {
     expect(MAX_UPLOAD_BYTES).toBe(25 * 1024 * 1024);
+  });
+});
+
+/**
+ * Editing must never leave an approval standing over different text.
+ *
+ * The publisher stores the formatted caption when a post is scheduled, so an
+ * edit between approval and scheduling is the exact window in which unapproved
+ * copy reaches a customer's public profile.
+ */
+describe('postEditDecision', () => {
+  it('leaves an unapproved post unapproved', () => {
+    for (const status of ['DRAFT', 'GENERATING', 'READY', 'FAILED'] as PostStatus[]) {
+      expect(postEditDecision(status)).toEqual({ allowed: true, withdrawApproval: false });
+    }
+  });
+
+  it('withdraws approval when approved text is edited', () => {
+    expect(postEditDecision('APPROVED')).toEqual({ allowed: true, withdrawApproval: true });
+  });
+
+  it('refuses to edit a post that is already committed to the calendar', () => {
+    for (const status of ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] as PostStatus[]) {
+      expect(postEditDecision(status)).toEqual({ allowed: false, status });
+    }
+  });
+});
+
+describe('assertPostApprovable', () => {
+  it('allows approval of drafts, ready posts and failed publishes', () => {
+    for (const status of ['DRAFT', 'GENERATING', 'READY', 'FAILED'] as PostStatus[]) {
+      expect(() => assertPostApprovable(status)).not.toThrow();
+    }
+  });
+
+  it('refuses a second approval so the approver is not overwritten', () => {
+    expect(() => assertPostApprovable('APPROVED')).toThrow(AppError);
+  });
+
+  it('refuses approval of a post that is already going out or gone', () => {
+    for (const status of ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'] as PostStatus[]) {
+      expect(() => assertPostApprovable(status)).toThrow(AppError);
+    }
   });
 });
 

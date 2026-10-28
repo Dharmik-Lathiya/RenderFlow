@@ -4,8 +4,8 @@ The authoritative version of this table lives in [`PROJECT.md` §12](./PROJECT.m
 This file exists so progress can be read without scrolling a thousand lines of
 specification.
 
-**Last updated:** after the browser journey went green and the Phase 10 security
-pass started.
+**Last updated:** after the launch-readiness pass (public site, account recovery,
+rate limits on cost-incurring routes, approval integrity, stub billing).
 
 | #   | Phase                             | Status                                                       |
 | --- | --------------------------------- | ------------------------------------------------------------ |
@@ -22,6 +22,25 @@ pass started.
 | 10  | Hardening and launch polish       | **Partial** — security pass started                          |
 
 **7 shipped · 4 partial · 0 untouched**
+
+## Unphased launch-readiness work
+
+Not everything a product needs fits the 0-10 sequence. These shipped outside it and
+are recorded in `PROJECT.md` §12 Phase 10:
+
+- Public site: `/pricing` (rendered from `pricing_rules`), `/about`, `/contact`,
+  `/security`, `/terms`, `/privacy`, sitemap, crawling rules, icon, OG card, 404 /
+  error / loading routes.
+- Account recovery: forgot-password, reset-password, verify-email with one-shot
+  tokens; a reset revokes every session. Mail sits behind an `EmailSender` seam
+  whose development transport is refused in production.
+- Rate limits on generation, campaign, schedule and admin routes. User-scoped
+  limits now run after authentication instead of degrading to the client IP.
+- Editing an approved post withdraws the approval; scheduled posts refuse edits.
+- `purchase()` + a stub top-up endpoint (disabled by default, refused in production).
+
+Still missing for a commercial launch: a real payment provider, a real email
+transport, real social adapters and OAuth.
 
 ## What "partial" means here
 

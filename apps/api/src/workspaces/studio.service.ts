@@ -103,6 +103,59 @@ export const updatePostSchema = z
   })
   .refine((value) => Object.keys(value).length > 0, { message: 'at least one field is required' });
 
+/** `posts.status`, derived so adding a status is a schema change and not two. */
+export type PostStatus = (typeof posts.$inferSelect)['status'];
+
+/**
+ * What editing a post's text does to it.
+ *
+ * This exists because of a hole the approval workflow otherwise has: the
+ * publisher stores the formatted text at SCHEDULE time, but schedules from
+ * `posts.caption` at that moment. So "approve the caption, then rewrite it, then
+ * schedule" sends text no approver ever saw, while the row still says APPROVED.
+ * The only way to keep "what was approved is what goes out" true is for an edit
+ * to withdraw the approval.
+ *
+ * A post that is already committed to the calendar is refused instead of
+ * silently invalidated: the scheduled publish job holds its own copy of the
+ * text, so an accepted edit would change nothing the user can see.
+ */
+export type PostEditDecision =
+  { allowed: true; withdrawApproval: boolean } | { allowed: false; status: PostStatus };
+
+export function postEditDecision(status: PostStatus): PostEditDecision {
+  switch (status) {
+    case 'SCHEDULED':
+    case 'PUBLISHING':
+    case 'PUBLISHED':
+      return { allowed: false, status };
+    case 'APPROVED':
+      return { allowed: true, withdrawApproval: true };
+    case 'DRAFT':
+    case 'GENERATING':
+    case 'READY':
+    case 'FAILED':
+      return { allowed: true, withdrawApproval: false };
+  }
+}
+
+/**
+ * Refuses approval of a post that cannot legitimately be approved.
+ *
+ * APPROVED is a conflict rather than a no-op so a double click cannot overwrite
+ * the approver or the timestamp. The three committed statuses are refused
+ * because approving a post that is already going out (or already out) would
+ * claim a review that did not happen.
+ */
+export function assertPostApprovable(status: PostStatus): void {
+  if (status === 'APPROVED') {
+    throw new AppError(ERROR_CODES.CONFLICT, 'Post is already approved');
+  }
+  if (status === 'SCHEDULED' || status === 'PUBLISHING' || status === 'PUBLISHED') {
+    throw new AppError(ERROR_CODES.CONFLICT, `Cannot approve a post that is ${status}`);
+  }
+}
+
 /**
  * The calendar's query: scheduled posts in a workspace, optionally a window.
  *
@@ -419,11 +472,32 @@ export class StudioService implements OnModuleInit {
       },
     });
 
+    const decision = postEditDecision(scoped.value.status);
+    if (!decision.allowed) {
+      throw new AppError(
+        ERROR_CODES.CONFLICT,
+        `Cannot edit a post that is ${decision.status}; unschedule it first`,
+      );
+    }
+
     const [updated] = await this.db
       .update(posts)
-      .set({ ...input, version: scoped.value.version + 1, updatedAt: new Date() })
-      .where(eq(posts.id, postId))
+      .set({
+        ...input,
+        // Withdrawing the approval in the same statement is what closes the
+        // approve-then-rewrite gap; a separate UPDATE would leave a window.
+        ...(decision.withdrawApproval ? { status: 'READY' as const, approvedBy: null } : {}),
+        version: scoped.value.version + 1,
+        updatedAt: new Date(),
+      })
+      // Guarded on the status that was read, so a concurrent approval (or a
+      // concurrent schedule) cannot be overwritten by this stale edit.
+      .where(and(eq(posts.id, postId), eq(posts.status, scoped.value.status)))
       .returning();
+
+    if (updated === undefined) {
+      throw new AppError(ERROR_CODES.CONFLICT, 'Post changed while it was being edited; retry');
+    }
 
     return updated;
   }
@@ -448,15 +522,19 @@ export class StudioService implements OnModuleInit {
       },
     });
 
-    if (scoped.value.status === 'APPROVED') {
-      throw new AppError(ERROR_CODES.CONFLICT, 'Post is already approved');
-    }
+    assertPostApprovable(scoped.value.status);
 
     const [approved] = await this.db
       .update(posts)
       .set({ status: 'APPROVED', approvedBy: userId, updatedAt: new Date() })
-      .where(eq(posts.id, postId))
+      // Guarded on the status the decision was made against, so two approvers
+      // racing produce one approval and one conflict rather than two "wins".
+      .where(and(eq(posts.id, postId), eq(posts.status, scoped.value.status)))
       .returning();
+
+    if (approved === undefined) {
+      throw new AppError(ERROR_CODES.CONFLICT, 'Post changed while it was being approved; retry');
+    }
 
     return approved;
   }

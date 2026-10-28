@@ -29,6 +29,8 @@ const HTTP_STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   NOT_FOUND: 404,
   JOB_NOT_FOUND: 404,
   CONFLICT: 409,
+  /** A one-shot token that is unknown, already used, or expired. */
+  INVALID_TOKEN: 400,
   IDEMPOTENCY_CONFLICT: 409,
   EMAIL_ALREADY_REGISTERED: 409,
   JOB_ALREADY_TERMINAL: 409,

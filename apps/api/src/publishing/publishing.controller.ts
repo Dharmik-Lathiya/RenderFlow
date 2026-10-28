@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { CurrentUser } from '../auth/auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.guard';
+import { RATE_LIMIT_RULES, RateLimitByUser } from '../ratelimit/rate-limit.guard';
 import { NotificationsService } from './notifications.service';
 import { PublishingService, rescheduleSchema, scheduleSchema } from './publishing.service';
 import { SocialAccountsService, connectAccountSchema } from './social-accounts.service';
@@ -50,6 +51,9 @@ export class PublishingController {
 
   // --- scheduling ---------------------------------------------------------
 
+  // Free, but each call materialises publish jobs and queue entries, and a loop
+  // here spends a platform's rate limit rather than ours.
+  @RateLimitByUser(RATE_LIMIT_RULES.SCHEDULE_USER)
   @Post('posts/:postId/schedule')
   @ApiHeader({ name: 'Idempotency-Key', required: false })
   @ApiOperation({
@@ -79,6 +83,7 @@ export class PublishingController {
     return this.publishing.cancel(user.id, postId);
   }
 
+  @RateLimitByUser(RATE_LIMIT_RULES.SCHEDULE_USER)
   @Patch('posts/:postId/schedule')
   @ApiOperation({
     summary: 'Move a scheduled post to a new time (APPROVER+)',

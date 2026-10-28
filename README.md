@@ -147,9 +147,17 @@ work still uses the narrower command in Setup.
 
 `pnpm dev` watches the TypeScript sources directly. The API and workers run under
 `ts-node`, because Nest's decorator-based DI needs `emitDecoratorMetadata`, which
-Node's built-in type stripping does not emit. The root `.env` is loaded with
+Node's built-in type stripping does not emit. Each app starts through
+`scripts/dev-server.mjs`, which passes `--no-experimental-strip-types` only on the
+Node versions that accept it (22.6+), so a run on an older runtime starts instead
+of dying with `node: bad option`. The root `.env` is loaded with
 Node's `--env-file-if-exists`, so a value already exported in your shell still
 wins.
+
+The `.env` you copy is the HOST configuration: it points `DATABASE_URL` and
+`REDIS_URL` at `localhost`, because `pnpm dev` runs outside Docker. The compose
+services do not read those values - `docker-compose.yml` gives every container
+its own `postgres:5432` / `redis:6379` URLs.
 
 | Service        | URL                                                 |
 | -------------- | --------------------------------------------------- |
@@ -197,10 +205,23 @@ Credits are the part of this project worth reading first.
    `reserved → available`, idempotent via `UNIQUE(reference_type, reference_id, entry_type)`.
 6. **Only `libs/credits` may write to `wallets` or `credit_ledger`.** No other module
    runs SQL against those tables.
-7. **Every movement is an append-only ledger row.** Wallet columns are caches; an
-   hourly `reconcile()` proves `available + reserved == SUM(ledger)`.
+7. **Every movement is an append-only ledger row.** Wallet columns are caches, and
+   `reconcile()` compares them to the ledger **per bucket**, because a single
+   `SUM(amount)` cannot express two buckets:
 
-Pricing lives in the `pricing_rules` table, never in code and never on the client:
+   ```
+   available = SUM(SIGNUP_BONUS, PURCHASE, ADJUSTMENT, REFUND) + SUM(RESERVE, EXPIRY)
+   reserved  = -SUM(RESERVE, REFUND) + SUM(CAPTURE)
+   ```
+
+   `available + reserved == SUM(ledger)` is **not** the invariant - reserving moves
+   credits between buckets without changing the total, so a total-based check
+   passes while the wallet is wrong. `PROJECT.md` §5.10 has the arithmetic. The
+   endpoint exists; nothing schedules it hourly yet (`PROJECT.md` Phase 5 gaps).
+
+Pricing lives in the `pricing_rules` table, never in code and never on the client.
+The table below is what `pnpm db:seed` inserts; the live rows win, and the public
+pricing page reads them from `GET /credits/pricing` rather than restating this:
 
 | Action                        | Credits |
 | ----------------------------- | ------- |
@@ -245,10 +266,12 @@ charge, or double post.**
 
 ## Chaos testing
 
-`tests/chaos/run.sh` automates scenarios R1–R11 (`PROJECT.md` §13.3): killing
-`media-worker` mid-render, stopping Redis mid-job, duplicate delivery, two reapers
-racing, publisher killed after the platform accepted a post. Each scenario prints
-PASS/FAIL and leaves the system clean. Lands in Phase 5.
+`tests/chaos/run.sh` automates R1-R4 (`PROJECT.md` §13.3) against a real database:
+the exact state a killed worker leaves behind, the retry that resumes from a
+checkpoint, the refund that must happen exactly once, and a reaper race. R5 - a
+real `SIGKILL` - needs Redis and is reported as `SKIP`, which makes the script
+exit non-zero on purpose. A chaos harness that reports PASS for what it did not
+run is worse than none.
 
 ```bash
 pnpm test:chaos
@@ -270,8 +293,8 @@ pnpm test:chaos
 Gates: `libs/credits` and the state machines ≥ 95 %, overall ≥ 80 %. Mocks are used
 for every external API — tests never call a real provider.
 
-Current: **994 unit tests** and **482 integration tests** passing; 93.8 % lines /
-85.2 % branches overall (unit).
+Current: **994 unit tests**, **482 integration tests** and 14/14 browser journeys
+passing; 93.8 % lines / 85.2 % branches overall (unit).
 
 ---
 

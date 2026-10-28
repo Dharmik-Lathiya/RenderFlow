@@ -1,29 +1,14 @@
 import type { Metadata } from 'next';
-import { Calistoga, Inter } from 'next/font/google';
 
 import { Landing } from './landing';
+import { fontClassName } from './fonts';
 
 /**
  * The public landing page.
  *
- * Fonts are loaded here rather than in the root layout: the application shell
- * uses the platform UI font, and the marketing page is the one place that needs
- * an editorial display face. `next/font` self-hosts both files and emits a
- * metric-adjusted fallback, so the first paint does not wait on Google.
+ * Fonts live in `./fonts` so the pricing, about and legal pages render in the
+ * same editorial face; this file only owns the page's metadata and content.
  */
-const display = Calistoga({
-  subsets: ['latin'],
-  weight: '400',
-  variable: '--font-landing-display',
-  display: 'swap',
-});
-
-const body = Inter({
-  subsets: ['latin'],
-  variable: '--font-landing-body',
-  display: 'swap',
-});
-
 export const metadata: Metadata = {
   title: 'RenderFlow — AI marketing studio and social scheduler',
   description:
@@ -37,5 +22,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <Landing fontClassName={`${display.variable} ${body.variable}`} />;
+  return <Landing fontClassName={fontClassName} />;
 }

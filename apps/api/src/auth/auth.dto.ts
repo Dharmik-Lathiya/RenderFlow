@@ -49,6 +49,30 @@ export const loginSchema = z.object({
 
 export type LoginDto = z.infer<typeof loginSchema>;
 
+/**
+ * Account recovery and verification.
+ *
+ * The token bounds are presentation, not security: the real guarantee is that the
+ * digest has to match a row, and 43 characters of base64url is what 32 random
+ * bytes produce. A shorter or longer string simply cannot match anything.
+ */
+export const forgotPasswordSchema = z.object({ email: emailSchema });
+
+export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(20).max(200),
+  password: passwordSchema,
+});
+
+export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
+
+export const verifyEmailSchema = z.object({
+  token: z.string().trim().min(20).max(200),
+});
+
+export type VerifyEmailDto = z.infer<typeof verifyEmailSchema>;
+
 /** Response body for register/login/refresh. Never includes the password hash. */
 export interface AuthResponse {
   user: {

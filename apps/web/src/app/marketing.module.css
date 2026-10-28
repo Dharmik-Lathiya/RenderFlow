@@ -1,0 +1,189 @@
+/**
+ * Public page styles (pricing, about, legal, security).
+ *
+ * Layered on top of `landing.module.css`: these pages render inside
+ * `MarketingPage`, so the `--lp-*` tokens and the display font are already on the
+ * ancestor. Only the prose layout lives here, which keeps the landing page's own
+ * stylesheet about the landing page.
+ */
+
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: clamp(48px, 8vw, 96px) 24px clamp(64px, 10vw, 120px);
+}
+
+.wide {
+  max-width: 1080px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--lp-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0 0 18px;
+  font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.lede {
+  max-width: 40rem;
+  margin: 0 0 40px;
+  color: var(--lp-muted);
+  font-size: clamp(1.05rem, 1.6vw, 1.18rem);
+}
+
+.prose {
+  max-width: 44rem;
+}
+
+.prose h2 {
+  margin: 44px 0 12px;
+  font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
+  font-size: 1.6rem;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.prose h3 {
+  margin: 28px 0 8px;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.prose p {
+  margin: 0 0 16px;
+  color: var(--lp-muted);
+}
+
+.prose ul {
+  margin: 0 0 20px;
+  padding-left: 1.2rem;
+  color: var(--lp-muted);
+}
+
+.prose li {
+  margin-bottom: 8px;
+}
+
+.prose a {
+  color: var(--lp-blue-ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.note {
+  margin: 0 0 32px;
+  padding: 14px 16px;
+  border: 1px solid var(--lp-border);
+  border-left: 3px solid var(--lp-orange);
+  border-radius: 8px;
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+  font-size: 0.95rem;
+}
+
+/* --- pricing ------------------------------------------------------------ */
+
+.priceList {
+  margin: 0 0 32px;
+  padding: 0;
+  border: 1px solid var(--lp-border);
+  border-radius: 14px;
+  background: var(--lp-surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.priceRow:last-child {
+  border-bottom: 0;
+}
+
+.priceLabel {
+  display: block;
+  color: var(--lp-ink);
+  font-weight: 600;
+}
+
+.priceHint {
+  display: block;
+  margin-top: 2px;
+  color: var(--lp-muted);
+  font-size: 0.9rem;
+}
+
+.priceValue {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.free {
+  color: var(--lp-green);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: var(--lp-blue);
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 1px solid var(--lp-border);
+  border-radius: 999px;
+  background: var(--lp-surface);
+  color: var(--lp-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.unavailable {
+  margin: 0 0 24px;
+  padding: 16px 18px;
+  border: 1px dashed var(--lp-border);
+  border-radius: 10px;
+  color: var(--lp-muted);
+}
+
+.meta {
+  margin: 48px 0 0;
+  color: var(--lp-muted);
+  font-size: 0.85rem;
+}

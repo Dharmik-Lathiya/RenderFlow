@@ -143,6 +143,18 @@ export function hashRefreshToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/**
+ * Digest for one-shot tokens (password reset, email verification).
+ *
+ * Same construction as a refresh token - a 256-bit random value, stored only as
+ * its digest - but a separate name because the two have different lifetimes and
+ * failure modes, and a shared helper makes it easy to reuse one where the other
+ * was meant.
+ */
+export function hashAuthToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 /** Constant-time comparison for secrets. */
 export function timingSafeEqual(a: string, b: string): boolean {
   const bufferA = Buffer.from(a);

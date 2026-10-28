@@ -13,6 +13,8 @@ import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
 import { assertCorsIsExplicit, corsOrigins, loadEnv } from './config/env';
+import { assertBillingIsSafe } from './credits/billing';
+import { assertEmailTransportIsSafe } from './email/email';
 import { loadAuthConfig } from './auth/auth.config';
 import { createNestLoggerAdapter } from './logger/nest-logger';
 import { mountBullBoard } from './metrics/bull-board';
@@ -30,6 +32,11 @@ const UNVERSIONED_ROUTES = [
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
   assertCorsIsExplicit(env);
+  // Refuse to boot into production with a transport that writes one-shot reset
+  // tokens to the log stream.
+  assertEmailTransportIsSafe({ nodeEnv: env.NODE_ENV, provider: env.EMAIL_PROVIDER });
+  // And refuse to ship a top-up button that mints credits without a payment.
+  assertBillingIsSafe({ nodeEnv: env.NODE_ENV, provider: env.BILLING_PROVIDER });
   // Validates secret strength and TTL formats before the server accepts traffic.
   const authConfig = loadAuthConfig(process.env);
 

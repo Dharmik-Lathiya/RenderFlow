@@ -5,11 +5,13 @@ import type { Response } from 'express';
 import {
   RATE_LIMIT_RULES,
   RATE_LIMIT_STORE,
+  PreAuthRateLimitGuard,
   RateLimit,
   RateLimitByIp,
   RateLimitByUser,
   RateLimitGuard,
   RateLimitedError,
+  UserRateLimitGuard,
   setRateLimitHeaders,
   tightestDecision,
   type RateLimitScope,
@@ -570,5 +572,63 @@ describe('setRateLimitHeaders', () => {
 describe('store injection token', () => {
   it('is a symbol, so it cannot collide with a class token', () => {
     expect(typeof RATE_LIMIT_STORE).toBe('symbol');
+  });
+});
+
+/**
+ * The two-phase split.
+ *
+ * `user` scope needs `request.user`, which the pre-auth guard runs too early to
+ * see. Before the split it fell back to the IP, so an office of ten shared one
+ * generation budget while each of them was told the limit was theirs.
+ */
+describe('guard phases', () => {
+  it('the pre-auth guard leaves user rules to the post-auth guard', () => {
+    const store = new InMemoryRateLimitStore();
+    const guard = new PreAuthRateLimitGuard(
+      reflectorReturning([{ name: RATE_LIMIT_RULES.GENERATE_USER, scope: 'user' }]),
+      loadRateLimitConfig(configReader({})),
+      store,
+    );
+
+    const allowed = guard.canActivate(
+      contextFor(request({ user: { id: 'user-a' } }), responseDouble()),
+    );
+
+    expect(allowed).toBe(true);
+    // Nothing counted: this instance does not own the rule.
+    expect(store.size()).toBe(0);
+  });
+
+  it('the post-auth guard counts per user, not per address', () => {
+    const store = new InMemoryRateLimitStore();
+    const guard = new UserRateLimitGuard(
+      reflectorReturning([{ name: RATE_LIMIT_RULES.GENERATE_USER, scope: 'user' }]),
+      loadRateLimitConfig(configReader({ RATE_LIMIT_GENERATE_USER: '1/1h' })),
+      store,
+    );
+
+    const pass = (user: string): boolean =>
+      guard.canActivate(
+        contextFor(request({ ip: '203.0.113.9', user: { id: user } }), responseDouble()),
+      );
+
+    expect(pass('user-a')).toBe(true);
+    expect(() => pass('user-a')).toThrow(RateLimitedError);
+
+    // A colleague behind the same NAT has their own budget.
+    expect(pass('user-b')).toBe(true);
+  });
+
+  it('the post-auth guard ignores ip rules', () => {
+    const store = new InMemoryRateLimitStore();
+    const guard = new UserRateLimitGuard(
+      reflectorReturning([{ name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' }]),
+      loadRateLimitConfig(configReader({ RATE_LIMIT_LOGIN_IP: '1/15m' })),
+      store,
+    );
+
+    expect(guard.canActivate(contextFor(request(), responseDouble()))).toBe(true);
+    expect(store.size()).toBe(0);
   });
 });

@@ -24,6 +24,29 @@ export const RATE_LIMIT_RULES = {
   REGISTER_IP: 'REGISTER_IP',
   /** Per client IP. Cheap, but bounded so it cannot be used to exhaust the pool. */
   REFRESH_IP: 'REFRESH_IP',
+  /**
+   * Per user. Every generation reserves credits and then spends real provider
+   * money, so this is the limit that bounds a runaway script or a retry loop.
+   * Applied AFTER authentication, where the user id exists.
+   */
+  GENERATE_USER: 'GENERATE_USER',
+  /** Per user. A campaign reserves credits and fans out into posts. */
+  CAMPAIGN_USER: 'CAMPAIGN_USER',
+  /**
+   * Per user. Scheduling is free but creates publish jobs and queue entries; a
+   * loop here is a loop against a social platform's rate limit.
+   */
+  SCHEDULE_USER: 'SCHEDULE_USER',
+  /** Per user. Operator endpoints read across the tenant set and can replay work. */
+  ADMIN_USER: 'ADMIN_USER',
+  /** Per IP. Each accepted call sends an email and writes a one-shot token. */
+  FORGOT_PASSWORD_IP: 'FORGOT_PASSWORD_IP',
+  /** Per IP. Token guessing is bounded here as well as by the digest. */
+  RESET_PASSWORD_IP: 'RESET_PASSWORD_IP',
+  /** Per IP. Same reasoning as reset; verification links are also one-shot. */
+  VERIFY_EMAIL_IP: 'VERIFY_EMAIL_IP',
+  /** Per user. Bounds a stub top-up loop while billing has no real provider. */
+  TOPUP_USER: 'TOPUP_USER',
 } as const;
 
 export type RateLimitRuleName = (typeof RATE_LIMIT_RULES)[keyof typeof RATE_LIMIT_RULES];
@@ -55,6 +78,17 @@ const DEFAULT_SPECS = {
   LOGIN_ACCOUNT: '30/1h',
   REGISTER_IP: '5/1h',
   REFRESH_IP: '60/15m',
+  // Generous on purpose: these bound runaway automation, not ordinary use. A
+  // person producing a week of content does a handful an hour; a script does
+  // hundreds. Tightening them into a productivity limit would be the wrong tool.
+  GENERATE_USER: '30/1h',
+  CAMPAIGN_USER: '10/1h',
+  SCHEDULE_USER: '60/1h',
+  ADMIN_USER: '120/1h',
+  FORGOT_PASSWORD_IP: '5/1h',
+  RESET_PASSWORD_IP: '10/1h',
+  VERIFY_EMAIL_IP: '20/1h',
+  TOPUP_USER: '10/1h',
 } as const satisfies Readonly<Record<RateLimitRuleName, string>>;
 
 /**

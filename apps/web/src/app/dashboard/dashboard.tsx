@@ -89,7 +89,10 @@ export function Dashboard() {
               You have no credits left. Nothing is charged until work completes, so a failed job
               costs you nothing - but a new one needs a balance.
             </p>
-            <Link href="/brands">
+            {/* The pricing page, not the brands list: a user with no credits
+                needs to know what credits cost, and sending them to a page of
+                brands they cannot generate for is a dead end. */}
+            <Link href="/pricing">
               <Button variant="primary">See plans</Button>
             </Link>
           </div>

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { ArrowRight, MarketingPage } from '../components/marketing';
 import styles from './landing.module.css';
 
 /**
@@ -41,353 +42,280 @@ const FAQ = [
 ] as const;
 
 export function Landing({ fontClassName }: { fontClassName?: string }) {
-  const className = [styles.landing, fontClassName].filter(Boolean).join(' ');
-
   return (
-    <div className={className}>
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <Link href="/" className={styles.brand}>
-            <LogoMark />
-            <span>RenderFlow</span>
-          </Link>
+    <MarketingPage fontClassName={fontClassName}>
+      <section className={styles.hero} aria-labelledby="hero-title">
+        <div className={styles.heroCopy}>
+          <p className={styles.eyebrow}>
+            <span className={styles.eyebrowDot} aria-hidden="true" />
+            AI marketing studio for small teams
+          </p>
 
-          <nav className={styles.headerNav} aria-label="Primary">
-            <a className={styles.navLink} href="#features">
-              Features
-            </a>
-            <a className={styles.navLink} href="#how-it-works">
-              How it works
-            </a>
-            <a className={styles.navLink} href="#faq">
-              FAQ
-            </a>
-          </nav>
+          <h1 id="hero-title" className={styles.heroTitle}>
+            A month of marketing.
+            <span className={styles.heroTitleAccent}>Made in an afternoon.</span>
+          </h1>
 
-          <div className={styles.headerActions}>
-            <Link className={styles.signIn} href="/login">
-              Sign in
-            </Link>
+          <p className={styles.heroLede}>
+            RenderFlow turns one brand brief into captions, posters, carousels and reels, then
+            schedules the approved ones. Pay per asset, not per seat — and failed generations are
+            refunded.
+          </p>
+
+          <div className={styles.heroActions}>
             <Link className={styles.primaryCta} href="/register">
               Start free
               <ArrowRight className={styles.ctaArrow} />
             </Link>
+            <a className={styles.secondaryCta} href="#how-it-works">
+              See how it works
+            </a>
           </div>
+
+          <ul className={styles.proofRow}>
+            <li>
+              <CheckIcon className={styles.check} />
+              Free credits to start
+            </li>
+            <li>
+              <CheckIcon className={styles.check} />
+              No card required
+            </li>
+            <li>
+              <CheckIcon className={styles.check} />
+              Refunds on system failure
+            </li>
+          </ul>
         </div>
-      </header>
 
-      <main id="main">
-        <section className={styles.hero} aria-labelledby="hero-title">
-          <div className={styles.heroCopy}>
-            <p className={styles.eyebrow}>
-              <span className={styles.eyebrowDot} aria-hidden="true" />
-              AI marketing studio for small teams
+        <Preview />
+      </section>
+
+      <section className={styles.trust} aria-label="How RenderFlow protects your work">
+        <div className={styles.trustInner}>
+          <TrustItem
+            icon={<ShieldIcon />}
+            title="Refund on failure"
+            body="If generation fails after retries, the reserved credits go back automatically."
+          />
+          <TrustItem
+            icon={<RepeatIcon />}
+            title="No double posts"
+            body="Publishing checks for the existing platform post before any retry is allowed."
+          />
+          <TrustItem
+            icon={<KeyIcon />}
+            title="Tokens encrypted"
+            body="Social credentials are encrypted at rest with AES-256-GCM and never returned."
+          />
+        </div>
+      </section>
+
+      <section id="features" className={styles.section} aria-labelledby="features-title">
+        <div className={styles.sectionHead}>
+          <p className={styles.eyebrow}>One studio, end to end</p>
+          <h2 id="features-title" className={styles.sectionTitle}>
+            From brief to published, without the handoffs.
+          </h2>
+          <p className={styles.sectionLede}>
+            The same system writes the campaign, keeps the calendar honest, and makes sure a retry
+            cannot charge you twice. The parts that usually break are the parts we built first.
+          </p>
+        </div>
+
+        <div className={styles.features}>
+          <Feature icon={<SparkIcon />} title="Brief in. Campaign out." wide>
+            <p>
+              Describe the brand and the goal. RenderFlow plans the campaign and drafts the assets
+              in your voice — first as a structured plan, then as finished work.
             </p>
-
-            <h1 id="hero-title" className={styles.heroTitle}>
-              A month of marketing.
-              <span className={styles.heroTitleAccent}>Made in an afternoon.</span>
-            </h1>
-
-            <p className={styles.heroLede}>
-              RenderFlow turns one brand brief into captions, posters, carousels and reels, then
-              schedules the approved ones. Pay per asset, not per seat — and failed generations are
-              refunded.
-            </p>
-
-            <div className={styles.heroActions}>
-              <Link className={styles.primaryCta} href="/register">
-                Start free
-                <ArrowRight className={styles.ctaArrow} />
-              </Link>
-              <a className={styles.secondaryCta} href="#how-it-works">
-                See how it works
-              </a>
+            <div className={styles.featureVisual}>
+              <div className={styles.chipRow}>
+                <span className={styles.chip}>Caption</span>
+                <span className={styles.chip}>Poster</span>
+                <span className={styles.chip}>Carousel</span>
+                <span className={styles.chip}>Reel</span>
+              </div>
+              <div className={styles.planLine} aria-hidden="true">
+                <span className={styles.planNode} />
+                <span className={styles.planBar} />
+                <span className={styles.planNode} />
+                <span className={styles.planBarShort} />
+                <span className={styles.planNode} />
+              </div>
             </div>
+          </Feature>
 
-            <ul className={styles.proofRow}>
-              <li>
-                <CheckIcon className={styles.check} />
-                Free credits to start
-              </li>
-              <li>
-                <CheckIcon className={styles.check} />
-                No card required
-              </li>
-              <li>
-                <CheckIcon className={styles.check} />
-                Refunds on system failure
-              </li>
-            </ul>
-          </div>
-
-          <Preview />
-        </section>
-
-        <section className={styles.trust} aria-label="How RenderFlow protects your work">
-          <div className={styles.trustInner}>
-            <TrustItem
-              icon={<ShieldIcon />}
-              title="Refund on failure"
-              body="If generation fails after retries, the reserved credits go back automatically."
-            />
-            <TrustItem
-              icon={<RepeatIcon />}
-              title="No double posts"
-              body="Publishing checks for the existing platform post before any retry is allowed."
-            />
-            <TrustItem
-              icon={<KeyIcon />}
-              title="Tokens encrypted"
-              body="Social credentials are encrypted at rest with AES-256-GCM and never returned."
-            />
-          </div>
-        </section>
-
-        <section id="features" className={styles.section} aria-labelledby="features-title">
-          <div className={styles.sectionHead}>
-            <p className={styles.eyebrow}>One studio, end to end</p>
-            <h2 id="features-title" className={styles.sectionTitle}>
-              From brief to published, without the handoffs.
-            </h2>
-            <p className={styles.sectionLede}>
-              The same system writes the campaign, keeps the calendar honest, and makes sure a retry
-              cannot charge you twice. The parts that usually break are the parts we built first.
+          <Feature icon={<CalendarIcon />} title="A calendar that keeps up.">
+            <p>
+              Drag a post to another day, or use the date field on the card. Every move keeps its
+              time and can be moved back.
             </p>
-          </div>
-
-          <div className={styles.features}>
-            <Feature icon={<SparkIcon />} title="Brief in. Campaign out." wide>
-              <p>
-                Describe the brand and the goal. RenderFlow plans the campaign and drafts the assets
-                in your voice — first as a structured plan, then as finished work.
-              </p>
-              <div className={styles.featureVisual}>
-                <div className={styles.chipRow}>
-                  <span className={styles.chip}>Caption</span>
-                  <span className={styles.chip}>Poster</span>
-                  <span className={styles.chip}>Carousel</span>
-                  <span className={styles.chip}>Reel</span>
-                </div>
-                <div className={styles.planLine} aria-hidden="true">
-                  <span className={styles.planNode} />
-                  <span className={styles.planBar} />
-                  <span className={styles.planNode} />
-                  <span className={styles.planBarShort} />
-                  <span className={styles.planNode} />
-                </div>
+            <div className={styles.featureVisual} aria-hidden="true">
+              <div className={styles.week}>
+                <span className={styles.day}>Mon</span>
+                <span className={styles.day}>Tue</span>
+                <span className={`${styles.day} ${styles.dayActive}`}>Wed</span>
+                <span className={styles.day}>Thu</span>
+                <span className={styles.day}>Fri</span>
               </div>
-            </Feature>
+            </div>
+          </Feature>
 
-            <Feature icon={<CalendarIcon />} title="A calendar that keeps up.">
-              <p>
-                Drag a post to another day, or use the date field on the card. Every move keeps its
-                time and can be moved back.
-              </p>
-              <div className={styles.featureVisual} aria-hidden="true">
-                <div className={styles.week}>
-                  <span className={styles.day}>Mon</span>
-                  <span className={styles.day}>Tue</span>
-                  <span className={`${styles.day} ${styles.dayActive}`}>Wed</span>
-                  <span className={styles.day}>Thu</span>
-                  <span className={styles.day}>Fri</span>
-                </div>
+          <Feature icon={<ReceiptIcon />} title="Credits you can audit.">
+            <p>
+              Reserve first, capture on success, refund on failure. The ledger is append-only, and
+              reconciliation can prove the balance.
+            </p>
+            <div className={styles.featureVisual} aria-hidden="true">
+              <div className={styles.miniLedger}>
+                <span>Reserve</span>
+                <span className={styles.ledgerArrow}>→</span>
+                <span className={styles.ledgerGood}>Capture</span>
               </div>
-            </Feature>
-
-            <Feature icon={<ReceiptIcon />} title="Credits you can audit.">
-              <p>
-                Reserve first, capture on success, refund on failure. The ledger is append-only, and
-                reconciliation can prove the balance.
-              </p>
-              <div className={styles.featureVisual} aria-hidden="true">
-                <div className={styles.miniLedger}>
-                  <span>Reserve</span>
-                  <span className={styles.ledgerArrow}>→</span>
-                  <span className={styles.ledgerGood}>Capture</span>
-                </div>
-                <div className={styles.miniLedger}>
-                  <span>Failure</span>
-                  <span className={styles.ledgerArrow}>→</span>
-                  <span className={styles.ledgerWarm}>Refund</span>
-                </div>
+              <div className={styles.miniLedger}>
+                <span>Failure</span>
+                <span className={styles.ledgerArrow}>→</span>
+                <span className={styles.ledgerWarm}>Refund</span>
               </div>
-            </Feature>
+            </div>
+          </Feature>
 
-            <Feature icon={<ShieldIcon />} title="Publishing that survives retries.">
-              <p>
-                A transactional outbox, leases and heartbeats mean a crashed worker cannot lose a
-                job. Idempotency at three levels means it cannot post twice.
-              </p>
-              <div className={styles.featureVisual} aria-hidden="true">
-                <div className={styles.flow}>
-                  <span className={styles.flowStep}>Outbox</span>
-                  <ArrowRight className={styles.flowArrow} />
-                  <span className={styles.flowStep}>Worker</span>
-                  <ArrowRight className={styles.flowArrow} />
-                  <span className={`${styles.flowStep} ${styles.flowStepGood}`}>Published</span>
-                </div>
+          <Feature icon={<ShieldIcon />} title="Publishing that survives retries.">
+            <p>
+              A transactional outbox, leases and heartbeats mean a crashed worker cannot lose a job.
+              Idempotency at three levels means it cannot post twice.
+            </p>
+            <div className={styles.featureVisual} aria-hidden="true">
+              <div className={styles.flow}>
+                <span className={styles.flowStep}>Outbox</span>
+                <ArrowRight className={styles.flowArrow} />
+                <span className={styles.flowStep}>Worker</span>
+                <ArrowRight className={styles.flowArrow} />
+                <span className={`${styles.flowStep} ${styles.flowStepGood}`}>Published</span>
               </div>
-            </Feature>
+            </div>
+          </Feature>
 
-            <Feature icon={<ChartIcon />} title="Numbers with a next move.">
-              <p>
-                Platform snapshots feed a campaign view, then a suggestion for what to make next —
-                based on what already worked, not on a horoscope.
-              </p>
-              <div className={styles.featureVisual} aria-hidden="true">
-                <div className={styles.bars}>
-                  <span className={styles.bar} style={{ height: '38%' }} />
-                  <span className={styles.bar} style={{ height: '58%' }} />
-                  <span className={`${styles.bar} ${styles.barHot}`} style={{ height: '88%' }} />
-                  <span className={styles.bar} style={{ height: '52%' }} />
-                  <span className={styles.bar} style={{ height: '68%' }} />
-                </div>
-                <p className={styles.suggestion}>
-                  <SparkIcon /> Try a carousel next
-                </p>
+          <Feature icon={<ChartIcon />} title="Numbers with a next move.">
+            <p>
+              Platform snapshots feed a campaign view, then a suggestion for what to make next —
+              based on what already worked, not on a horoscope.
+            </p>
+            <div className={styles.featureVisual} aria-hidden="true">
+              <div className={styles.bars}>
+                <span className={styles.bar} style={{ height: '38%' }} />
+                <span className={styles.bar} style={{ height: '58%' }} />
+                <span className={`${styles.bar} ${styles.barHot}`} style={{ height: '88%' }} />
+                <span className={styles.bar} style={{ height: '52%' }} />
+                <span className={styles.bar} style={{ height: '68%' }} />
               </div>
-            </Feature>
-          </div>
-        </section>
-
-        <section id="how-it-works" className={styles.section} aria-labelledby="how-it-works-title">
-          <div className={styles.sectionHead}>
-            <p className={styles.eyebrow}>Three steps, one afternoon</p>
-            <h2 id="how-it-works-title" className={styles.sectionTitle}>
-              You bring the brand. The studio does the rest.
-            </h2>
-          </div>
-
-          <ol className={styles.steps}>
-            <li className={styles.step}>
-              <span className={styles.stepNumber} aria-hidden="true">
-                01
-              </span>
-              <h3>Tell us about your brand.</h3>
-              <p>
-                Industry, colours, languages and tone. One brief becomes the context for every
-                asset, so the campaign sounds like you.
+              <p className={styles.suggestion}>
+                <SparkIcon /> Try a carousel next
               </p>
-            </li>
-            <li className={styles.step}>
-              <span className={styles.stepNumber} aria-hidden="true">
-                02
-              </span>
-              <h3>Generate, then approve.</h3>
-              <p>
-                The studio drafts the plan, captions and visuals. Keep what fits, edit the rest, or
-                regenerate a single scene without redoing the whole reel.
-              </p>
-            </li>
-            <li className={styles.step}>
-              <span className={styles.stepNumber} aria-hidden="true">
-                03
-              </span>
-              <h3>Schedule once.</h3>
-              <p>
-                Pick accounts and slots. RenderFlow publishes on time, records the platform id, and
-                retries safely if a provider stumbles.
-              </p>
-            </li>
-          </ol>
-        </section>
+            </div>
+          </Feature>
+        </div>
+      </section>
 
-        <section className={styles.quoteBand} aria-label="The reliability brief">
-          <div className={styles.quoteInner}>
-            <span className={styles.quoteMark} aria-hidden="true">
-              “
+      <section id="how-it-works" className={styles.section} aria-labelledby="how-it-works-title">
+        <div className={styles.sectionHead}>
+          <p className={styles.eyebrow}>Three steps, one afternoon</p>
+          <h2 id="how-it-works-title" className={styles.sectionTitle}>
+            You bring the brand. The studio does the rest.
+          </h2>
+        </div>
+
+        <ol className={styles.steps}>
+          <li className={styles.step}>
+            <span className={styles.stepNumber} aria-hidden="true">
+              01
             </span>
-            <p className={styles.quoteText}>
-              A crash at any point must never lose a job, double charge, or double post.
+            <h3>Tell us about your brand.</h3>
+            <p>
+              Industry, colours, languages and tone. One brief becomes the context for every asset,
+              so the campaign sounds like you.
             </p>
-            <p className={styles.quoteAttribution}>The RenderFlow design brief</p>
-          </div>
-        </section>
+          </li>
+          <li className={styles.step}>
+            <span className={styles.stepNumber} aria-hidden="true">
+              02
+            </span>
+            <h3>Generate, then approve.</h3>
+            <p>
+              The studio drafts the plan, captions and visuals. Keep what fits, edit the rest, or
+              regenerate a single scene without redoing the whole reel.
+            </p>
+          </li>
+          <li className={styles.step}>
+            <span className={styles.stepNumber} aria-hidden="true">
+              03
+            </span>
+            <h3>Schedule once.</h3>
+            <p>
+              Pick accounts and slots. RenderFlow publishes on time, records the platform id, and
+              retries safely if a provider stumbles.
+            </p>
+          </li>
+        </ol>
+      </section>
 
-        <section id="faq" className={`${styles.section} ${styles.faq}`} aria-labelledby="faq-title">
+      <section className={styles.quoteBand} aria-label="The reliability brief">
+        <div className={styles.quoteInner}>
+          <span className={styles.quoteMark} aria-hidden="true">
+            “
+          </span>
+          <p className={styles.quoteText}>
+            A crash at any point must never lose a job, double charge, or double post.
+          </p>
+          <p className={styles.quoteAttribution}>The RenderFlow design brief</p>
+        </div>
+      </section>
+
+      <section id="faq" className={`${styles.section} ${styles.faq}`} aria-labelledby="faq-title">
+        <div>
+          <p className={styles.eyebrow}>Questions, answered</p>
+          <h2 id="faq-title" className={styles.sectionTitle}>
+            Before you write the first brief.
+          </h2>
+          <p className={styles.sectionLede}>
+            No hidden subscription, no charge for a failed render, and nothing published without
+            your approval.
+          </p>
+        </div>
+
+        <div className={styles.faqList}>
+          {FAQ.map((item) => (
+            <details key={item.question} className={styles.faqItem}>
+              <summary>
+                {item.question}
+                <span className={styles.faqIcon} aria-hidden="true">
+                  +
+                </span>
+              </summary>
+              <p className={styles.faqAnswer}>{item.answer}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.finalCta} aria-labelledby="final-cta-title">
+        <div className={styles.finalPanel}>
           <div>
-            <p className={styles.eyebrow}>Questions, answered</p>
-            <h2 id="faq-title" className={styles.sectionTitle}>
-              Before you write the first brief.
+            <h2 id="final-cta-title" className={styles.finalTitle}>
+              Your next campaign is one brief away.
             </h2>
-            <p className={styles.sectionLede}>
-              No hidden subscription, no charge for a failed render, and nothing published without
-              your approval.
+            <p className={styles.finalCopy}>
+              Start with free credits. Approve every asset. Let the calendar do the remembering.
             </p>
           </div>
-
-          <div className={styles.faqList}>
-            {FAQ.map((item) => (
-              <details key={item.question} className={styles.faqItem}>
-                <summary>
-                  {item.question}
-                  <span className={styles.faqIcon} aria-hidden="true">
-                    +
-                  </span>
-                </summary>
-                <p className={styles.faqAnswer}>{item.answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        <section className={styles.finalCta} aria-labelledby="final-cta-title">
-          <div className={styles.finalPanel}>
-            <div>
-              <h2 id="final-cta-title" className={styles.finalTitle}>
-                Your next campaign is one brief away.
-              </h2>
-              <p className={styles.finalCopy}>
-                Start with free credits. Approve every asset. Let the calendar do the remembering.
-              </p>
-            </div>
-            <Link className={styles.primaryCta} href="/register">
-              Start free
-              <ArrowRight className={styles.ctaArrow} />
-            </Link>
-          </div>
-        </section>
-      </main>
-
-      <footer className={styles.footer}>
-        <div className={styles.footerInner}>
-          <div>
-            <Link href="/" className={styles.brand}>
-              <LogoMark />
-              <span>RenderFlow</span>
-            </Link>
-            <p className={styles.footerCopy}>
-              An AI marketing studio and social scheduler for teams that would rather ship the
-              campaign than chase the calendar.
-            </p>
-          </div>
-
-          <nav className={styles.footerNav} aria-label="Footer">
-            <a className={styles.footerLink} href="#features">
-              Features
-            </a>
-            <a className={styles.footerLink} href="#how-it-works">
-              How it works
-            </a>
-            <a className={styles.footerLink} href="#faq">
-              FAQ
-            </a>
-            <Link className={styles.footerLink} href="/login">
-              Sign in
-            </Link>
-            <Link className={styles.footerLink} href="/register">
-              Create account
-            </Link>
-          </nav>
+          <Link className={styles.primaryCta} href="/register">
+            Start free
+            <ArrowRight className={styles.ctaArrow} />
+          </Link>
         </div>
-
-        <div className={styles.footerMeta}>
-          <span>© {new Date().getFullYear()} RenderFlow</span>
-          <span>Built for small teams with big calendars.</span>
-        </div>
-      </footer>
-    </div>
+      </section>
+    </MarketingPage>
   );
 }
 
@@ -525,35 +453,6 @@ function Preview() {
         Preview · sample data. Your studio starts with free credits.
       </figcaption>
     </figure>
-  );
-}
-
-function LogoMark() {
-  return (
-    <svg className={styles.brandMark} viewBox="0 0 28 28" width="26" height="26" aria-hidden="true">
-      <rect x="3" y="4" width="14" height="5" rx="2.5" fill="#2563eb" />
-      <rect x="9" y="11.5" width="16" height="5" rx="2.5" fill="#60a5fa" />
-      <rect x="5" y="19" width="12" height="5" rx="2.5" fill="#ea580c" />
-    </svg>
-  );
-}
-
-function ArrowRight({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 20 20"
-      width="17"
-      height="17"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 10h11M11 5l5 5-5 5" />
-    </svg>
   );
 }
 

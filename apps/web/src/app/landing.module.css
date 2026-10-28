@@ -39,6 +39,11 @@
   font-size: 1.0625rem;
   line-height: 1.65;
   overflow-wrap: break-word;
+  /* The hero preview's glow layer is deliberately larger than its card, which
+     would otherwise widen the document past the viewport on a phone and push
+     the header CTA off-screen. `clip` (not `hidden`) keeps the sticky header
+     working, because it does not create a scroll container. */
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -170,12 +175,14 @@
 
 .hero {
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  /* The preview gets real weight here. At 1.05/0.95 it was a 520px widget
+     floating beside a 78px headline, so the right half read as empty. */
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
   align-items: center;
-  gap: clamp(32px, 5vw, 72px);
+  gap: clamp(32px, 4.5vw, 64px);
   max-width: 1200px;
   margin: 0 auto;
-  padding: clamp(56px, 9vw, 104px) 24px clamp(48px, 7vw, 88px);
+  padding: clamp(52px, 7vw, 88px) 24px clamp(56px, 7vw, 96px);
 }
 
 .heroCopy {
@@ -203,23 +210,28 @@
 }
 
 .heroTitle {
-  max-width: 13ch;
-  margin: 0 0 22px;
+  /* 13ch at a 4.9rem cap produced a four-line 78px block that ate the fold and
+     pushed the proof row under it. 15ch at 4.25rem keeps the same line breaks
+     with noticeably less weight on the page. */
+  max-width: 15ch;
+  margin: 0 0 20px;
   font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.75rem, 6.4vw, 4.9rem);
+  font-size: clamp(2.6rem, 5.2vw, 4.25rem);
   font-weight: 400;
-  letter-spacing: -0.035em;
-  line-height: 0.99;
-  text-wrap: balance;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  /* Deliberately NOT `text-wrap: balance`. Balance equalises the two blocks and
+     breaks the first sentence as "A month" / "of marketing.", which orphans the
+     article. Greedy wrapping gives the intended "A month of" / "marketing." */
 }
 
 .heroTitleAccent {
   display: block;
-  color: var(--lp-blue);
+  color: var(--lp-blue-ink);
 }
 
 .heroLede {
-  max-width: 35rem;
+  max-width: 33rem;
   margin: 0;
   color: var(--lp-muted);
   font-size: clamp(1.05rem, 1.6vw, 1.2rem);
@@ -281,8 +293,20 @@
 
 .previewWrap {
   position: relative;
+  isolation: isolate;
   min-width: 0;
   margin: 0;
+}
+
+/* A soft blue wash so the card sits on the page instead of being pasted onto it. */
+.previewWrap::before {
+  position: absolute;
+  z-index: -1;
+  inset: -10% -8% -12% -8%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(37, 99, 235, 0.16), transparent 72%);
+  content: '';
+  pointer-events: none;
 }
 
 .previewFrame {
@@ -290,26 +314,23 @@
   border: 1px solid var(--lp-border);
   border-radius: 18px;
   background: var(--lp-surface);
+  /* Straight, stacked shadows. The old -0.5deg tilt made the frame look like a
+     sticker and left visible ragged edges at the page margins. */
   box-shadow:
-    0 30px 70px -30px rgba(15, 23, 42, 0.35),
-    0 2px 6px rgba(15, 23, 42, 0.05);
-  transform: rotate(-0.5deg);
-  transition: transform 200ms ease;
-}
-
-.previewFrame:hover {
-  transform: rotate(0deg);
+    0 40px 80px -44px rgba(15, 23, 42, 0.5),
+    0 14px 32px -18px rgba(15, 23, 42, 0.22),
+    0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .previewBar {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--lp-border);
   background: var(--lp-surface-2);
   color: var(--lp-muted);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .dots {
@@ -337,7 +358,7 @@
   border-radius: 999px;
   background: var(--lp-surface);
   color: var(--lp-muted);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -345,14 +366,14 @@
 
 .previewBody {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 12px;
-  padding: 14px;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 14px;
+  padding: 16px;
 }
 
 .previewMain {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -366,7 +387,7 @@
 .previewCampaign strong {
   display: block;
   font-family: var(--font-landing-display, Georgia), Georgia, serif;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   font-weight: 400;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -376,7 +397,7 @@
   display: block;
   margin-bottom: 4px;
   color: var(--lp-muted);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -389,12 +410,12 @@
   border-radius: 999px;
   background: #eff6ff;
   color: var(--lp-blue-ink);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 650;
 }
 
 .captionCard {
-  padding: 14px;
+  padding: 16px;
   border: 1px solid var(--lp-border);
   border-radius: 12px;
   background: var(--lp-surface);
@@ -403,7 +424,7 @@
 .captionCard p {
   margin: 0 0 10px;
   color: #334155;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   line-height: 1.55;
 }
 
@@ -418,7 +439,7 @@
   border-radius: 999px;
   background: #eff6ff;
   color: var(--lp-blue-ink);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -433,11 +454,11 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 92px;
-  padding: 10px;
+  min-height: 108px;
+  padding: 12px;
   border: 1px solid var(--lp-border);
   border-radius: 12px;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 650;
 }
 
@@ -456,7 +477,7 @@
 }
 
 .assetMeta {
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 400;
   opacity: 0.8;
 }
@@ -488,7 +509,7 @@
 }
 
 .sideCard {
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--lp-border);
   border-radius: 12px;
   background: var(--lp-surface);
@@ -498,9 +519,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--lp-border);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .slotDay {
@@ -529,15 +550,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 7px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--lp-border);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .ledgerState,
 .ledgerGood,
 .ledgerWarm {
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -556,9 +577,9 @@
 }
 
 .previewCaption {
-  margin-top: 12px;
+  margin-top: 14px;
   color: var(--lp-muted);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   text-align: center;
 }
 
@@ -573,40 +594,41 @@
 .trustInner {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  gap: 32px;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 28px 24px;
+  padding: 34px 24px;
 }
 
 .trustItem {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
 }
 
 .trustIcon {
   display: grid;
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  border-radius: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
   background: #eff6ff;
   color: var(--lp-blue);
 }
 
 .trustItem strong {
   display: block;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   letter-spacing: -0.005em;
 }
 
 .trustItem p {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   color: var(--lp-muted);
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  font-size: 0.875rem;
+  line-height: 1.55;
 }
 
 /* --- Sections ------------------------------------------------------------ */
@@ -614,12 +636,12 @@
 .section {
   max-width: 1200px;
   margin: 0 auto;
-  padding: clamp(64px, 9vw, 112px) 24px;
+  padding: clamp(60px, 7.5vw, 96px) 24px;
 }
 
 .sectionHead {
   max-width: 44rem;
-  margin-bottom: clamp(32px, 5vw, 52px);
+  margin-bottom: clamp(28px, 4vw, 44px);
 }
 
 .sectionTitle {
@@ -654,10 +676,18 @@
   grid-column: span 2;
   gap: 12px;
   min-width: 0;
-  padding: 24px;
+  padding: 26px;
   border: 1px solid var(--lp-border);
-  border-radius: 16px;
+  border-radius: 18px;
   background: var(--lp-surface);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.feature:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 16px 32px -24px rgba(15, 23, 42, 0.28);
 }
 
 .featureWide {
@@ -676,7 +706,7 @@
 
 .feature h3 {
   margin: 2px 0 0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.3;
@@ -824,6 +854,8 @@
   align-items: flex-end;
   gap: 5px;
   height: 46px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--lp-border);
 }
 
 .bar {
@@ -1027,8 +1059,12 @@
   overflow: hidden;
   padding: clamp(36px, 6vw, 64px);
   border-radius: 24px;
-  background: var(--lp-blue);
+  /* Deep navy, matching the quote band. A saturated #2563eb panel next to an
+     orange button was the loudest colour moment on the page and the least
+     legible: navy keeps the orange CTA as the only accent. */
+  background: linear-gradient(135deg, #0b1220 0%, #14224a 58%, #1e3a8a 100%);
   color: #ffffff;
+  box-shadow: 0 30px 60px -40px rgba(15, 23, 42, 0.6);
 }
 
 .finalPanel::before,
@@ -1072,7 +1108,7 @@
 .finalCopy {
   max-width: 32rem;
   margin: 0;
-  color: #dbeafe;
+  color: #c7d2fe;
   font-size: 1rem;
   line-height: 1.6;
 }
@@ -1090,12 +1126,12 @@
 
 .footerInner {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr);
   align-items: start;
-  gap: 24px;
+  gap: 40px;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 36px 24px 24px;
+  padding: 44px 24px 32px;
 }
 
 .footerCopy {
@@ -1108,15 +1144,30 @@
 
 .footerNav {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px 20px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.footerGroupTitle {
+  margin: 0 0 6px;
+  color: var(--lp-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.footerGroups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
 }
 
 .footerLink {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 36px;
+  width: fit-content;
   color: var(--lp-muted);
   font-size: 0.875rem;
   text-decoration: none;
@@ -1138,7 +1189,6 @@
   color: var(--lp-muted);
   font-size: 0.8125rem;
 }
-
 /* --- Motion -------------------------------------------------------------- */
 
 @keyframes landingRise {
@@ -1170,10 +1220,6 @@
     animation: none !important;
     transition-duration: 0.01ms !important;
   }
-
-  .previewFrame {
-    transform: none;
-  }
 }
 
 /* --- Responsive ---------------------------------------------------------- */
@@ -1185,10 +1231,6 @@
 
   .heroTitle {
     max-width: 16ch;
-  }
-
-  .previewFrame:hover {
-    transform: none;
   }
 
   .features {
@@ -1226,10 +1268,7 @@
 
   .footerInner {
     grid-template-columns: 1fr;
-  }
-
-  .footerNav {
-    justify-content: flex-start;
+    gap: 28px;
   }
 
   .finalPanel {
@@ -1287,6 +1326,10 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .footerGroups {
+    gap: 20px;
+  }
+
   .heroActions {
     align-items: flex-start;
     flex-direction: column;
@@ -1317,5 +1360,9 @@
 
   .previewSide {
     grid-template-columns: 1fr;
+  }
+
+  .footerGroups {
+    grid-template-columns: 1fr 1fr;
   }
 }

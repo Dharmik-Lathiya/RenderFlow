@@ -3,11 +3,12 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
 import { envSchema } from './config/env';
-import { RateLimitGuard } from './ratelimit/rate-limit.guard';
+import { PreAuthRateLimitGuard, UserRateLimitGuard } from './ratelimit/rate-limit.guard';
 import { RateLimitModule } from './ratelimit/rate-limit.module';
 import { AuthGuard, RolesGuard } from './auth/auth.guard';
 import { CSRF_OPTIONS, CsrfGuard } from './auth/csrf.guard';
 import { AuthModule } from './auth/auth.module';
+import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
@@ -40,6 +41,7 @@ import { UsersModule } from './users/users.module';
       validate: (config: Record<string, unknown>) => envSchema.parse(config),
     }),
     RateLimitModule,
+    EmailModule,
     AuthModule,
     OpenApiModule,
     WorkspacesModule,
@@ -59,15 +61,30 @@ import { UsersModule } from './users/users.module';
     // dependency rather than a default value.
     {
       provide: CSRF_OPTIONS,
-      useValue: { exemptPaths: ['/auth/login', '/auth/register'] } as const,
+      // Account recovery is exempt for the same reason as login itself: the
+      // caller has no session, so there is no CSRF cookie to echo. Each of these
+      // is rate limited and every token is single-use.
+      useValue: {
+        exemptPaths: [
+          '/auth/login',
+          '/auth/register',
+          '/auth/forgot-password',
+          '/auth/reset-password',
+          '/auth/verify-email',
+        ],
+      } as const,
     },
-    // RateLimitGuard runs FIRST, ahead of CSRF and authentication: the work it
-    // protects is ~50ms of argon2 per login, which has already been spent by the
-    // time any handler runs. Limiting after the hash would bound the database
+    // The IP/email guard runs FIRST, ahead of CSRF and authentication: the work
+    // it protects is ~50ms of argon2 per login, which has already been spent by
+    // the time any handler runs. Limiting after the hash would bound the database
     // but not the CPU, which is the actual denial-of-service surface here.
-    { provide: APP_GUARD, useClass: RateLimitGuard },
+    { provide: APP_GUARD, useClass: PreAuthRateLimitGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
+    // The user-scoped guard must come after AuthGuard: before it, `request.user`
+    // is empty and a user limit silently degrades to a per-IP one, which puts
+    // everyone in an office on one budget.
+    { provide: APP_GUARD, useClass: UserRateLimitGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })

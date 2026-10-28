@@ -57,6 +57,36 @@ export const envSchema = z.object({
   RATE_LIMIT_LOGIN_ACCOUNT: rateLimitSpecSchema.default('30/1h'),
   RATE_LIMIT_REGISTER_IP: rateLimitSpecSchema.default('5/1h'),
   RATE_LIMIT_REFRESH_IP: rateLimitSpecSchema.default('60/15m'),
+  // Authenticated, cost-incurring routes. Enforced after authentication so the
+  // key is the user, not the address their office shares.
+  RATE_LIMIT_GENERATE_USER: rateLimitSpecSchema.default('30/1h'),
+  RATE_LIMIT_CAMPAIGN_USER: rateLimitSpecSchema.default('10/1h'),
+  RATE_LIMIT_SCHEDULE_USER: rateLimitSpecSchema.default('60/1h'),
+  RATE_LIMIT_ADMIN_USER: rateLimitSpecSchema.default('120/1h'),
+  // Account recovery. Tight: each accepted call sends a mail and writes a row.
+  RATE_LIMIT_FORGOT_PASSWORD_IP: rateLimitSpecSchema.default('5/1h'),
+  RATE_LIMIT_RESET_PASSWORD_IP: rateLimitSpecSchema.default('10/1h'),
+  RATE_LIMIT_VERIFY_EMAIL_IP: rateLimitSpecSchema.default('20/1h'),
+
+  // --- transactional email ---
+  /**
+   * `log` prints the message (including the one-shot link) to the log for local
+   * development and is REFUSED when NODE_ENV=production; `none` drops mail.
+   * A real provider adapter plugs in at `email.module.ts`.
+   */
+  EMAIL_PROVIDER: z.enum(['log', 'none']).default('log'),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
+  EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().positive().default(48),
+
+  // --- billing ---
+  /**
+   * `stub` grants a credit pack without taking money, for local demos and for
+   * exercising the PURCHASE ledger path. It is REFUSED when NODE_ENV=production,
+   * because it is a button that mints credits.
+   */
+  BILLING_PROVIDER: z.enum(['disabled', 'stub']).default('disabled'),
+  /** Credits granted by one stub top-up. */
+  TOPUP_CREDITS: z.coerce.number().int().positive().default(50),
 
   // --- database logging ---
   DB_LOG_LEVELS: z.string().default('warn,error'),

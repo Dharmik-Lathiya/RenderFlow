@@ -111,6 +111,11 @@ export interface DomainClient {
     login(body: unknown, options?: RequestOptions): Promise<AuthResponse>;
     logout(options?: RequestOptions): Promise<void>;
     me(options?: RequestOptions): Promise<MeResponse>;
+    /** Always resolves: the API answers 202 whether or not the address exists. */
+    forgotPassword(email: string, options?: RequestOptions): Promise<void>;
+    resetPassword(token: string, password: string, options?: RequestOptions): Promise<void>;
+    verifyEmail(token: string, options?: RequestOptions): Promise<void>;
+    resendVerification(options?: RequestOptions): Promise<void>;
   };
 
   credits: {
@@ -235,6 +240,18 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
         await transport.post('/auth/logout', undefined, opts);
       },
       me: (opts) => parse(() => transport.get('/auth/me', opts), meResponseSchema, 'auth.me'),
+      forgotPassword: async (email, opts) => {
+        await transport.post('/auth/forgot-password', { email }, opts);
+      },
+      resetPassword: async (token, password, opts) => {
+        await transport.post('/auth/reset-password', { token, password }, opts);
+      },
+      verifyEmail: async (token, opts) => {
+        await transport.post('/auth/verify-email', { token }, opts);
+      },
+      resendVerification: async (opts) => {
+        await transport.post('/auth/resend-verification', undefined, opts);
+      },
     },
 
     credits: {

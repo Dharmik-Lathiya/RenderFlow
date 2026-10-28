@@ -141,6 +141,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
           <Button type="submit" variant="primary" busy={submitting}>
             {mode === 'register' ? 'Create account' : 'Sign in'}
           </Button>
+
+          {mode === 'login' && (
+            <p>
+              <a href="/forgot-password">Forgot your password?</a>
+            </p>
+          )}
         </form>
       </Card>
     </div>

@@ -1,0 +1,1 @@
+ALTER TABLE "brands" DROP COLUMN "logo_asset_id";

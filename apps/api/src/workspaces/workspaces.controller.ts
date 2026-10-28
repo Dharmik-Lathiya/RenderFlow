@@ -18,6 +18,7 @@ import { z } from 'zod';
 
 import { CurrentUser } from '../auth/auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.guard';
+import { RATE_LIMIT_RULES, RateLimitByUser } from '../ratelimit/rate-limit.guard';
 import { StudioService } from './studio.service';
 import {
   createBrandSchema,
@@ -169,6 +170,9 @@ export class StudioController {
     return this.studio.listCampaigns(user.id, brandId);
   }
 
+  // A campaign reserves credits and fans out into posts, so a loop here is a
+  // spender even though the request itself looks like a plain create.
+  @RateLimitByUser(RATE_LIMIT_RULES.CAMPAIGN_USER)
   @Post('campaigns')
   @ApiOperation({ summary: 'Create a campaign (EDITOR+)' })
   async createCampaign(@CurrentUser() user: AuthenticatedUser, @Body() body: unknown) {

@@ -15,6 +15,7 @@ import { ValidationFailedError } from '@renderflow/common';
 import type { Response } from 'express';
 
 import { CurrentUser, type AuthenticatedUser } from '../auth/auth.guard';
+import { RATE_LIMIT_RULES, RateLimitByUser } from '../ratelimit/rate-limit.guard';
 import { JobsService, generateSchema } from './jobs.service';
 
 const uuidParam = new ParseUUIDPipe({ version: '4' });
@@ -29,6 +30,9 @@ const SSE_MAX_MS = 120_000;
 export class JobsController {
   constructor(private readonly jobs: JobsService) {}
 
+  // Bounds a retry loop before it can reserve credits in a loop. Keyed on the
+  // authenticated user, which is why this guard runs after AuthGuard.
+  @RateLimitByUser(RATE_LIMIT_RULES.GENERATE_USER)
   @Post('posts/:postId/generate')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({

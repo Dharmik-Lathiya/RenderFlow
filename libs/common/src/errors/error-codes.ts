@@ -20,6 +20,8 @@ export const ERROR_CODES = {
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
   EMAIL_ALREADY_REGISTERED: 'EMAIL_ALREADY_REGISTERED',
   CSRF_TOKEN_INVALID: 'CSRF_TOKEN_INVALID',
+  /** A one-shot recovery/verification token that is unknown, used, or expired. */
+  INVALID_TOKEN: 'INVALID_TOKEN',
 
   // --- tenancy ---
   WORKSPACE_ACCESS_DENIED: 'WORKSPACE_ACCESS_DENIED',

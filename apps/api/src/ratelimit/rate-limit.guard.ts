@@ -37,6 +37,20 @@ export interface RateLimitRuleRef {
 }
 
 /**
+ * Which rules a guard instance enforces.
+ *
+ * Two guard instances exist because `user` scope needs an identity that does not
+ * exist yet when the first guard runs. The pre-auth guard is registered ahead of
+ * authentication on purpose (it protects argon2); the post-auth guard runs after
+ * `AuthGuard`, where `request.user` is populated.
+ *
+ * Before this split, a `user`-scoped rule silently keyed on the client IP: every
+ * user in an office shared one budget, and the rule's name lied about what it
+ * counted.
+ */
+export type RateLimitMode = 'all' | 'pre-auth' | 'post-auth';
+
+/**
  * Resolved configuration, injected rather than read per request.
  *
  * A dedicated token rather than `ConfigService` for two reasons: parsing config
@@ -98,15 +112,38 @@ export class RateLimitGuard implements CanActivate {
     private readonly reflector: Reflector,
     @Inject(RATE_LIMIT_CONFIG) private readonly config: RateLimitConfig,
     @Inject(RATE_LIMIT_STORE) private readonly store: RateLimitStore,
+    private readonly mode: RateLimitMode = 'all',
   ) {}
 
+  /** Whether this instance owns the rule. `all` is the default, used by tests. */
+  protected handles(scope: RateLimitScope): boolean {
+    switch (this.mode) {
+      case 'pre-auth':
+        return scope !== 'user';
+      case 'post-auth':
+        return scope === 'user';
+      case 'all':
+        return true;
+      default: {
+        const exhaustive: never = this.mode;
+        throw new Error(`Unhandled rate limit mode: ${String(exhaustive)}`);
+      }
+    }
+  }
+
   canActivate(context: ExecutionContext): boolean {
-    const rules = this.reflector.getAllAndOverride<RateLimitRuleRef[]>(RATE_LIMIT_KEY, [
+    const declared = this.reflector.getAllAndOverride<RateLimitRuleRef[]>(RATE_LIMIT_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    if (rules === undefined || rules.length === 0 || !this.config.enabled) {
+    if (declared === undefined || declared.length === 0 || !this.config.enabled) {
+      return true;
+    }
+
+    const rules = declared.filter((rule) => this.handles(rule.scope));
+
+    if (rules.length === 0) {
       return true;
     }
 
@@ -228,6 +265,41 @@ function emailFromBody(body: unknown): string | undefined {
   }
   const normalised = raw.trim().toLowerCase();
   return normalised === '' ? undefined : normalised.slice(0, MAX_EMAIL_KEY_LENGTH);
+}
+
+/**
+ * The guard that runs before authentication. Owns `ip` and `email` rules.
+ *
+ * A separate subclass rather than a constructor argument at the registration
+ * site: an `APP_GUARD` is constructed by Nest, so there is nowhere to pass one.
+ */
+@Injectable()
+export class PreAuthRateLimitGuard extends RateLimitGuard {
+  constructor(
+    reflector: Reflector,
+    @Inject(RATE_LIMIT_CONFIG) config: RateLimitConfig,
+    @Inject(RATE_LIMIT_STORE) store: RateLimitStore,
+  ) {
+    super(reflector, config, store, 'pre-auth');
+  }
+}
+
+/**
+ * The guard that runs after `AuthGuard`. Owns `user` rules.
+ *
+ * Everything it protects is already authenticated and already cheap to attribute:
+ * a generation request reserves credits, a schedule creates a publish job. Being
+ * after auth is what makes `user` a real account key rather than the shared IP.
+ */
+@Injectable()
+export class UserRateLimitGuard extends RateLimitGuard {
+  constructor(
+    reflector: Reflector,
+    @Inject(RATE_LIMIT_CONFIG) config: RateLimitConfig,
+    @Inject(RATE_LIMIT_STORE) store: RateLimitStore,
+  ) {
+    super(reflector, config, store, 'post-auth');
+  }
 }
 
 export { RATE_LIMIT_RULES };

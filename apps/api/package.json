@@ -11,7 +11,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
-    "dev": "node --no-experimental-strip-types --watch -r ts-node/register/transpile-only src/main.ts",
+    "dev": "node ../../scripts/dev-server.mjs src/main.ts",
     "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit"

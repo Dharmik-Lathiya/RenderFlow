@@ -269,7 +269,9 @@ pricing_rules(action PK, credits, active)
 
 workspaces(id, name, owner_id)
 workspace_members(workspace_id, user_id, role)            -- OWNER | EDITOR | APPROVER | VIEWER
-brands(id, workspace_id, name, industry, tone, audience, colors jsonb, logo_asset_id, languages text[])
+brands(id, workspace_id, name, industry, tone, audience, colors jsonb, languages text[])
+-- brand logos are a later column (brands.logo_asset_id -> assets.id, ON DELETE SET NULL),
+-- added together with the upload flow that populates it rather than as a bare uuid.
 -- approved posts for "brand voice". Phase 6 builds this with a jsonb embedding
 -- rather than `vector`: pgvector is not installed in this environment, so a
 -- `vector` column could neither be created nor tested. The store sits behind an
@@ -468,8 +470,12 @@ but means a client sending garbage is charged against its IP's account budget. 1
 
 ```
 Auth:      POST /auth/register (grants 50 credits) | /auth/login | /auth/refresh | /auth/logout
+           POST /auth/forgot-password (always 202) | /auth/reset-password
+           POST /auth/verify-email | /auth/resend-verification
            GET  /auth/me | GET /me
 Credits:   GET  /credits (balance + ledger, paginated)
+           GET  /credits/pricing (public: active prices + signup bonus)
+           POST /credits/top-up (stub provider; 503 unless BILLING_PROVIDER=stub)
 Workspace: GET  /workspaces | GET /workspaces/:id | GET/POST/DELETE /workspaces/:id/members[/:userId]
 Brands:    GET/POST /brands | GET/PATCH/DELETE /brands/:id | GET /brands/:id/campaigns
 Campaigns: POST /campaigns (goal; reserves 2) | GET /campaigns/:id | GET /campaigns/:id/posts
@@ -518,6 +524,15 @@ MAX_JOB_ATTEMPTS=3
 JOB_LEASE_SECONDS=120
 HEARTBEAT_SECONDS=30
 REAPER_INTERVAL_SECONDS=60
+
+# Billing (stub refused when NODE_ENV=production)
+BILLING_PROVIDER=disabled        # disabled | stub
+TOPUP_CREDITS=50
+
+# Transactional email (log is refused when NODE_ENV=production)
+EMAIL_PROVIDER=log               # log | none
+PASSWORD_RESET_TTL_MINUTES=30
+EMAIL_VERIFICATION_TTL_HOURS=48
 
 # Storage
 S3_ENDPOINT=http://minio:9000
@@ -1021,9 +1036,11 @@ Known gaps:
   reproduce the exact state SIGKILL leaves (PROCESSING, an unrenewed lease,
   partial checkpoints) and take the same recovery decisions the real thing does;
   what they do not exercise is the process dying, which needs Redis.
-- **`/admin/*` is not filtered by workspace.** Operators are workspace OWNERs,
-  but the queries are global, so an owner sees the whole DLQ. Wrong for a
-  multi-tenant product; recorded rather than shipped quietly.
+- **`/admin/*` is workspace-scoped, not global.** A global `ADMIN` sees every
+  workspace; a workspace OWNER sees only their own, filtered in SQL and re-checked
+  before every mutation. (An earlier revision of this note said the opposite; the
+  scoping landed with the Phase 9 admin console.) The remaining gap is that no
+  test boots the console against a real Redis.
 - **Reconciliation runs on demand, not hourly.** The endpoint exists; nothing
   schedules it yet.
 - **The DLQ has no UI.** Only the API.
@@ -1351,10 +1368,12 @@ Known gaps:
 - **The real Instagram adapter has never been called.** The mock implements the
   same interface and the request/response handling is tested, but no live token
   has been used. LinkedIn is deliberately unsupported.
-- **The `analytics` queue is a wake-up that nothing enqueues yet.** The poll is
-  the real schedule, so a freshly published post still gets its first snapshot
-  after five minutes. Wiring the publisher to enqueue here would shorten that,
-  but the poll is what makes the numbers correct.
+- **The `analytics` queue is a wake-up, not the schedule.** The relay routes
+  `post.published` here (`queueForEvent`), so a fresh post does not wait for the
+  poll; the poll is still what makes the numbers correct, because a lost wake-up
+  costs latency rather than the snapshot. An earlier revision of this note said
+  nothing enqueued here, which stopped being true when the relay learned the
+  event.
 - **Snapshots are hourly.** Time-of-day trends inside an hour are not available,
   and the last six hours are refreshed rather than re-fetched.
 - **Bull Board's guard is unit-tested, but no test boots the board against a
@@ -1374,6 +1393,30 @@ every response (CSP off only because Swagger UI and Bull Board use inline
 assets), an explicit CORS allow-list that rejects `*` with cookie auth, a
 double-submit CSRF guard, httpOnly + SameSite cookies, argon2 passwords,
 AES-256-GCM social tokens, and upload MIME/size validation with a presigned PUT.
+Also delivered (launch-readiness work that was not in any phase):
+
+- **Public site.** `/pricing`, `/about`, `/contact`, `/security`, `/terms`,
+  `/privacy`, a shared header/footer, `robots.txt` that allows the marketing pages
+  (the old static file said `Disallow: /` for the whole domain, so the landing
+  page could not be indexed), a sitemap, an app icon, a generated OG card, and
+  `not-found` / `error` / `loading` routes. `/pricing` renders the live
+  `pricing_rules` through `GET /credits/pricing` rather than restating them.
+- **Account recovery.** `POST /auth/forgot-password | /auth/reset-password |
+/auth/verify-email | /auth/resend-verification`, backed by one-shot tokens in
+  `auth_tokens` (digest only, unique, expiring, consumed by a guarded UPDATE). A
+  reset revokes every session. The `EmailSender` seam has only a development
+  transport; the log transport is refused when `NODE_ENV=production`.
+- **Rate limits that were missing.** `POST /posts/:id/generate`, `POST /campaigns`,
+  `POST|PATCH /posts/:id/schedule` and every `/admin/*` route are now limited, and
+  `user`-scoped rules run in a second guard **after** authentication - before
+  that, `user` scope silently keyed on the IP.
+- **Approval integrity.** Editing an approved post's caption now withdraws the
+  approval; a post that is already scheduled, publishing or published refuses the
+  edit; approval is guarded on the status it was decided against.
+- **`purchase()`** in `libs/credits` (ledger-first, idempotent on the provider
+  reference) and a stub `POST /credits/top-up` that is disabled by default and
+  refused in production. No real payment provider is wired.
+
 Outstanding: the k6 load test and index review, a backup/restore runbook, chaos
 scenario R5 (a real SIGKILL), a CI dependency-audit job, SSRF hardening for any
 future user-supplied fetch, and the README chaos GIF.

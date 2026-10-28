@@ -1,9 +1,12 @@
-import { and, eq, isNull } from 'drizzle-orm';
-import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
+
+import { and, eq, gt, isNull } from 'drizzle-orm';
+import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppError, ERROR_CODES } from '@renderflow/common';
 import { grantSignupBonus, isUniqueViolation } from '@renderflow/credits';
 import {
+  authTokens,
   getDb,
   refreshSessions,
   users,
@@ -15,11 +18,19 @@ import {
 import { createLogger } from '@renderflow/observability';
 
 import type { Env } from '../config/env';
+import {
+  EMAIL_SENDER,
+  passwordResetEmail,
+  verificationEmail,
+  type EmailSender,
+} from '../email/email';
 import { loadAuthConfigFrom, ttlSeconds, type AuthConfig } from './auth.config';
+import { normalizeEmail } from './auth.dto';
 import {
   DEFAULT_ARGON2_OPTIONS,
   assertPasswordPolicy,
   generateRefreshToken,
+  hashAuthToken,
   hashPassword,
   hashRefreshToken,
   verifyPassword,
@@ -84,7 +95,10 @@ export class AuthService implements OnModuleInit {
   private config!: AuthConfig;
   private argon2Options: Argon2Options = DEFAULT_ARGON2_OPTIONS;
 
-  constructor(private readonly configService: ConfigService<Env, true>) {}
+  constructor(
+    private readonly configService: ConfigService<Env, true>,
+    @Inject(EMAIL_SENDER) private readonly email: EmailSender,
+  ) {}
 
   onModuleInit(): void {
     this.db = getDb();
@@ -291,6 +305,175 @@ export class AuthService implements OnModuleInit {
       throw new AppError(ERROR_CODES.NOT_FOUND, 'User not found', { details: { userId } });
     }
     return user;
+  }
+
+  /**
+   * Starts a password reset.
+   *
+   * Always succeeds, whether or not the address is registered: a different answer
+   * for an unknown address turns this endpoint into an account-existence oracle,
+   * which is exactly what credential stuffing feeds on. The caller gets 202 and a
+   * registered user gets a mail.
+   */
+  async requestPasswordReset(rawEmail: string): Promise<void> {
+    const rows = await this.db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, normalizeEmail(rawEmail)))
+      .limit(1);
+
+    const user = rows[0];
+    if (user === undefined) {
+      return;
+    }
+
+    const ttlMinutes = this.configService.get('PASSWORD_RESET_TTL_MINUTES', { infer: true });
+    const token = await this.issueAuthToken(user.id, 'PASSWORD_RESET', ttlMinutes * 60_000);
+    const link = `${this.webBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+
+    await this.email.send({ to: user.email, ...passwordResetEmail(link, ttlMinutes) });
+  }
+
+  /**
+   * Completes a password reset.
+   *
+   * Consuming the token and changing the password are separate statements, so the
+   * token is burned first: a failure while writing the password must not leave a
+   * link that still works. Every existing session is revoked in the same
+   * transaction as the password change - a reset is also "log out everywhere",
+   * otherwise whoever had the old password keeps their session.
+   */
+  async resetPassword(token: string, password: string): Promise<void> {
+    assertPasswordPolicy(password);
+    const userId = await this.consumeAuthToken(token, 'PASSWORD_RESET');
+    const passwordHash = await hashPassword(password, this.argon2Options);
+
+    await this.db.transaction(async (tx: DbTransaction) => {
+      await tx
+        .update(users)
+        .set({ passwordHash, updatedAt: new Date() })
+        .where(eq(users.id, userId));
+
+      await tx
+        .update(refreshSessions)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(refreshSessions.userId, userId), isNull(refreshSessions.revokedAt)));
+    });
+  }
+
+  /**
+   * Sends (or re-sends) an email-verification link.
+   *
+   * Silent when the address is already verified: the caller is authenticated, and
+   * telling them "nothing to do" is more useful than a new link that verifies
+   * nothing.
+   */
+  async requestEmailVerification(userId: string): Promise<void> {
+    const rows = await this.db
+      .select({ email: users.email, verifiedAt: users.emailVerifiedAt })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    const user = rows[0];
+    if (user === undefined || user.verifiedAt !== null) {
+      return;
+    }
+
+    const ttlHours = this.configService.get('EMAIL_VERIFICATION_TTL_HOURS', { infer: true });
+    const token = await this.issueAuthToken(userId, 'EMAIL_VERIFICATION', ttlHours * 3_600_000);
+    const link = `${this.webBaseUrl()}/verify-email?token=${encodeURIComponent(token)}`;
+
+    await this.email.send({ to: user.email, ...verificationEmail(link, ttlHours) });
+  }
+
+  /** Marks the address verified. A used or expired link is `INVALID_TOKEN`. */
+  async verifyEmail(token: string): Promise<void> {
+    const userId = await this.consumeAuthToken(token, 'EMAIL_VERIFICATION');
+
+    await this.db
+      .update(users)
+      .set({ emailVerifiedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(users.id, userId), isNull(users.emailVerifiedAt)));
+  }
+
+  /**
+   * Issues a one-shot token, invalidating any earlier unused one of the same kind.
+   *
+   * Only the digest is stored. Invalidation happens in the same transaction as the
+   * insert so a user who clicks "send again" three times has exactly one working
+   * link - the newest.
+   */
+  private async issueAuthToken(
+    userId: string,
+    purpose: 'PASSWORD_RESET' | 'EMAIL_VERIFICATION',
+    ttlMs: number,
+  ): Promise<string> {
+    const token = randomBytes(32).toString('base64url');
+
+    await this.db.transaction(async (tx: DbTransaction) => {
+      await tx
+        .update(authTokens)
+        .set({ usedAt: new Date() })
+        .where(
+          and(
+            eq(authTokens.userId, userId),
+            eq(authTokens.purpose, purpose),
+            isNull(authTokens.usedAt),
+          ),
+        );
+
+      await tx.insert(authTokens).values({
+        userId,
+        purpose,
+        tokenHash: hashAuthToken(token),
+        expiresAt: new Date(Date.now() + ttlMs),
+      });
+    });
+
+    return token;
+  }
+
+  /**
+   * Claims a token exactly once.
+   *
+   * The guard is the decision: `used_at IS NULL` plus `expires_at > now()` in the
+   * WHERE clause means two simultaneous clicks produce one winner, with no
+   * read-then-write window.
+   */
+  private async consumeAuthToken(
+    token: string,
+    purpose: 'PASSWORD_RESET' | 'EMAIL_VERIFICATION',
+  ): Promise<string> {
+    const trimmed = token.trim();
+    if (trimmed === '') {
+      throw new AppError(ERROR_CODES.INVALID_TOKEN, 'This link is invalid or has expired.');
+    }
+
+    const [claimed] = await this.db
+      .update(authTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(authTokens.tokenHash, hashAuthToken(trimmed)),
+          eq(authTokens.purpose, purpose),
+          isNull(authTokens.usedAt),
+          gt(authTokens.expiresAt, new Date()),
+        ),
+      )
+      .returning({ userId: authTokens.userId });
+
+    if (claimed === undefined) {
+      // One message for unknown / used / expired: distinguishing them tells a
+      // caller whether a token ever existed.
+      throw new AppError(ERROR_CODES.INVALID_TOKEN, 'This link is invalid or has expired.');
+    }
+
+    return claimed.userId;
+  }
+
+  private webBaseUrl(): string {
+    return this.configService.get('WEB_BASE_URL', { infer: true }).replace(/\/+$/, '');
   }
 
   private async issueSession(

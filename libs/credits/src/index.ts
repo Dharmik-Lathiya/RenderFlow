@@ -17,6 +17,7 @@
 
 export * from './balance';
 export * from './pricing';
+export * from './purchase';
 export * from './reserve';
 export * from './signup-bonus';
 export {

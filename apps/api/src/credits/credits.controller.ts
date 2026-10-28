@@ -1,8 +1,20 @@
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
+import type { WalletBalance } from '@renderflow/credits';
 
-import { CurrentUser, type AuthenticatedUser } from '../auth/auth.guard';
-import { CreditsService, type CreditsResponse } from './credits.service';
+import { CurrentUser, Public, type AuthenticatedUser } from '../auth/auth.guard';
+import { RATE_LIMIT_RULES, RateLimitByUser } from '../ratelimit/rate-limit.guard';
+import { CreditsService, type CreditsResponse, type PricingResponse } from './credits.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -17,6 +29,39 @@ const MAX_PAGE_SIZE = 100;
 @Controller('credits')
 export class CreditsController {
   constructor(private readonly credits: CreditsService) {}
+
+  /**
+   * Public: the marketing site renders these numbers instead of restating them.
+   *
+   * Declared before `@Get()` for readability only - Nest matches on the full
+   * path either way - and cached briefly because a price change does not need to
+   * be visible within milliseconds.
+   */
+  @Public()
+  @Get('pricing')
+  @ApiOperation({ summary: 'Active credit prices and the signup bonus' })
+  @Header('Cache-Control', 'public, max-age=60')
+  async getPricing(): Promise<PricingResponse> {
+    return this.credits.getPricing();
+  }
+
+  /**
+   * POST /api/v1/credits/top-up - the stub purchase path.
+   *
+   * 503 unless BILLING_PROVIDER=stub, and that value is refused in production at
+   * boot. The response carries the new balance so the client does not have to
+   * refetch to know whether it worked.
+   */
+  @Post('top-up')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Buy a credit pack (stub provider; disabled by default)' })
+  @RateLimitByUser(RATE_LIMIT_RULES.TOPUP_USER)
+  async topUp(
+    @CurrentUser() user: AuthenticatedUser,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+  ): Promise<{ wallet: WalletBalance; applied: boolean }> {
+    return this.credits.topUp(user.id, idempotencyKey);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Wallet balance and paginated credit ledger' })

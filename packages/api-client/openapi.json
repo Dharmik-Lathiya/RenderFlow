@@ -261,6 +261,19 @@
         "tags": ["assets"]
       }
     },
+    "/auth/forgot-password": {
+      "post": {
+        "operationId": "AuthController_forgotPassword",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Send a password reset link (always 202)",
+        "tags": ["auth"]
+      }
+    },
     "/auth/login": {
       "post": {
         "operationId": "AuthController_login",
@@ -296,7 +309,7 @@
             "description": ""
           }
         },
-        "summary": "The current token's claims",
+        "summary": "The signed-in user's profile and wallet",
         "tags": ["auth"]
       }
     },
@@ -323,6 +336,45 @@
           }
         },
         "summary": "Create an account and grant the signup bonus",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/resend-verification": {
+      "post": {
+        "operationId": "AuthController_resendVerification",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Re-send the email verification link",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Set a new password using a reset token",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/verify-email": {
+      "post": {
+        "operationId": "AuthController_verifyEmail",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Confirm an email address with a verification token",
         "tags": ["auth"]
       }
     },
@@ -527,6 +579,32 @@
           }
         },
         "summary": "Wallet balance and paginated credit ledger",
+        "tags": ["credits"]
+      }
+    },
+    "/credits/pricing": {
+      "get": {
+        "operationId": "CreditsController_getPricing",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Active credit prices and the signup bonus",
+        "tags": ["credits"]
+      }
+    },
+    "/credits/top-up": {
+      "post": {
+        "operationId": "CreditsController_topUp",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Buy a credit pack (stub provider; disabled by default)",
         "tags": ["credits"]
       }
     },

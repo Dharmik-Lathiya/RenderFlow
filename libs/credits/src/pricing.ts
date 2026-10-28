@@ -78,6 +78,21 @@ export async function priceFor(tx: CreditTransaction, action: GenerationKind): P
   return { action, credits: row.credits };
 }
 
+/**
+ * The prices a customer may be charged, for the public pricing page.
+ *
+ * Active only: an inactive rule exists so historical charges still reconcile and
+ * must never be advertised as a current price. Kept beside `listPrices` rather
+ * than filtered at the call site so "what may I be charged" has one definition.
+ */
+export async function listActivePrices(tx: CreditTransaction): Promise<PriceQuote[]> {
+  const rows: Array<{ action: string; credits: number }> = await tx
+    .select({ action: pricingRules.action, credits: pricingRules.credits })
+    .from(pricingRules)
+    .where(eq(pricingRules.active, 1));
+  return rows.map((row) => ({ action: row.action as GenerationKind, credits: row.credits }));
+}
+
 /** Reads every price, for `GET /credits/pricing` and admin screens. */
 export async function listPrices(tx: CreditTransaction): Promise<PriceQuote[]> {
   const rows: Array<{ action: string; credits: number }> = await tx

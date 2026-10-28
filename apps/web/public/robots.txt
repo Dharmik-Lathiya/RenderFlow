@@ -1,3 +1,0 @@
-# RenderFlow dashboard - not indexable.
-User-agent: *
-Disallow: /

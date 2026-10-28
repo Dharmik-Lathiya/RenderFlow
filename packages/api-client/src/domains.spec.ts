@@ -31,6 +31,10 @@ describe('domain paths are documented', () => {
     { method: 'POST', path: '/auth/login' },
     { method: 'POST', path: '/auth/logout' },
     { method: 'GET', path: '/auth/me' },
+    { method: 'POST', path: '/auth/forgot-password' },
+    { method: 'POST', path: '/auth/reset-password' },
+    { method: 'POST', path: '/auth/verify-email' },
+    { method: 'POST', path: '/auth/resend-verification' },
     { method: 'GET', path: '/credits' },
     { method: 'GET', path: '/workspaces' },
     { method: 'GET', path: '/workspaces/{workspaceId}/members' },
@@ -99,6 +103,10 @@ describe('domain paths are documented', () => {
     '/health/live': 'liveness is an infrastructure probe, not an app concern',
     '/health/ready': 'readiness is an infrastructure probe, not an app concern',
     '/metrics': 'Prometheus scrape, not an app concern',
+    '/credits/pricing':
+      'read server-side by the marketing pricing page, where this browser client is not used',
+    '/credits/top-up':
+      'billing is disabled by default; a checkout flow adds the call together with its provider',
   };
 
   it('accounts for every documented path', () => {

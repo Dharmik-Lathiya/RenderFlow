@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { ValidationFailedError } from '@renderflow/common';
 
 import { CurrentUser, type AuthenticatedUser } from '../auth/auth.guard';
+import { RATE_LIMIT_RULES, RateLimitByUser } from '../ratelimit/rate-limit.guard';
 import { AdminService, adjustSchema, replaySchema, type OperatorScope } from './admin.service';
 
 const uuidParam = new ParseUUIDPipe({ version: '4' });
@@ -27,6 +28,9 @@ const uuidParam = new ParseUUIDPipe({ version: '4' });
  */
 @ApiTags('admin')
 @Controller('admin')
+// Class-level: every operator route reads across tenants or replays work, and an
+// operator credential is the most damaging one to leave unthrottled.
+@RateLimitByUser(RATE_LIMIT_RULES.ADMIN_USER)
 export class AdminController {
   constructor(private readonly admin: AdminService) {}
 
