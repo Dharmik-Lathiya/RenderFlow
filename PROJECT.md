@@ -729,21 +729,21 @@ Each phase ends with a **Definition of Done (DoD)**. Do not start the next phase
 The single place to look for where the project stands. "Shipped" means the
 DoD's assertions are written and passing; "partial" means some of them are not.
 
-| #   | Phase                             | Status                                            | Verified how                                                                                                                                                                                                                             |
-| --- | --------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0   | Foundation                        | **Shipped**, one DoD item unverified              | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                                                                       |
-| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified              | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                                                                    |
-| 2   | Credit engine                     | **Shipped**                                       | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                                                              |
-| 3   | Brands, campaigns, posts, assets  | **Shipped**                                       | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                                                             |
-| 4   | Job pipeline with mock AI         | **Shipped**                                       | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                                                                    |
-| 5   | Reliability layer                 | **Partial** - R5 (a real SIGKILL) not implemented | R1-R4 pass via `tests/chaos/run.sh`; R5 reported as SKIP and exits non-zero. Needs Redis.                                                                                                                                                |
-| 6   | Real AI integration               | **Partial** - the DoD's first half unverified     | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                                                             |
-| 7   | Scheduling and publishing         | **Shipped**, mocks only                           | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                            |
-| 8   | Frontend (Next.js)                | **Shipped**                                       | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                   |
-| 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered           | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker). |
-| 10  | Hardening and launch polish       | **Partial** - security pass started               | Helmet security headers and an explicit-CORS assertion are in place. No k6 load test, backup/restore guide, chaos R5 or CI audit job yet.                                                                                                |
+| #   | Phase                             | Status                                        | Verified how                                                                                                                                                                                                                             |
+| --- | --------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Foundation                        | **Shipped**, one DoD item unverified          | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                                                                       |
+| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified          | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                                                                    |
+| 2   | Credit engine                     | **Shipped**                                   | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                                                              |
+| 3   | Brands, campaigns, posts, assets  | **Shipped**                                   | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                                                             |
+| 4   | Job pipeline with mock AI         | **Shipped**                                   | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                                                                    |
+| 5   | Reliability layer                 | **Shipped**                                   | R1-R4 via `tests/chaos/run.sh`; R5 spawns a real worker, SIGKILLs it inside SCRIPT, waits out the lease, and resumes in a second process: 40/40 chaos assertions. Integration suite 28/28.                                               |
+| 6   | Real AI integration               | **Partial** - the DoD's first half unverified | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                                                             |
+| 7   | Scheduling and publishing         | **Shipped**, mocks only                       | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                            |
+| 8   | Frontend (Next.js)                | **Shipped**                                   | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                   |
+| 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered       | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker). |
+| 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet security headers and an explicit-CORS assertion are in place. No k6 load test, backup/restore guide or CI audit job yet.                                                                                                          |
 
-**7 of 11 phases shipped** (0-4, 7, 8), **4 partial** (5, 6, 9, 10), **0
+**8 of 11 phases shipped** (0-5, 7, 8), **3 partial** (6, 9, 10), **0
 untouched**.
 
 Phase 7 is counted as shipped because its DoD is met end to end — but only
@@ -753,9 +753,6 @@ the phase's own known-gaps list.
 
 What "partial" costs, stated plainly:
 
-- **Phase 5** - the recovery logic is tested against the exact database state a
-  `kill -9` leaves behind, and takes the same decisions the real thing does. What
-  is untested is the process dying, which needs Redis.
 - **Phase 6** - every provider's request and response handling is exercised, and
   the renderer produces real mp4s. What is untested is the behaviour of the live
   APIs: their rate limits, their outages, their price.
@@ -957,17 +954,22 @@ mid-flight.
 - Heartbeat/lease, reaper, retries with backoff, checkpoint resume, DLQ, graceful shutdown, idempotency keys.
 - **DoD:** killing `media-worker` at stage IMAGE results in retry on another worker that resumes from checkpoint; after max attempts the job fails and credits are refunded exactly once; chaos test passes.
 
-**Status: mostly shipped.** `libs/jobs` gained `lease.ts` and `reaper.ts`; the
-two generation workers now hold a lease and heartbeat; `apps/reaper` runs the
-sweeps under a Postgres advisory lock. New admin endpoints: `GET /admin/dlq`,
+**Status: shipped.** `libs/jobs` gained `lease.ts` and `reaper.ts`; the two
+generation workers now hold a lease and heartbeat; `apps/reaper` runs the sweeps
+under a Postgres advisory lock. New admin endpoints: `GET /admin/dlq`,
 `POST /admin/dlq/:jobId/replay`, `GET /admin/dlq/outbox`,
 `POST /admin/dlq/outbox/:eventId/replay`, `GET /admin/reconcile`. Already
 delivered in earlier phases: retries with backoff (`libs/queue` presets),
 checkpoint resume, idempotency keys, graceful shutdown.
 
-DoD verified in `tests/integration/reliability.spec.ts` (27 assertions) and
-`tests/chaos/run.sh` (R1-R4, 14 assertions). **R5 is not implemented** — see the
-known gaps below.
+DoD verified in `tests/integration/reliability.spec.ts` (28 tests) and
+`tests/chaos/run.sh` (R1-R5, 40 assertions). R5 is the real thing: the harness
+spawns a worker process, waits until it is inside SCRIPT, sends `SIGKILL`,
+waits for the lease to expire without a graceful release, runs the real
+`sweepOnce`, and starts a second process that resumes from the PLAN checkpoint
+and finishes. It needs no Redis - the queue message is the outbox event the
+relay would publish, consumed directly by the child - because process death and
+lease expiry are the properties under test, not the broker.
 
 Decisions worth carrying forward:
 
@@ -1018,6 +1020,15 @@ Bugs the tests caught
   is exactly the kind of partial green that hides this. The guard now re-checks
   expiry (`IS NULL OR < now()`), which also closes the window between the sweep's
   read and the write.
+- **A requeued job carried a message no worker would accept.** `requeue()` wrote
+  `{eventType, jobId, reason}` and nothing else, while every worker validates
+  `job.created` with `jobCreatedEventSchema` before touching the database. The
+  relay would publish it, the worker would reject it with a zod error, and the job
+  would stay `PENDING` with its credits reserved - recovery that looks successful
+  in the outbox and does nothing. It now replays the original `job.created`
+  payload from the outbox, refuses to requeue a job whose create event is missing,
+  and the integration test drives the requeued payload through
+  `handleGenerationJob` to completion.
 - **`startHeartbeat().stop()` hung every worker.** It cleared the timer but never
   settled the promise the loop was awaiting, so `done` never resolved — and the
   SIGTERM drain awaits it. Found by a 60s test timeout, not by reading.
@@ -1030,12 +1041,6 @@ Bugs the tests caught
 
 Known gaps:
 
-- **R5 — a real SIGKILL — is not implemented.** `tests/chaos/run.sh` runs R1-R4
-  against a real database and reports R5 as `SKIP`, exiting non-zero: a chaos
-  harness that reports green for what it did not do is worse than none. R1-R4
-  reproduce the exact state SIGKILL leaves (PROCESSING, an unrenewed lease,
-  partial checkpoints) and take the same recovery decisions the real thing does;
-  what they do not exercise is the process dying, which needs Redis.
 - **`/admin/*` is workspace-scoped, not global.** A global `ADMIN` sees every
   workspace; a workspace OWNER sees only their own, filtered in SQL and re-checked
   before every mutation. (An earlier revision of this note said the opposite; the
@@ -1128,8 +1133,6 @@ Known gaps:
   here. The request and response handling is exercised through a stub transport;
   the rate limits, price behaviour and outage characteristics of the real APIs are
   not.
-- **R5 (a real SIGKILL) is still not implemented** - it needs Redis. Carried over
-  from Phase 5.
 - **The pgvector backend is documented, not written.** `PortableVectorStore` is
   the only implementation, and it is the wrong choice at corpus scale.
 - **Brand memory is populated by nothing yet.** The store and the retrieval work;
@@ -1417,9 +1420,9 @@ Also delivered (launch-readiness work that was not in any phase):
   reference) and a stub `POST /credits/top-up` that is disabled by default and
   refused in production. No real payment provider is wired.
 
-Outstanding: the k6 load test and index review, a backup/restore runbook, chaos
-scenario R5 (a real SIGKILL), a CI dependency-audit job, SSRF hardening for any
-future user-supplied fetch, and the README chaos GIF.
+Outstanding: the k6 load test and index review, a backup/restore runbook, a CI
+dependency-audit job, SSRF hardening for any future user-supplied fetch, and the
+README chaos GIF.
 
 ---
 
@@ -1457,21 +1460,25 @@ future user-supplied fetch, and the README chaos GIF.
 
 ### 13.3 Must-pass reliability / chaos tests
 
-| #   | Scenario                                                        | Expected                                                                                  |
-| --- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| R1  | Kill `media-worker` during RENDER                               | lease expires, reaper resets, another worker resumes from checkpoint, job completes       |
-| R2  | Kill worker on every attempt                                    | job FAILED after max attempts, refunded once, user notified                               |
-| R3  | Stop Redis, create job, restart Redis                           | outbox relay delivers; job runs; nothing lost                                             |
-| R4  | Kill API after DB commit but before response                    | client retries with same idempotency key and gets the same job                            |
-| R5  | DB restart during processing                                    | workers reconnect and continue; no duplicate captures                                     |
-| R6  | SIGTERM during deploy                                           | worker releases or finishes job; no loss                                                  |
-| R7  | Worker completes S3 upload but crashes before DB update         | retry detects existing output and marks COMPLETED without regenerating or double charging |
-| R8  | Two reapers running                                             | leader lock ensures single action; no double refund                                       |
-| R9  | Publisher killed after platform accepted post, before DB update | retry reconciles via `external_post_id`/platform lookup; no duplicate post                |
-| R10 | Platform returns 429/5xx                                        | backoff retries; success eventually; failure after 5 attempts notifies user               |
-| R11 | Token expired                                                   | refresh and retry once; if refresh fails, mark account `NEEDS_REAUTH` and notify          |
+| #   | Scenario                                                        | Expected                                                                                                             |
+| --- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| R1  | Kill `media-worker` during RENDER                               | lease expires, reaper resets, another worker resumes from checkpoint, job completes                                  |
+| R2  | Kill worker on every attempt                                    | job FAILED after max attempts, refunded once, user notified                                                          |
+| R3  | Stop Redis, create job, restart Redis                           | outbox relay delivers; job runs; nothing lost                                                                        |
+| R4  | Kill API after DB commit but before response                    | client retries with same idempotency key and gets the same job                                                       |
+| R5  | SIGKILL a worker process during SCRIPT                          | lease expires; reaper replays a complete `job.created`; another process resumes from checkpoint; exactly one capture |
+| R6  | SIGTERM during deploy                                           | worker releases or finishes job; no loss                                                                             |
+| R7  | Worker completes S3 upload but crashes before DB update         | retry detects existing output and marks COMPLETED without regenerating or double charging                            |
+| R8  | Two reapers running                                             | leader lock ensures single action; no double refund                                                                  |
+| R9  | Publisher killed after platform accepted post, before DB update | retry reconciles via `external_post_id`/platform lookup; no duplicate post                                           |
+| R10 | Platform returns 429/5xx                                        | backoff retries; success eventually; failure after 5 attempts notifies user                                          |
+| R11 | Token expired                                                   | refresh and retry once; if refresh fails, mark account `NEEDS_REAUTH` and notify                                     |
+| R12 | DB restart during processing                                    | workers reconnect and continue; no duplicate captures                                                                |
 
-`tests/chaos/run.sh` automates these with `docker compose kill`/`stop`/`start` and prints PASS/FAIL per scenario.
+`tests/chaos/run.sh` automates R1-R5 against a disposable Postgres database. It
+needs no broker: R5 reads the queue message from `outbox_events`, which is what
+the relay would publish, and drives the real worker code in child processes. Each
+scenario prints PASS/FAIL.
 
 ### 13.4 E2E user journeys (Playwright)
 

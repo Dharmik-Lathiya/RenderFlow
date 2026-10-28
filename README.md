@@ -6,15 +6,16 @@ publishes to social platforms on schedule. Usage is credit based — new account
 **50 free credits**, credits are reserved before work starts and refunded if
 generation fails.
 
-> **Status: 7 of 11 phases shipped** (0–4, 7, 8), 4 partial (5, 6, 9, 10). The
-> credit engine, studio APIs, generation pipeline, scheduling, publishing and
-> the browser frontend are built. The full browser journey passes locally
-> (14/14, Chromium and a Pixel 7 viewport) and runs in CI against compose.
+> **Status: 8 of 11 phases shipped** (0–5, 7, 8), 3 partial (6, 9, 10). The
+> credit engine, studio APIs, generation pipeline, scheduling, publishing, the
+> browser frontend and the reliability layer are built. The full browser journey
+> passes locally (14/14, Chromium and a Pixel 7 viewport) and runs in CI against
+> compose; chaos R1–R5 includes a real SIGKILL and passes without a broker.
 >
 > The remaining gaps are deliberately unverified rather than quietly counted as
-> done: no real AI provider or social platform has been called, chaos R5 needs a
-> real SIGKILL, and no Grafana panel has rendered because this environment has no
-> Docker daemon. See [`PHASES.md`](./PHASES.md) for the per-phase table and
+> done: no real AI provider or social platform has been called, and no Grafana
+> panel has rendered because this environment has no Docker daemon. See
+> [`PHASES.md`](./PHASES.md) for the per-phase table and
 > [`PROJECT.md`](./PROJECT.md) §12 for the plan and §13 for the test matrix.
 
 ---
@@ -184,7 +185,7 @@ pnpm test:coverage # unit + coverage gates
 pnpm test:int      # integration, against a real Postgres
 pnpm test:int:coverage # integration + coverage gate (what CI runs)
 pnpm test:e2e      # Playwright against a running web + API (pnpm dev or compose)
-pnpm test:chaos    # tests/chaos/run.sh — R1-R4; R5 needs Redis
+pnpm test:chaos    # tests/chaos/run.sh — R1-R5, real SIGKILL, no Redis
 ```
 
 ---
@@ -266,12 +267,11 @@ charge, or double post.**
 
 ## Chaos testing
 
-`tests/chaos/run.sh` automates R1-R4 (`PROJECT.md` §13.3) against a real database:
-the exact state a killed worker leaves behind, the retry that resumes from a
-checkpoint, the refund that must happen exactly once, and a reaper race. R5 - a
-real `SIGKILL` - needs Redis and is reported as `SKIP`, which makes the script
-exit non-zero on purpose. A chaos harness that reports PASS for what it did not
-run is worse than none.
+`tests/chaos/run.sh` automates R1–R5 (`PROJECT.md` §13.3) against a disposable
+Postgres database. R1–R4 reproduce the state a dead worker leaves behind. R5
+spawns a real worker, SIGKILLs it inside SCRIPT, waits for the lease to expire,
+and resumes the job in a second process. It needs no Redis: the queue message is
+the outbox event the relay would publish. Forty assertions print PASS/FAIL.
 
 ```bash
 pnpm test:chaos
@@ -286,15 +286,16 @@ pnpm test:chaos
 | Unit        | Jest                  | credit math, state machines, pricing, adapters |
 | Integration | Jest + Testcontainers | real Postgres/Redis; credit and queue logic    |
 | Concurrency | Jest + `Promise.all`  | races on credits and publishing                |
-| Chaos       | Bash + Docker         | worker kill, Redis/DB restart, SIGTERM         |
+| Chaos       | Bash + real Postgres  | SIGKILL, lease expiry, reaper requeue, SIGTERM |
 | E2E         | Playwright            | real user journeys against compose             |
 | Load        | k6                    | throughput, queue drain time                   |
 
 Gates: `libs/credits` and the state machines ≥ 95 %, overall ≥ 80 %. Mocks are used
 for every external API — tests never call a real provider.
 
-Current: **994 unit tests**, **482 integration tests** and 14/14 browser journeys
-passing; 93.8 % lines / 85.2 % branches overall (unit).
+Current: **994 unit tests**, **483 integration tests**, **40 chaos assertions**
+and 14/14 browser journeys passing; 93.8 % lines / 85.2 % branches overall
+(unit).
 
 ---
 

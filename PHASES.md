@@ -4,8 +4,8 @@ The authoritative version of this table lives in [`PROJECT.md` §12](./PROJECT.m
 This file exists so progress can be read without scrolling a thousand lines of
 specification.
 
-**Last updated:** after the launch-readiness pass (public site, account recovery,
-rate limits on cost-incurring routes, approval integrity, stub billing).
+**Last updated:** after the launch-readiness pass and the real SIGKILL chaos
+scenario (R5).
 
 | #   | Phase                             | Status                                                       |
 | --- | --------------------------------- | ------------------------------------------------------------ |
@@ -14,14 +14,14 @@ rate limits on cost-incurring routes, approval integrity, stub billing).
 | 2   | Credit engine                     | Shipped                                                      |
 | 3   | Brands, campaigns, posts, assets  | Shipped                                                      |
 | 4   | Job pipeline with mock AI         | Shipped                                                      |
-| 5   | Reliability layer                 | **Partial** — R5 (a real SIGKILL) not implemented            |
+| 5   | Reliability layer                 | Shipped — R5 is a real SIGKILL, not a simulated state        |
 | 6   | Real AI integration               | **Partial** — never run against a real provider key          |
 | 7   | Scheduling and publishing         | Shipped (mocks only — no real adapter, no OAuth, no email)   |
 | 8   | Frontend (Next.js)                | Shipped — 14/14 browser journeys pass locally                |
 | 9   | Analytics, admin, observability   | **Partial** — analytics built; no Grafana panel has rendered |
 | 10  | Hardening and launch polish       | **Partial** — security pass started                          |
 
-**7 shipped · 4 partial · 0 untouched**
+**8 shipped · 3 partial · 0 untouched**
 
 ## Unphased launch-readiness work
 
@@ -47,11 +47,6 @@ transport, real social adapters and OAuth.
 Each partial phase is missing proof or work that needs infrastructure or
 credentials this environment does not have.
 
-- **Phase 5** needs Redis. `tests/chaos/run.sh` reproduces the exact database
-  state a `kill -9` leaves behind — `PROCESSING`, an unrenewed lease, partial
-  checkpoints — and asserts the real reaper makes the real decision. It reports
-  R5 as `SKIP` and exits non-zero, because a chaos harness that reports green for
-  what it did not do is worse than none.
 - **Phase 6** needs a network. Every provider's request and response handling runs
   against a stub transport, and the renderer produces real mp4s with real ffmpeg.
   What has never happened is a call to a live provider API, so their rate limits,
@@ -62,11 +57,27 @@ credentials this environment does not have.
   are drift-tested; a chart on a screen is not.
 - **Phase 10** has helmet, an explicit CORS allow-list, double-submit CSRF,
   encrypted social tokens, upload validation and presigned PUT. It still lacks a
-  k6 load test, an index review, a backup/restore runbook, chaos R5, a CI
-  dependency-audit job and the README chaos GIF.
+  k6 load test, an index review, a backup/restore runbook, a CI dependency-audit
+  job and the README chaos GIF.
 
 None of these gaps are hidden by a green build. They are stated in `PROJECT.md`
 beside the code they affect.
+
+## Phase 5 is shipped, and R5 is a real kill
+
+`tests/chaos/run.sh` now runs five scenarios with no broker. R1-R4 reproduce the
+database state a dead worker leaves behind. R5 does not simulate it: the harness
+spawns a real Node worker, waits until it is inside SCRIPT, sends `SIGKILL`, and
+watches the lease expire without a graceful release. The real reaper then replays
+the original `job.created` event, and a second real process resumes from the PLAN
+checkpoint and finishes. The assertions cover the attempt counter, the checkpoint
+set, one capture, zero refunds and zero ledger drift.
+
+The first version of the requeue event carried only `{eventType, jobId, reason}`,
+which every worker rejects. R5 is what exposed it: a job can look requeued in the
+outbox and still be stranded with its credits reserved. The fix replays the
+original payload and the integration suite drives that payload through the worker
+handler to completion.
 
 ## Phase 8 is shipped
 
@@ -114,24 +125,25 @@ TEST_DATABASE_URL=postgresql://renderflow:renderflow@127.0.0.1:5433/renderflow_t
 
 ./scripts/smoke-phase1.sh              # 11 assertions, real HTTP server
 ./scripts/smoke-phase4.sh              # 33 assertions, real HTTP server + SSE
-CHAOS_DATABASE_URL=... ./tests/chaos/run.sh        # R1-R4; R5 SKIPs without Redis
+CHAOS_DATABASE_URL=... ./tests/chaos/run.sh        # R1-R5, 40 assertions, no Redis
 ```
 
 Last full local gate: lint, typecheck, build and format clean; **994 unit**,
-**482 integration**, **14/14 browser journeys**. The browser run used `pnpm dev`,
-local Postgres/Redis and an S3-compatible test server because this environment has
-no Docker daemon; CI runs the same suite against compose.
+**483 integration**, **40 chaos assertions**, **14/14 browser journeys**. The
+browser run used `pnpm dev`, local Postgres/Redis and an S3-compatible test server
+because this environment has no Docker daemon; CI runs the same suite against
+compose.
 
 ## Commit map
 
-| Phase | Commits                                                                         |
-| ----- | ------------------------------------------------------------------------------- |
-| 0–1   | foundation and auth, through `db-adopt-legacy` (Drizzle cutover)                |
-| 2     | `feat(credits)` — reserve/capture/refund/adjust                                 |
-| 3     | `feat(studio)` — workspaces, brands, campaigns, posts, assets                   |
-| 4     | `364a115`, `e55034d`, `0d3ceeb` — stage machine, runner, relay + endpoints      |
-| 5     | `28c0485` — lease, heartbeat, reaper, operator DLQ                              |
-| 6     | `8c9dc97`, `07e01ce`, `35ddcda` — providers, renderer, moderation, brand memory |
-| 7     | `8c9dc97`-era: publisher, scheduler, mock adapters                              |
-| 8     | `18544a5`, `2b49265`, `9479c53`, `9087bcc` — frontend, api-client, e2e harness  |
-| 9     | `feat(observability)` — collector, alert rules, dashboard, analytics, admin     |
+| Phase | Commits                                                                                                          |
+| ----- | ---------------------------------------------------------------------------------------------------------------- |
+| 0–1   | foundation and auth, through `db-adopt-legacy` (Drizzle cutover)                                                 |
+| 2     | `feat(credits)` — reserve/capture/refund/adjust                                                                  |
+| 3     | `feat(studio)` — workspaces, brands, campaigns, posts, assets                                                    |
+| 4     | `364a115`, `e55034d`, `0d3ceeb` — stage machine, runner, relay + endpoints                                       |
+| 5     | `28c0485` — lease, heartbeat, reaper, operator DLQ; `fix(reaper)` — real R5 SIGKILL and complete requeue payload |
+| 6     | `8c9dc97`, `07e01ce`, `35ddcda` — providers, renderer, moderation, brand memory                                  |
+| 7     | `8c9dc97`-era: publisher, scheduler, mock adapters                                                               |
+| 8     | `18544a5`, `2b49265`, `9479c53`, `9087bcc` — frontend, api-client, e2e harness                                   |
+| 9     | `feat(observability)` — collector, alert rules, dashboard, analytics, admin                                      |

@@ -14,9 +14,10 @@
  * checkpoint, refund exactly once - is the real one, taken by the real reaper and
  * the real runner.
  *
- * What is NOT simulated: the process itself. The SIGKILL scenario (R5) lives in
- * the shell script, needs a real Redis, and is reported as SKIPPED rather than
- * passed when Redis is absent.
+ * What is NOT simulated: the process itself. That is `r5-harness.mjs`, spawned by
+ * the same shell script: it SIGKILLs a real worker and drives the recovery with a
+ * second real process. It does not need Redis either - the queue message is the
+ * outbox event the relay would publish.
  */
 
 import { randomUUID } from 'node:crypto';

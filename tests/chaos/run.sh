@@ -5,9 +5,11 @@
 #   A. Database-level recovery. A worker dies holding a lease with partial
 #      checkpoints; the reaper reclaims it; another worker resumes from the
 #      checkpoints. Runs with Postgres alone.
-#   B. A real SIGKILL. A worker process is killed mid-render with no chance to
-#      release its lease, and the recovery is observed through the real queue.
-#      Requires Redis.
+#   B. A real SIGKILL. A worker process is killed inside SCRIPT with no chance to
+#      release its lease, then a second process resumes from the checkpoint and
+#      finishes. Also runs with Postgres alone: the queue message is the outbox
+#      event the relay would have published, so no broker is required to prove
+#      the recovery path.
 #
 # Usage:
 #   CHAOS_DATABASE_URL=postgresql://renderflow:renderflow@127.0.0.1:5433/chaos \
@@ -70,12 +72,6 @@ fatal() {
 command -v psql >/dev/null 2>&1 || fatal "psql is not on PATH"
 [[ -d "$ROOT/libs/credits/dist" ]] || fatal "build first: pnpm build"
 
-HAVE_REDIS=false
-if command -v redis-cli >/dev/null 2>&1 \
-  && redis-cli -u "${REDIS_URL:-redis://localhost:6379}" ping >/dev/null 2>&1; then
-  HAVE_REDIS=true
-fi
-
 note "preparing a dedicated chaos database"
 # A dedicated database: this test truncates and leaves failed jobs behind, and
 # must not touch the one the integration suite uses.
@@ -122,22 +118,26 @@ else
   fatal "the recovery harness failed; see the output above"
 fi
 
-# --- B: a real SIGKILL, which needs the real queue --------------------------
+# --- B: a real SIGKILL ------------------------------------------------------
 #
-# Reported as SKIPPED rather than silently omitted. A green run of this script
-# that never killed anything would be a lie.
+# The harness spawns a real Node process, waits until it is inside SCRIPT, then
+# SIGKILLs it. The recovery is driven by the real reaper and a second real
+# process. No broker is involved; the queue message is the outbox event.
 
-if [[ "$HAVE_REDIS" != true ]]; then
-  note "real SIGKILL (needs Redis)"
-  skip "R5 worker killed mid-render with SIGKILL" "no Redis at ${REDIS_URL:-redis://localhost:6379}"
-  printf '\n  Start Redis with `docker compose up -d redis` to exercise R5.\n'
-  printf '  R1-R4 above are the same recovery decisions, driven without a queue.\n'
+note "real SIGKILL (R5)"
+printf '  A worker process will be SIGKILLed inside SCRIPT and the job recovered.\n'
+
+R5_JSON=""
+if R5_JSON=$(DATABASE_URL="$CHAOS_DB" SIGNUP_BONUS_CREDITS=50 \
+  node "$(dirname "${BASH_SOURCE[0]}")/r5-harness.mjs" 2>"$LOG_DIR/r5.log"); then
+  while IFS=$'\t' read -r label expected actual; do
+    check "$label" "$expected" "$actual"
+  done < <(node -e "
+    for (const r of $R5_JSON) console.log([r.label, r.expected, r.actual].join('\t'));
+  ")
 else
-  note "real SIGKILL (R5)"
-  printf '  A worker process will be SIGKILLed mid-render and the job recovered.\n'
-  # Wired up in a follow-up: it needs the relay and a live worker, and there is
-  # no way to verify it here. Refusing to fake a pass is the point.
-  skip "R5 worker killed mid-render with SIGKILL" "scenario not yet implemented"
+  cat "$LOG_DIR/r5.log" >&2
+  fatal "the R5 harness failed; see the output above"
 fi
 
 printf '\n======================================\n'
