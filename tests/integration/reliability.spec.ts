@@ -7,6 +7,7 @@ import {
   MockTextProvider,
   MockTtsProvider,
 } from '@renderflow/ai';
+import { jobCreatedEventSchema } from '@renderflow/common';
 import {
   creditLedger,
   generationJobs,
@@ -49,15 +50,14 @@ import {
  *
  * What is and is not exercised here
  * ---------------------------------
- * A real `kill -9` needs Redis and a running worker, neither of which exists in
- * this environment. What matters is the *state* a kill leaves behind, and that
- * state is exactly reproducible: PROCESSING, a lease nobody will renew, and
- * whatever checkpoints the dead worker managed to write. Every test below builds
- * that state directly and then asserts what the reaper and the next worker do
- * about it.
+ * This suite builds the *state* a kill leaves behind - PROCESSING, a lease
+ * nobody will renew, and whatever checkpoints the dead worker managed to write -
+ * and asserts what the reaper and the next worker do about it. That is the fast
+ * gate: every recovery decision, against a real database.
  *
- * So: the recovery logic is verified, the process death is not. That gap is
- * recorded in PROJECT.md's Phase 5 known gaps rather than papered over.
+ * The process death itself is exercised by `tests/chaos/r5-harness.mjs`, which
+ * spawns a real worker, SIGKILLs it inside SCRIPT, and resumes the job in a
+ * second process. It needs no Redis; R5 is part of `tests/chaos/run.sh`.
  */
 
 const WORKSPACE = '11111111-1111-4111-8111-111111111111';
@@ -330,6 +330,50 @@ describe('reliability: lease and reaper (Phase 5 DoD)', () => {
       // reaper that looks like it worked and strands the job.
       expect(events).toHaveLength(2);
       expect(new Set(events.map((e) => e.dedupeKey)).size).toBe(2);
+    });
+
+    it('replays a complete job.created payload a worker can actually run', async () => {
+      const { userId, jobId } = await newJob();
+      await simulateKill(jobId, 'dead-worker', true);
+
+      await sweepOnce(db);
+
+      const events = await db
+        .select()
+        .from(outboxEvents)
+        .where(eq(outboxEvents.aggregateId, jobId));
+      const requeued = events.find((event) => event.dedupeKey.includes(':job.requeued:'));
+      expect(requeued).toBeDefined();
+
+      // The bug this guards against: the requeue used to carry only
+      // `{eventType, jobId, reason}`. The relay published it happily, and every
+      // worker then rejected it with a zod error, leaving the job PENDING with
+      // its credits reserved. Parsing the stored payload is the same check the
+      // worker performs at the process boundary.
+      const payload = jobCreatedEventSchema.parse(requeued?.payload);
+      expect(payload).toMatchObject({
+        eventType: 'job.created',
+        jobId,
+        userId,
+        workspaceId: WORKSPACE,
+        kind: 'REEL',
+        creditsReserved: 30,
+      });
+
+      // And it must be enough to finish the job, not merely enough to parse.
+      await handleGenerationJob(deps({ lease: LEASE }), {
+        data: requeued?.payload,
+        attemptsMade: 0,
+        attempts: 3,
+      });
+
+      expect((await row(jobId))?.status).toBe('COMPLETED');
+      await expect(walletOf(db, userId)).resolves.toEqual({ available: 20, reserved: 0 });
+      const captures = await db
+        .select({ id: creditLedger.id })
+        .from(creditLedger)
+        .where(sql`${creditLedger.entryType} = 'CAPTURE'`);
+      expect(captures).toHaveLength(1);
     });
 
     it('re-queues a job that was never started at all', async () => {

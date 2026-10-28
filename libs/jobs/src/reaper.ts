@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
+import { jobCreatedEventSchema } from '@renderflow/common';
 import { generationJobs, outboxEvents, type Database } from '@renderflow/db';
 
 import { DEFAULT_LEASE, findExpiredJobs, type LeaseConfig } from './lease';
@@ -51,9 +52,39 @@ export interface ReaperOptions {
  * Same rule as every other path into the queue (AGENTS.md rule 6): the decision
  * and the request to act on it are one transaction, so a crash between them
  * cannot leave a job that nobody will ever pick up again.
+ *
+ * The event is the ORIGINAL `job.created` payload, not a hand-built subset.
+ * A worker validates every queue payload with `jobCreatedEventSchema` before it
+ * touches the database, so an event carrying only `{eventType, jobId, reason}`
+ * is published successfully and then rejected by every worker that receives it -
+ * the job stays PENDING with its credits reserved and looks recovered in the
+ * metrics. Replaying the original payload is also what preserves the
+ * workspace/kind/cost the job was actually created with.
  */
 async function requeue(db: Database, jobId: string, reason: string): Promise<boolean> {
-  const claimed = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
+    const original = await tx
+      .select({ payload: outboxEvents.payload })
+      .from(outboxEvents)
+      .where(eq(outboxEvents.dedupeKey, `JOB:${jobId}:job.created`))
+      .limit(1);
+
+    if (original[0] === undefined) {
+      // Every queue-delivered job is created with a `job.created` event, so a
+      // missing one means this job never had a queue message to replay. Failing
+      // loudly is deliberate: inventing a partial payload would publish a
+      // message that no worker accepts, which is indistinguishable from
+      // recovery until somebody looks at the balance.
+      throw new Error(
+        `Cannot requeue job ${jobId}: its original job.created event is missing. ` +
+          'The job cannot be handed to a worker without a complete payload.',
+      );
+    }
+
+    // Parsed, not copied blindly: a malformed historical event should stop the
+    // requeue here rather than reach a worker as an invalid message.
+    const event = jobCreatedEventSchema.parse(original[0].payload);
+
     // Guarded: only a job that is unfinished AND whose lease is still free or
     // still expired can be re-enqueued.
     //
@@ -93,17 +124,11 @@ async function requeue(db: Database, jobId: string, reason: string): Promise<boo
       // Distinct from the original create event, so the dedupe key does not
       // collide with it and the relay really does publish a second message.
       dedupeKey: `JOB:${jobId}:job.requeued:${randomUUID()}`,
-      payload: {
-        eventType: 'job.created',
-        jobId,
-        reason,
-      },
+      payload: { ...event, reason },
     });
 
     return true;
   });
-
-  return claimed;
 }
 
 /**
