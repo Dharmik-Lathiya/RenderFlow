@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "backup:check": "./scripts/backup-restore-check.sh",
     "clean": "turbo run clean && rm -rf node_modules",
     "db:fix-journal": "node scripts/fix-migration-journal.mjs",
     "db:generate": "pnpm --filter @renderflow/db db:generate",

@@ -106,6 +106,7 @@ libs/
 packages/
   api-client/           typed SDK generated from the API OpenAPI document
 tests/                  e2e, integration, chaos
+docs/                   runbooks (backup and restore)
 infra/                  docker, grafana, prometheus, scripts
 ```
 
@@ -191,6 +192,7 @@ pnpm test:int      # integration, against a real Postgres
 pnpm test:int:coverage # integration + coverage gate (what CI runs)
 pnpm test:e2e      # Playwright against a running web + API (pnpm dev or compose)
 pnpm test:chaos    # tests/chaos/run.sh — R1-R5, real SIGKILL, no Redis
+pnpm backup:check  # restore drill; needs DATABASE_URL and RESTORE_DATABASE_URL
 ```
 
 ---
@@ -266,6 +268,9 @@ charge, or double post.**
   ledger rows, and an `external_post_id` check before any publish is retried.
 - **DLQ + admin replay** — exhausted jobs are inspectable and replayable.
 - **Graceful shutdown** — SIGTERM drains in-flight work before exit.
+- **Backup/restore drill** — `docs/backup-restore.md` and
+  `scripts/backup-restore-check.sh` dump a database, restore it into a scratch
+  database, and hash every table. CI runs it after the integration suite.
 - **Token safety** — social tokens encrypted at rest (AES-256-GCM), never logged.
 
 ---
@@ -338,9 +343,9 @@ Set these on the Vercel project:
 | `NEXT_PUBLIC_SITE_URL` | Canonical origin in the sitemap and `robots.txt`. Falls back to `http://localhost:3000`.                                                      |
 
 The API's CORS allow-list must contain the Vercel origin, and cookies need
-`SameSite=None; Secure` across origins. The current production deployment has
-none of these variables set, so it serves the marketing site only; no live AI,
-social or payment provider has been connected.
+`SameSite=None; Secure` across origins. The current production deployment sets
+`NEXT_PUBLIC_SITE_URL` but has no API URL, so it serves the marketing site only;
+no live AI, social or payment provider has been connected.
 
 ---
 

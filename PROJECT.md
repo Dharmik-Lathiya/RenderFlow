@@ -118,6 +118,7 @@ renderflow/
 │   ├── docker/                  # Dockerfiles per app
 │   ├── grafana/ prometheus/
 │   └── scripts/                 # chaos.sh, seed.ts
+├── docs/                        # runbooks (backup and restore)
 └── tests/
     ├── e2e/                     # Playwright
     ├── integration/
@@ -741,7 +742,7 @@ DoD's assertions are written and passing; "partial" means some of them are not.
 | 7   | Scheduling and publishing         | **Shipped**, mocks only                       | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                            |
 | 8   | Frontend (Next.js)                | **Shipped**                                   | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                   |
 | 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered       | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker). |
-| 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet headers, explicit CORS, CSRF, encrypted tokens, upload validation and a CI dependency audit at high/critical. No k6 load test, index review, backup/restore guide or chaos GIF yet.                                               |
+| 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet headers, explicit CORS, CSRF, encrypted tokens, upload validation, a CI dependency audit at high/critical and a backup/restore drill that hashes every table in CI. No k6 load test, index review or chaos GIF yet.               |
 
 **8 of 11 phases shipped** (0-5, 7, 8), **3 partial** (6, 9, 10), **0
 untouched**.
@@ -1438,9 +1439,16 @@ Also delivered (launch-readiness work that was not in any phase):
   `deepmerge-ts`) are pinned to patched releases in `pnpm-workspace.yaml`. The two
   remaining moderate advisories are dev-only and have no patched release: esbuild
   via `drizzle-kit` and uuid via `testcontainers`.
+- **Backup and restore.** `docs/backup-restore.md` is the runbook: what to back
+  up (Postgres, object storage, secrets, explicitly not Redis), RPO/RTO targets,
+  and the order to restore in so a worker cannot publish or charge against the
+  old timeline. `scripts/backup-restore-check.sh` restores a dump into a scratch
+  database, compares an md5 content hash for every table, checks the credit
+  invariants and confirms the five idempotency indexes survived. CI runs the
+  drill after the integration suite; the first local run restored all 20 tables.
 
-Outstanding: the k6 load test and index review, a backup/restore runbook, SSRF
-hardening for any future user-supplied fetch, and the README chaos GIF.
+Outstanding: the k6 load test and index review, SSRF hardening for any future
+user-supplied fetch, and the README chaos GIF.
 
 ---
 

@@ -143,6 +143,22 @@ jobs:
           TEST_DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow_test
         run: pnpm test:int:coverage
 
+      # The drill restores into a second database and compares every table. It
+      # runs after the suite so the source is the schema and data the tests just
+      # produced, not an empty database.
+      - name: install postgres client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: backup and restore drill
+        env:
+          DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow_test
+          RESTORE_DATABASE_URL: postgresql://renderflow:renderflow@localhost:5432/renderflow_restore
+        run: |
+          psql postgresql://renderflow:renderflow@localhost:5432/postgres \
+            -v ON_ERROR_STOP=1 \
+            -c 'create database renderflow_restore'
+          pnpm backup:check
+
   chaos:
     name: chaos (real SIGKILL)
     runs-on: ubuntu-latest
