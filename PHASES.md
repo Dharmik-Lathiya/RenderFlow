@@ -128,22 +128,23 @@ TEST_DATABASE_URL=postgresql://renderflow:renderflow@127.0.0.1:5433/renderflow_t
 CHAOS_DATABASE_URL=... ./tests/chaos/run.sh        # R1-R5, 40 assertions, no Redis
 ```
 
-Last full local gate: lint, typecheck, build and format clean; **994 unit**,
-**483 integration**, **40 chaos assertions**, **14/14 browser journeys**. The
-browser run used `pnpm dev`, local Postgres/Redis and an S3-compatible test server
-because this environment has no Docker daemon; CI runs the same suite against
-compose.
+Last full local gate: lint, typecheck, build and format clean; **1040 unit**,
+**491 integration**, **40 chaos assertions**, **14/14 browser journeys**. Unit
+coverage is 92.4 % lines / 84.5 % branches; integration coverage is 87.4 % lines
+/ 70.9 % branches. The browser run used `pnpm dev`, local Postgres/Redis and an
+S3-compatible test server because this environment has no Docker daemon; CI runs
+the same suite against compose.
 
 ## Commit map
 
-| Phase | Commits                                                                                                          |
-| ----- | ---------------------------------------------------------------------------------------------------------------- |
-| 0–1   | foundation and auth, through `db-adopt-legacy` (Drizzle cutover)                                                 |
-| 2     | `feat(credits)` — reserve/capture/refund/adjust                                                                  |
-| 3     | `feat(studio)` — workspaces, brands, campaigns, posts, assets                                                    |
-| 4     | `364a115`, `e55034d`, `0d3ceeb` — stage machine, runner, relay + endpoints                                       |
-| 5     | `28c0485` — lease, heartbeat, reaper, operator DLQ; `fix(reaper)` — real R5 SIGKILL and complete requeue payload |
-| 6     | `8c9dc97`, `07e01ce`, `35ddcda` — providers, renderer, moderation, brand memory                                  |
-| 7     | `8c9dc97`-era: publisher, scheduler, mock adapters                                                               |
-| 8     | `18544a5`, `2b49265`, `9479c53`, `9087bcc` — frontend, api-client, e2e harness                                   |
-| 9     | `feat(observability)` — collector, alert rules, dashboard, analytics, admin                                      |
+| Phase | Commits                                                                                                            |
+| ----- | ------------------------------------------------------------------------------------------------------------------ |
+| 0–1   | foundation and auth, through `db-adopt-legacy` (Drizzle cutover)                                                   |
+| 2     | `feat(credits)` — reserve/capture/refund/adjust                                                                    |
+| 3     | `feat(studio)` — workspaces, brands, campaigns, posts, assets                                                      |
+| 4     | `364a115`, `e55034d`, `0d3ceeb` — stage machine, runner, relay + endpoints                                         |
+| 5     | `28c0485` — lease, heartbeat, reaper, operator DLQ; `4323596` fix(reaper); `0c6e2f5` test(chaos) — real R5 SIGKILL |
+| 6     | `8c9dc97`, `07e01ce`, `35ddcda` — providers, renderer, moderation, brand memory                                    |
+| 7     | `8c9dc97`-era: publisher, scheduler, mock adapters                                                                 |
+| 8     | `18544a5`, `2b49265`, `9479c53`, `9087bcc` — frontend, api-client, e2e harness                                     |
+| 9     | `feat(observability)` — collector, alert rules, dashboard, analytics, admin                                        |

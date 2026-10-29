@@ -293,9 +293,9 @@ pnpm test:chaos
 Gates: `libs/credits` and the state machines ≥ 95 %, overall ≥ 80 %. Mocks are used
 for every external API — tests never call a real provider.
 
-Current: **994 unit tests**, **483 integration tests**, **40 chaos assertions**
-and 14/14 browser journeys passing; 93.8 % lines / 85.2 % branches overall
-(unit).
+Current: **1040 unit tests**, **491 integration tests**, **40 chaos assertions**
+and 14/14 browser journeys passing. Unit coverage is 92.4 % lines / 84.5 %
+branches; integration coverage is 87.4 % lines / 70.9 % branches.
 
 ---
 

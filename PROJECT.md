@@ -945,7 +945,7 @@ Known gaps: the BullMQ path (`BullMqPublisher`, both workers' `createWorker`) is
 typechecked and unit-tested against a stubbed factory but has never actually been
 _run_ — there is no Redis in this environment. Media stages write deterministic
 placeholder bytes rather than real images and FFmpeg output; Phase 6 replaces the
-providers. The lease/heartbeat columns exist but are unused: that is Phase 5,
+providers. The lease/heartbeat columns existed but were unused until Phase 5,
 along with the reaper that refunds a reservation whose worker was killed
 mid-flight.
 
@@ -1418,7 +1418,11 @@ Also delivered (launch-readiness work that was not in any phase):
   edit; approval is guarded on the status it was decided against.
 - **`purchase()`** in `libs/credits` (ledger-first, idempotent on the provider
   reference) and a stub `POST /credits/top-up` that is disabled by default and
-  refused in production. No real payment provider is wired.
+  refused in production. No real payment provider is wired. Its first integration
+  test caught that `onConflictDoNothing` named the ledger columns without the
+  partial index's `reference_type IS NOT NULL` predicate, so Postgres could not
+  infer the arbiter index and every real purchase failed. The predicate is now
+  repeated on the statement.
 
 Outstanding: the k6 load test and index review, a backup/restore runbook, a CI
 dependency-audit job, SSRF hardening for any future user-supplied fetch, and the
