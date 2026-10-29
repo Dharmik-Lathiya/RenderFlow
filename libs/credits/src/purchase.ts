@@ -63,8 +63,15 @@ export async function purchase(
       note: input.note ?? `purchase via ${input.provider}`,
     })
     // Partial unique index covers (reference_type, reference_id, entry_type).
+    //
+    // The index's predicate has to be repeated here: Postgres infers the
+    // arbiter index from the conflict target, and a partial index is only a
+    // candidate when the statement's `WHERE` implies its predicate. Omitting it
+    // produces "there is no unique or exclusion constraint matching the ON
+    // CONFLICT specification" at the first real purchase.
     .onConflictDoNothing({
       target: [creditLedger.referenceType, creditLedger.referenceId, creditLedger.entryType],
+      where: sql`${creditLedger.referenceType} IS NOT NULL`,
     })
     .returning({ id: creditLedger.id });
 
