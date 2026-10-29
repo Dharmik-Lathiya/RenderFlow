@@ -18,7 +18,7 @@
   "dependencies": {
     "@renderflow/common": "workspace:*",
     "drizzle-orm": "^0.45.3",
-    "zod": "^4.1.13"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^24.19.1"

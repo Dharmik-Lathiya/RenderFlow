@@ -56,9 +56,9 @@ credentials this environment does not have.
   containers have never started here, so no panel has rendered. The expressions
   are drift-tested; a chart on a screen is not.
 - **Phase 10** has helmet, an explicit CORS allow-list, double-submit CSRF,
-  encrypted social tokens, upload validation and presigned PUT. It still lacks a
-  k6 load test, an index review, a backup/restore runbook, a CI dependency-audit
-  job and the README chaos GIF.
+  encrypted social tokens, upload validation, presigned PUT and a CI dependency
+  audit. It still lacks a k6 load test, an index review, a backup/restore runbook
+  and the README chaos GIF.
 
 None of these gaps are hidden by a green build. They are stated in `PROJECT.md`
 beside the code they affect.
@@ -128,7 +128,7 @@ TEST_DATABASE_URL=postgresql://renderflow:renderflow@127.0.0.1:5433/renderflow_t
 CHAOS_DATABASE_URL=... ./tests/chaos/run.sh        # R1-R5, 40 assertions, no Redis
 ```
 
-Last full local gate: lint, typecheck, build and format clean; **1040 unit**,
+Last full local gate: lint, typecheck, build and format clean; **1046 unit**,
 **491 integration**, **40 chaos assertions**, **14/14 browser journeys**. Unit
 coverage is 92.4 % lines / 84.5 % branches; integration coverage is 87.4 % lines
 / 70.9 % branches. The browser run used `pnpm dev`, local Postgres/Redis and an

@@ -298,7 +298,7 @@ pnpm test:chaos
 Gates: `libs/credits` and the state machines ≥ 95 %, overall ≥ 80 %. Mocks are used
 for every external API — tests never call a real provider.
 
-Current: **1040 unit tests**, **491 integration tests**, **40 chaos assertions**
+Current: **1046 unit tests**, **491 integration tests**, **40 chaos assertions**
 and 14/14 browser journeys passing. Unit coverage is 92.4 % lines / 84.5 %
 branches; integration coverage is 87.4 % lines / 70.9 % branches.
 
@@ -319,6 +319,28 @@ Copy `.env.example` to `.env`. Notable values:
 | `S3_ENDPOINT`              | `http://minio:9000` | S3/MinIO                                  |
 
 Local development and CI run entirely on mocks.
+
+---
+
+## Deployment
+
+The web app deploys to Vercel from `apps/web`; the API is a long-running NestJS
+process and does not fit a serverless function, so it needs a host that can run
+the container in `infra/docker/node-app.Dockerfile` (plus Postgres, Redis and
+S3-compatible storage for the workers).
+
+Set these on the Vercel project:
+
+| Variable               | Why                                                                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`  | Build-time browser base URL, including `/api/v1`. Without it the client falls back to `http://localhost:4000`, so only the public pages work. |
+| `API_INTERNAL_URL`     | Server-side base URL used to render `/pricing` from `pricing_rules`. Falls back to `NEXT_PUBLIC_API_URL`.                                     |
+| `NEXT_PUBLIC_SITE_URL` | Canonical origin in the sitemap and `robots.txt`. Falls back to `http://localhost:3000`.                                                      |
+
+The API's CORS allow-list must contain the Vercel origin, and cookies need
+`SameSite=None; Secure` across origins. The current production deployment has
+none of these variables set, so it serves the marketing site only; no live AI,
+social or payment provider has been connected.
 
 ---
 

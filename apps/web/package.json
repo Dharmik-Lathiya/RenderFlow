@@ -16,11 +16,11 @@
     "@hookform/resolvers": "^5.9.1",
     "@renderflow/api-client": "workspace:*",
     "@tanstack/react-query": "^5.104.2",
-    "next": "^16.3.8",
+    "next": "^16.4.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-hook-form": "^7.90.0",
-    "zod": "^4.6.6"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.2",

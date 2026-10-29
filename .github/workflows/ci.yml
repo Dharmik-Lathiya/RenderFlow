@@ -57,6 +57,32 @@ jobs:
       - name: prettier check
         run: pnpm format:check
 
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # High and critical only. The two remaining moderate advisories are in
+      # dev-only tooling with no patched release (esbuild via drizzle-kit and
+      # uuid via testcontainers); they are recorded in PROJECT.md. A high or
+      # critical advisory anywhere fails the build, including one that arrives
+      # through a transitive dependency.
+      - name: audit for high and critical advisories
+        run: pnpm audit --audit-level high
+
   integration:
     name: integration (real Postgres)
     runs-on: ubuntu-latest

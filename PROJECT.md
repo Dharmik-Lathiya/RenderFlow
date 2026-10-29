@@ -741,7 +741,7 @@ DoD's assertions are written and passing; "partial" means some of them are not.
 | 7   | Scheduling and publishing         | **Shipped**, mocks only                       | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                            |
 | 8   | Frontend (Next.js)                | **Shipped**                                   | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                   |
 | 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered       | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker). |
-| 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet security headers and an explicit-CORS assertion are in place. No k6 load test, backup/restore guide or CI audit job yet.                                                                                                          |
+| 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet headers, explicit CORS, CSRF, encrypted tokens, upload validation and a CI dependency audit at high/critical. No k6 load test, index review, backup/restore guide or chaos GIF yet.                                               |
 
 **8 of 11 phases shipped** (0-5, 7, 8), **3 partial** (6, 9, 10), **0
 untouched**.
@@ -1429,10 +1429,18 @@ Also delivered (launch-readiness work that was not in any phase):
   partial index's `reference_type IS NOT NULL` predicate, so Postgres could not
   infer the arbiter index and every real purchase failed. The predicate is now
   repeated on the statement.
+- **Dependency audit.** `pnpm audit --audit-level high` is a CI job, so a high or
+  critical advisory fails the build. It caught Next.js 16.3.8 carrying two
+  unauthenticated RCE advisories (fixed in 16.4.1) and zod 4.6.5 carrying a
+  memory-exhaustion advisory. Next is now 16.4.3 and zod 4.6.7. Four transitive
+  packages whose parents pin an exact vulnerable version (`body-parser`, `multer`,
+  `js-yaml`, `qs`) and three dev-only ones (`undici`, `handlebars`,
+  `deepmerge-ts`) are pinned to patched releases in `pnpm-workspace.yaml`. The two
+  remaining moderate advisories are dev-only and have no patched release: esbuild
+  via `drizzle-kit` and uuid via `testcontainers`.
 
-Outstanding: the k6 load test and index review, a backup/restore runbook, a CI
-dependency-audit job, SSRF hardening for any future user-supplied fetch, and the
-README chaos GIF.
+Outstanding: the k6 load test and index review, a backup/restore runbook, SSRF
+hardening for any future user-supplied fetch, and the README chaos GIF.
 
 ---
 

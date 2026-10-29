@@ -17,6 +17,21 @@ autoInstallPeers: false
 # Fail the install when the local Node version is outside engines.node.
 engineStrict: true
 
+# Security pins for transitive dependencies whose parents pin an exact,
+# vulnerable version. Each one is a patch/minor upgrade inside the same major
+# line, except deepmerge-ts 8, which is only reached by the Prisma CLI that
+# drizzle-orm's optional peer drags in and is never imported by RenderFlow.
+# Remove an entry once its parent ships the fixed version itself; `pnpm audit`
+# in CI is what notices.
+overrides:
+  body-parser: 2.4.0
+  deepmerge-ts: 8.0.2
+  handlebars: 4.7.10
+  js-yaml: 5.4.1
+  multer: 2.5.0
+  qs: 6.16.1
+  undici: 7.30.1
+
 # pnpm >=10 blocks dependency lifecycle scripts by default. Each entry here has a
 # genuine native build step: Prisma extracts its query engines, msgpackr-extract is
 # BullMQ's (de)serialiser, argon2 links a native binding, and protobufjs/ssh2 come
