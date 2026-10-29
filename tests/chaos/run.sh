@@ -36,9 +36,7 @@ PASS=0
 FAIL=0
 SKIP=0
 
-WORKER_PID=""
 cleanup() {
-  [[ -n "$WORKER_PID" ]] && kill -9 "$WORKER_PID" 2>/dev/null
   rm -rf "$LOG_DIR"
 }
 trap cleanup EXIT
