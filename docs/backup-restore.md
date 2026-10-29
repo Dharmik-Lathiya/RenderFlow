@@ -60,6 +60,11 @@ The script refuses to run when both URLs are the same. It deletes its dump on
 exit. The dump still contains password hashes and encrypted social tokens, so
 run the drill on a trusted machine and never attach the dump to a ticket.
 
+Each table is hashed in one aggregate. That is exact and cheap at the sizes this
+repository runs; on a multi-gigabyte table, hash a sample or compare the managed
+provider's block checksums instead, because the aggregate has to hold the
+table's row text in memory.
+
 Use a role that can create extensions (the local compose user is a superuser, as
 is the CI Postgres service user), or pre-install `vector` in the scratch
 database. `pg_restore --clean` drops and recreates the extension along with the

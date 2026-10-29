@@ -61,6 +61,9 @@ while IFS= read -r table; do
 
   # A content hash, not just a row count: a restore that swaps two rows has the
   # same count and would pass a weaker check. The ORDER BY makes it stable.
+  # The aggregate holds the table's row text in memory, which is fine for the
+  # test-sized databases this drill runs against; hash a sample for a
+  # multi-gigabyte table.
   query="select md5(coalesce(string_agg(row_to_json(t)::text, '|' order by row_to_json(t)::text), '')) from $table t"
 
   source_hash=$(psql "$DATABASE_URL" -Atc "$query")

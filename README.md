@@ -342,10 +342,13 @@ Set these on the Vercel project:
 | `API_INTERNAL_URL`     | Server-side base URL used to render `/pricing` from `pricing_rules`. Falls back to `NEXT_PUBLIC_API_URL`.                                     |
 | `NEXT_PUBLIC_SITE_URL` | Canonical origin in the sitemap and `robots.txt`. Falls back to `http://localhost:3000`.                                                      |
 
-The API's CORS allow-list must contain the Vercel origin, and cookies need
-`SameSite=None; Secure` across origins. The current production deployment sets
-`NEXT_PUBLIC_SITE_URL` but has no API URL, so it serves the marketing site only;
-no live AI, social or payment provider has been connected.
+The API's CORS allow-list must contain the Vercel origin. Deploy the API on the
+same registrable site as the web app (for example `app.example.com` and
+`api.example.com`): the auth cookies are `SameSite=Lax`, so a cross-site API
+would need a cookie-policy change before sign-in could work. The current
+production deployment sets `NEXT_PUBLIC_SITE_URL` but has no API URL, so it
+serves the marketing site only; no live AI, social or payment provider has been
+connected.
 
 ---
 
