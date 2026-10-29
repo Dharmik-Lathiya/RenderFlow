@@ -48,8 +48,33 @@
   --shell-columns-narrow: 1fr;
 }
 
+/*
+ * Explicit choice wins over the OS. The boot script sets `data-theme` before
+ * first paint; this block is also what the provider uses when the user clicks
+ * the shell toggle.
+ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #ffffff;
+  --bg-raised: #f6f7f9;
+  --bg-sunken: #eceef1;
+  --border: #d7dbe0;
+  --border-strong: #b6bcc4;
+
+  --fg: #14181d;
+  --muted: #5a6470;
+  --accent: #2f62d8;
+  --accent-fg: #ffffff;
+  --danger: #b4231f;
+  --success: #16794a;
+  --warning: #8a5b00;
+}
+
+/* No-JavaScript fallback: without the boot script there is no data-theme, so
+   the page still follows the OS instead of being permanently dark. */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme]) {
     color-scheme: light;
 
     --bg: #ffffff;

@@ -5,6 +5,7 @@ import './globals.css';
 
 import { Providers } from '../lib/providers';
 import { Shell } from '../components/shell';
+import { THEME_STORAGE_KEY } from '../lib/theme-config';
 
 /**
  * Root layout.
@@ -19,6 +20,27 @@ export const metadata: Metadata = {
 };
 
 /**
+ * Runs before the first paint, so a reload with a stored light preference never
+ * flashes the dark default. Kept inline rather than in a client component: a
+ * React effect runs after paint, which is exactly one frame too late.
+ */
+const THEME_BOOT_SCRIPT = `(function () {
+  try {
+    var stored = window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
+    var theme = stored === 'light' || stored === 'dark'
+      ? stored
+      : window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.style.colorScheme = theme;
+  } catch (error) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.style.colorScheme = 'dark';
+  }
+})();`;
+
+/**
  * `lang` and the skip link are not decoration.
  *
  * A screen reader picks its voice from `lang`, and the skip link is the only way
@@ -27,8 +49,17 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    // The boot script adds `data-theme` before hydration; React must not treat
+    // that deliberate attribute as a mismatch.
+    <html lang="en" suppressHydrationWarning>
       <body>
+        {/*
+          A native blocking script, deliberately not `next/script`: the
+          `beforeInteractive` strategy queues the code for Next's runtime, which
+          is late enough to paint the wrong theme for a frame. As the first node
+          in the body it runs before any app markup is parsed.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <a className="skip-link" href="#main">
           Skip to main content
         </a>

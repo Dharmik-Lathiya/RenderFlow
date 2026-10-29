@@ -175,6 +175,11 @@ The landing page is server-rendered and needs no session; the application shell
 starts at `/dashboard`. The marketing design and its contrast checks live in
 `design-system/renderflow/`.
 
+The app follows the OS colour scheme until you choose Light or Dark in the
+sidebar. That choice is stored in this browser and applied by a pre-paint script,
+so reloads do not flash the wrong palette. The public marketing pages remain
+deliberately light; the toggle applies to the product shell and its panels.
+
 ### Commands
 
 ```bash

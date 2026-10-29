@@ -1256,6 +1256,12 @@ Decisions:
 - **`Providers` takes an optional `queryClient`.** An injection point, not "wrap
   it in your own provider" - a provider outside is shadowed by the one inside,
   so the test's settings silently do not apply.
+- **Theme is a persisted, explicit choice.** `ThemeProvider` follows the OS until
+  the user picks Light or Dark in the shell, then stores that choice in
+  `localStorage`. A `beforeInteractive` boot script sets `data-theme` before
+  first paint so a stored light preference never flashes the dark default. Both
+  palettes are tokenised in `globals.css` and contrast-tested; the public
+  marketing pages keep their separate light editorial tokens.
 
 Known gaps:
 

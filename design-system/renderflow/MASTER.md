@@ -11,8 +11,9 @@
 **Category:** SaaS (General)
 **Design Dials:** Variance 5/10 (Balanced / Modern) | Motion 3/10 (Subtle) | Density 3/10 (Spacious)
 
-> **RenderFlow adaptation:** the product application is dark-first (see
-> `apps/web/src/app/globals.css`); this light palette is the public marketing
+> **RenderFlow adaptation:** the product application supports explicit light and
+> dark themes, defaulting to the OS preference (see `apps/web/src/lib/theme.tsx`
+> and `apps/web/src/app/globals.css`); this light palette is the public marketing
 > surface. The landing page overrides colour and typography details in
 > `design-system/renderflow/pages/landing.md`. Do not copy the marketing palette
 > into app screens without re-checking their contrast and focus states.

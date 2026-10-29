@@ -6,6 +6,7 @@ import { createContext, useContext, useState, type ReactNode } from 'react';
 import { ApiClientError, createApiClient, type DomainClient } from '@renderflow/api-client';
 
 import { API_BASE_URL } from './api-url';
+import { ThemeProvider } from './theme';
 
 /**
  * The API client, as a React context.
@@ -133,8 +134,10 @@ export function Providers({
   const [apiClient] = useState(() => client ?? createBrowserApiClient());
 
   return (
-    <ApiContext.Provider value={apiClient}>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </ApiContext.Provider>
+    <ThemeProvider>
+      <ApiContext.Provider value={apiClient}>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </ApiContext.Provider>
+    </ThemeProvider>
   );
 }

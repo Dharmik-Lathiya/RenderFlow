@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { useApi } from '../lib/providers';
+import { ThemeToggle } from './theme-toggle';
 import { Badge } from './ui';
 import styles from './ui.module.css';
 
@@ -66,6 +67,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </ul>
 
         <div className={styles.navFooter}>
+          <ThemeToggle />
           {me.isError ? (
             <>
               <p>Signed out.</p>
