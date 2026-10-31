@@ -1,3 +1,4 @@
+/* global __ENV -- provided by the k6 runtime, not Node. */
 import http from 'k6/http';
 import { check } from 'k6';
 
