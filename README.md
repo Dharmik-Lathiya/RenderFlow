@@ -17,6 +17,17 @@ generation fails.
 > panel has rendered because this environment has no Docker daemon. See
 > [`PHASES.md`](./PHASES.md) for the per-phase table and
 > [`PROJECT.md`](./PROJECT.md) §12 for the plan and §13 for the test matrix.
+> Production blockers — readiness probes, worker metrics and alert delivery —
+> are listed in [`SECURITY.md`](./SECURITY.md) and
+> [`OPERATIONS.md`](./OPERATIONS.md).
+
+## Production documentation
+
+- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — components, data flow, credit rules, jobs and scaling.
+- [`SECURITY.md`](./SECURITY.md) — threat model, controls and launch blockers.
+- [`DEPLOYMENT.md`](./DEPLOYMENT.md) — build, migrate, deploy and smoke-test.
+- [`OPERATIONS.md`](./OPERATIONS.md) — monitoring, alerts, incidents and runbooks.
+- [`docs/README.md`](./docs/README.md) — index of runbooks and evidence.
 
 ---
 
@@ -106,7 +117,7 @@ libs/
 packages/
   api-client/           typed SDK generated from the API OpenAPI document
 tests/                  e2e, integration, chaos
-docs/                   runbooks (backup/restore, index review)
+docs/                   runbooks (backup/restore, index review, load testing)
 infra/                  docker, grafana, prometheus, scripts
 ```
 
@@ -193,6 +204,7 @@ pnpm test:int:coverage # integration + coverage gate (what CI runs)
 pnpm test:e2e      # Playwright against a running web + API (pnpm dev or compose)
 pnpm test:chaos    # tests/chaos/run.sh — R1-R5, real SIGKILL, no Redis
 pnpm backup:check  # restore drill; needs DATABASE_URL and RESTORE_DATABASE_URL
+# load test (k6 is not a package dependency): BASE_URL=... k6 run tests/load/api-read.js
 ```
 
 ---
@@ -298,7 +310,7 @@ pnpm test:chaos
 | Concurrency | Jest + `Promise.all`  | races on credits and publishing                |
 | Chaos       | Bash + real Postgres  | SIGKILL, lease expiry, reaper requeue, SIGTERM |
 | E2E         | Playwright            | real user journeys against compose             |
-| Load        | k6                    | throughput, queue drain time                   |
+| Load        | k6                    | public read throughput (manual; not in CI)     |
 
 Gates: `libs/credits` and the state machines ≥ 95 %, overall ≥ 80 %. Mocks are used
 for every external API — tests never call a real provider.
@@ -349,6 +361,10 @@ would need a cookie-policy change before sign-in could work. The current
 production deployment sets `NEXT_PUBLIC_SITE_URL` but has no API URL, so it
 serves the marketing site only; no live AI, social or payment provider has been
 connected.
+
+Full procedures are in [`DEPLOYMENT.md`](./DEPLOYMENT.md) and
+[`OPERATIONS.md`](./OPERATIONS.md). Security controls and launch blockers are in
+[`SECURITY.md`](./SECURITY.md).
 
 ---
 

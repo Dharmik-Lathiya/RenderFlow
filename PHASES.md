@@ -4,8 +4,8 @@ The authoritative version of this table lives in [`PROJECT.md` §12](./PROJECT.m
 This file exists so progress can be read without scrolling a thousand lines of
 specification.
 
-**Last updated:** after the launch-readiness pass and the real SIGKILL chaos
-scenario (R5).
+**Last updated:** after the index review, manual k6 load test and production
+documentation pass.
 
 | #   | Phase                             | Status                                                       |
 | --- | --------------------------------- | ------------------------------------------------------------ |
@@ -57,9 +57,10 @@ credentials this environment does not have.
   are drift-tested; a chart on a screen is not.
 - **Phase 10** has helmet, an explicit CORS allow-list, double-submit CSRF,
   encrypted social tokens, upload validation, presigned PUT, a CI dependency
-  audit, a backup/restore runbook with a drill that runs in CI, and an index
-  review that added a missing history index and pinned the survivors with a test.
-  It still lacks a k6 load test and the README chaos GIF.
+  audit, a backup/restore runbook with a drill that runs in CI, an index review
+  that added a missing history index and pinned the survivors with a test, and a
+  manual k6 read load test. It still lacks a CI-hosted load job and the README
+  chaos GIF.
 
 None of these gaps are hidden by a green build. They are stated in `PROJECT.md`
 beside the code they affect.
