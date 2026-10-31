@@ -106,7 +106,7 @@ libs/
 packages/
   api-client/           typed SDK generated from the API OpenAPI document
 tests/                  e2e, integration, chaos
-docs/                   runbooks (backup and restore)
+docs/                   runbooks (backup/restore, index review)
 infra/                  docker, grafana, prometheus, scripts
 ```
 

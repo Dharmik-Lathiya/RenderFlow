@@ -118,7 +118,7 @@ renderflow/
 │   ├── docker/                  # Dockerfiles per app
 │   ├── grafana/ prometheus/
 │   └── scripts/                 # chaos.sh, seed.ts
-├── docs/                        # runbooks (backup and restore)
+├── docs/                        # runbooks (backup/restore, index review)
 └── tests/
     ├── e2e/                     # Playwright
     ├── integration/
@@ -730,19 +730,19 @@ Each phase ends with a **Definition of Done (DoD)**. Do not start the next phase
 The single place to look for where the project stands. "Shipped" means the
 DoD's assertions are written and passing; "partial" means some of them are not.
 
-| #   | Phase                             | Status                                        | Verified how                                                                                                                                                                                                                             |
-| --- | --------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0   | Foundation                        | **Shipped**, one DoD item unverified          | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                                                                       |
-| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified          | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                                                                    |
-| 2   | Credit engine                     | **Shipped**                                   | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                                                              |
-| 3   | Brands, campaigns, posts, assets  | **Shipped**                                   | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                                                             |
-| 4   | Job pipeline with mock AI         | **Shipped**                                   | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                                                                    |
-| 5   | Reliability layer                 | **Shipped**                                   | R1-R4 via `tests/chaos/run.sh`; R5 spawns a real worker, SIGKILLs it inside SCRIPT, waits out the lease, and resumes in a second process: 40/40 chaos assertions. Integration suite 28/28.                                               |
-| 6   | Real AI integration               | **Partial** - the DoD's first half unverified | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                                                             |
-| 7   | Scheduling and publishing         | **Shipped**, mocks only                       | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                            |
-| 8   | Frontend (Next.js)                | **Shipped**                                   | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                   |
-| 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered       | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker). |
-| 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet headers, explicit CORS, CSRF, encrypted tokens, upload validation, a CI dependency audit at high/critical and a backup/restore drill that hashes every table in CI. No k6 load test, index review or chaos GIF yet.               |
+| #   | Phase                             | Status                                        | Verified how                                                                                                                                                                                                                                                              |
+| --- | --------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Foundation                        | **Shipped**, one DoD item unverified          | `docker compose up` cannot be run here: no Docker. Everything else verified in CI.                                                                                                                                                                                        |
+| 1   | Auth, users, wallet, signup bonus | **Shipped**, one DoD item unverified          | 11/11 `scripts/smoke-phase1.sh` against a running server. `docker compose up` unverified (no Docker).                                                                                                                                                                     |
+| 2   | Credit engine                     | **Shipped**                                   | 100+ integration assertions against real Postgres (C3-C12), plus per-bucket reconciliation.                                                                                                                                                                               |
+| 3   | Brands, campaigns, posts, assets  | **Shipped**                                   | Integration suite incl. multi-tenant isolation per endpoint.                                                                                                                                                                                                              |
+| 4   | Job pipeline with mock AI         | **Shipped**                                   | 33/33 `scripts/smoke-phase4.sh` + integration suites.                                                                                                                                                                                                                     |
+| 5   | Reliability layer                 | **Shipped**                                   | R1-R4 via `tests/chaos/run.sh`; R5 spawns a real worker, SIGKILLs it inside SCRIPT, waits out the lease, and resumes in a second process: 40/40 chaos assertions. Integration suite 28/28.                                                                                |
+| 6   | Real AI integration               | **Partial** - the DoD's first half unverified | Mock passes everything; the renderer is verified end to end with real ffmpeg; providers via a stub transport. **No real provider key has ever been called.**                                                                                                              |
+| 7   | Scheduling and publishing         | **Shipped**, mocks only                       | DoD met against the mock: publishes within 5 s of target, no duplicate when a publisher dies mid-publish, expired token refreshes and succeeds. **No real adapter, no OAuth flow, no email.**                                                                             |
+| 8   | Frontend (Next.js)                | **Shipped**                                   | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                                                    |
+| 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered       | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker).                                  |
+| 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet headers, explicit CORS, CSRF, encrypted tokens, upload validation, a CI dependency audit at high/critical, a backup/restore drill that hashes every table in CI, and an index review with the reviewed indexes pinned by a test. No k6 load test or chaos GIF yet. |
 
 **8 of 11 phases shipped** (0-5, 7, 8), **3 partial** (6, 9, 10), **0
 untouched**.
@@ -1446,9 +1446,16 @@ Also delivered (launch-readiness work that was not in any phase):
   database, compares an md5 content hash for every table, checks the credit
   invariants and confirms the five idempotency indexes survived. CI runs the
   drill after the integration suite; the first local run restored all 20 tables.
+- **Index review.** `docs/index-review.md` maps each index to the query that
+  needs it. The review found one gap: the partial unique index on
+  `(post_id, social_account_id)` only covers live rows, so a post's publication
+  history fell back to a sequential scan. Migration `0014` adds
+  `publish_jobs_post_id_idx`; on a 100k-row scratch table the same lookup went
+  from 34.36 ms to 0.116 ms. `tests/integration/schema-indexes.spec.ts` pins the
+  reviewed indexes so a later migration cannot silently drop one.
 
-Outstanding: the k6 load test and index review, SSRF hardening for any future
-user-supplied fetch, and the README chaos GIF.
+Outstanding: the k6 load test, SSRF hardening for any future user-supplied fetch,
+and the README chaos GIF.
 
 ---
 

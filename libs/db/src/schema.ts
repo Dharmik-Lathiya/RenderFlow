@@ -604,6 +604,16 @@ export const publishJobs = pgTable(
       .on(table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),
     /**
+     * A post's publication history, including FAILED and PUBLISHED rows.
+     *
+     * `publish_jobs_post_account_idx` below is partial on the live statuses, so
+     * it cannot answer "every job for this post" (the replay check and the
+     * post-detail list). Without this index that query sequentially scans the
+     * whole table: 34 ms for 100k rows in the review benchmark, and the cost
+     * grows with every other tenant's publish history.
+     */
+    postIdx: index('publish_jobs_post_id_idx').on(table.postId),
+    /**
      * One post must not be LIVE-published to the same account twice.
      *
      * PARTIAL, and that is the whole point. A plain unique index over

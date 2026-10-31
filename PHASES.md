@@ -57,8 +57,9 @@ credentials this environment does not have.
   are drift-tested; a chart on a screen is not.
 - **Phase 10** has helmet, an explicit CORS allow-list, double-submit CSRF,
   encrypted social tokens, upload validation, presigned PUT, a CI dependency
-  audit and a backup/restore runbook with a drill that runs in CI. It still lacks
-  a k6 load test, an index review and the README chaos GIF.
+  audit, a backup/restore runbook with a drill that runs in CI, and an index
+  review that added a missing history index and pinned the survivors with a test.
+  It still lacks a k6 load test and the README chaos GIF.
 
 None of these gaps are hidden by a green build. They are stated in `PROJECT.md`
 beside the code they affect.
