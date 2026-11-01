@@ -33,6 +33,8 @@ export interface PresignedUpload {
 export interface StorageProvider {
   putObject(input: PutObjectInput): Promise<ObjectMetadata>;
   getObject(key: string): Promise<Uint8Array>;
+  /** Reads at most `maxBytes` from the start; used for magic-byte checks. */
+  getObjectPrefix(key: string, maxBytes: number): Promise<Uint8Array>;
   headObject(key: string): Promise<ObjectMetadata | null>;
   deleteObject(key: string): Promise<void>;
   createPresignedUpload(

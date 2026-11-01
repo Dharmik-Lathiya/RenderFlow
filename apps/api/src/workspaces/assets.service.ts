@@ -43,6 +43,7 @@ export interface StorageLike {
   ): Promise<PresignedUploadResult>;
   createPresignedDownload(key: string, expiresInSeconds?: number): Promise<string>;
   headObject(key: string): Promise<{ sizeBytes: number; contentType: string } | null>;
+  getObjectPrefix(key: string, maxBytes: number): Promise<Uint8Array>;
   deleteObject?(key: string): Promise<void>;
 }
 
@@ -142,6 +143,7 @@ function buildStorage(): StorageLike {
           ? null
           : { sizeBytes: metadata.sizeBytes, contentType: metadata.contentType };
       },
+      getObjectPrefix: (key, maxBytes) => storage.getObjectPrefix(key, maxBytes),
       deleteObject: (key: string) => storage.deleteObject(key),
     };
   } catch (error) {
@@ -151,6 +153,7 @@ function buildStorage(): StorageLike {
       createPresignedUpload: () => reject(message),
       createPresignedDownload: () => reject(message),
       headObject: () => reject(message),
+      getObjectPrefix: () => reject(message),
     };
   }
 }

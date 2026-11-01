@@ -15,6 +15,7 @@ import {
 
 import { WorkspaceAccessService } from './workspace-access.service';
 import { WorkspacesService } from './workspaces.service';
+import { mimeMatches, SNIFF_BYTES } from './upload-signature';
 
 /**
  * Brands, campaigns, posts and assets.
@@ -658,6 +659,8 @@ export class StudioService implements OnModuleInit {
     assetId: string,
     storage: {
       headObject(key: string): Promise<{ sizeBytes: number; contentType: string } | null>;
+      getObjectPrefix(key: string, maxBytes: number): Promise<Uint8Array>;
+      deleteObject?(key: string): Promise<void>;
     },
   ) {
     const asset = await this.getAsset(userId, assetId);
@@ -671,6 +674,26 @@ export class StudioService implements OnModuleInit {
       throw new AppError(ERROR_CODES.ASSET_TOO_LARGE, 'Uploaded object exceeds the size limit', {
         details: { sizeBytes: head.sizeBytes, maxBytes: MAX_UPLOAD_BYTES },
       });
+    }
+
+    // The declared MIME is a claim. Inspect the actual bytes; a mismatch is a
+    // stored-XSS attempt (HTML declared as image/png), not a user mistake to
+    // paper over.
+    const prefix = await storage.getObjectPrefix(asset.storageKey, SNIFF_BYTES);
+    const check = mimeMatches(asset.mime, prefix);
+    if (!check.ok) {
+      await storage.deleteObject?.(asset.storageKey);
+      await this.db.delete(assets).where(eq(assets.id, assetId));
+      throw new AppError(
+        ERROR_CODES.UNSUPPORTED_MEDIA_TYPE,
+        'Uploaded file content does not match its declared type',
+        {
+          details: {
+            declared: check.declared,
+            detected: check.detected,
+          },
+        },
+      );
     }
 
     const [confirmed] = await this.db

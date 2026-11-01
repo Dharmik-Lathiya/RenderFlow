@@ -27,6 +27,7 @@ describe('S3Storage construction', () => {
     for (const method of [
       'putObject',
       'getObject',
+      'getObjectPrefix',
       'headObject',
       'deleteObject',
       'createPresignedUpload',

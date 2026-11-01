@@ -91,6 +91,28 @@ export class S3Storage implements StorageProvider {
     }
   }
 
+  async getObjectPrefix(key: string, maxBytes: number): Promise<Uint8Array> {
+    try {
+      const result = await this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Range: `bytes=0-${Math.max(0, maxBytes - 1)}`,
+        }),
+      );
+      const bytes = await result.Body?.transformToByteArray();
+      if (!bytes) {
+        throw new ObjectNotFoundError(key);
+      }
+      return bytes.slice(0, maxBytes);
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        throw error;
+      }
+      throw new StorageError(`Failed to read the start of object ${key}`, { cause: error });
+    }
+  }
+
   async headObject(key: string): Promise<ObjectMetadata | null> {
     try {
       const result = await this.client.send(

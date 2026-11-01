@@ -57,6 +57,10 @@ describe('StorageProvider interface', () => {
         calls.push(`get:${key}`);
         return new Uint8Array([1, 2, 3]);
       },
+      getObjectPrefix: async (key, maxBytes) => {
+        calls.push(`prefix:${key}:${maxBytes}`);
+        return new Uint8Array([1, 2, 3]);
+      },
       headObject: async (key) => {
         calls.push(`head:${key}`);
         return null;
