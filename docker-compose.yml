@@ -252,6 +252,29 @@ services:
       api:
         condition: service_healthy
 
+  alertmanager:
+    # Receives firing alerts from Prometheus and delivers them to Slack. Kept in
+    # the observability profile so `docker compose up` stays the lightweight app
+    # stack; `--profile observability` brings the whole monitoring path up.
+    image: prom/alertmanager:v0.27.0
+    profiles: ['observability']
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      # Expands ${SLACK_WEBHOOK_URL} from the environment. Without this flag the
+      # placeholder is sent literally and every notification fails.
+      - '--config.expand-env'
+    environment:
+      # Compose supplies a valid placeholder when the operator has not set a
+      # webhook yet. Alertmanager still starts and shows alerts on :9093.
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-https://hooks.slack.com/services/REPLACE/REPLACE/REPLACE}
+    volumes:
+      - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanagerdata:/alertmanager
+    ports:
+      - '9093:9093'
+
   prometheus:
     image: prom/prometheus:latest
     profiles: ['observability']
@@ -269,6 +292,7 @@ services:
       - '9090:9090'
     depends_on:
       - redis
+      - alertmanager
 
   grafana:
     image: grafana/grafana:latest
@@ -294,3 +318,4 @@ volumes:
   redisdata:
   miniodata:
   grafanadata:
+  alertmanagerdata:

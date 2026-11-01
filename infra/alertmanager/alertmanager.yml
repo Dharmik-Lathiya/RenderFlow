@@ -1,0 +1,45 @@
+# RenderFlow — Alertmanager configuration.
+#
+# Prometheus evaluates `alerts.yml`; this process is what actually delivers a
+# firing alert. Without it the rules are a dashboard nobody watches.
+#
+# The Slack webhook is injected by Compose and expanded by Alertmanager's
+# `--config.expand-env` flag, so no secret is committed. When the variable is
+# unset, Compose supplies a syntactically valid placeholder: Alertmanager starts,
+# alerts are still grouped and visible on :9093, and delivery begins as soon as a
+# real webhook is configured.
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: slack
+  # Group by the alert name and service so a single failing worker produces one
+  # message rather than one per rule.
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: slack
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#renderflow-alerts'
+        send_resolved: true
+        title: >-
+          [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}]
+          {{ .CommonLabels.alertname }}
+        text: >-
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ if .Annotations.runbook }}Runbook: {{ .Annotations.runbook }}{{ end }}
+          {{ end }}
+
+inhibit_rules:
+  # A critical alert supersedes the warning for the same condition. Two pages for
+  # one incident is how an on-call rotation learns to mute the channel.
+  - source_matchers: ['severity="critical"']
+    target_matchers: ['severity="warning"']
+    equal: ['alertname', 'service']

@@ -74,9 +74,10 @@ These are known gaps, not hypotheticals:
   processes do not start an HTTP server. Those targets will be down.
 - **The Redis scrape target is not an exporter.** `redis:6379` does not serve
   `/metrics`. Use a Redis exporter or remove the target.
-- **No Alertmanager is deployed.** `infra/prometheus/prometheus.yml` names
-  `alertmanager:9093`, but `docker-compose.yml` has no Alertmanager service.
-  Alert rules evaluate in Prometheus, but nothing is delivered.
+- **Alertmanager is deployed in the observability profile.** Prometheus sends
+  firing alerts to `alertmanager:9093`; Alertmanager routes them to Slack when
+  `SLACK_WEBHOOK_URL` is set. Without a webhook it still starts and exposes
+  firing alerts on `:9093`, but nothing leaves the host.
 - **Grafana has provisioned dashboards and datasources**, but the panels have
   never been rendered in this environment because Docker is unavailable. Validate
   the dashboard before relying on it.
@@ -370,7 +371,8 @@ error; that is deliberate and safer than silently using a wrong key.
 - Readiness is not dependency-aware.
 - Worker metrics and Redis metrics are not exposed, so several Prometheus targets
   are guaranteed down.
-- Alertmanager is not deployed.
+- Alertmanager is deployed, but Slack delivery requires `SLACK_WEBHOOK_URL`; the
+  local default is a placeholder receiver.
 - Grafana panels have not been rendered in this environment.
 - Rate limits are per-process.
 - Real email, social, AI and billing providers are not connected.
