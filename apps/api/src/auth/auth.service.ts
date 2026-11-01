@@ -231,10 +231,11 @@ export class AuthService implements OnModuleInit {
     const tokenHash = hashRefreshToken(refreshToken);
     const now = new Date();
 
-    const user = await this.db.transaction(async (tx: DbTransaction) => {
+    return this.db.transaction(async (tx: DbTransaction) => {
       const rows = await tx
         .select({
           id: refreshSessions.id,
+          familyId: refreshSessions.familyId,
           expiresAt: refreshSessions.expiresAt,
           revokedAt: refreshSessions.revokedAt,
           userId: users.id,
@@ -245,11 +246,44 @@ export class AuthService implements OnModuleInit {
         .from(refreshSessions)
         .innerJoin(users, eq(refreshSessions.userId, users.id))
         .where(eq(refreshSessions.tokenHash, tokenHash))
-        .limit(1);
+        .limit(1)
+        // Serialises two refreshes presenting the same token. The loser sees the
+        // row already revoked and is treated as reuse, not as a second success.
+        .for('update');
 
       const session = rows[0];
 
-      if (session === undefined || session.revokedAt !== null || session.expiresAt <= now) {
+      if (session === undefined) {
+        throw new AppError(ERROR_CODES.UNAUTHORIZED, 'Refresh token is invalid or expired');
+      }
+
+      if (session.revokedAt !== null) {
+        // A revoked token being presented means either a replay or a stolen
+        // token. Revoke the whole family: the legitimate user is logged out, and
+        // so is the attacker holding any descendant of this login.
+        await tx
+          .update(refreshSessions)
+          .set({ revokedAt: now })
+          .where(
+            and(eq(refreshSessions.familyId, session.familyId), isNull(refreshSessions.revokedAt)),
+          );
+
+        log().warn(
+          {
+            event: 'REFRESH_TOKEN_REUSE',
+            userId: session.userId,
+            familyId: session.familyId,
+          },
+          'refresh token reuse detected; revoked the token family',
+        );
+
+        throw new AppError(
+          ERROR_CODES.UNAUTHORIZED,
+          'Refresh token reuse detected; all sessions in this family were revoked',
+        );
+      }
+
+      if (session.expiresAt <= now) {
         throw new AppError(ERROR_CODES.UNAUTHORIZED, 'Refresh token is invalid or expired');
       }
 
@@ -258,15 +292,17 @@ export class AuthService implements OnModuleInit {
         .set({ revokedAt: now })
         .where(eq(refreshSessions.id, session.id));
 
-      return {
-        id: session.userId,
-        email: session.email,
-        name: session.name,
-        role: session.role,
-      };
+      return this.issueSession(
+        {
+          id: session.userId,
+          email: session.email,
+          name: session.name,
+          role: session.role,
+        },
+        meta,
+        { familyId: session.familyId, tx },
+      );
     });
-
-    return this.issueSession(user, meta);
   }
 
   /** Revokes the presented session. Idempotent: logging out twice is fine. */
@@ -479,6 +515,7 @@ export class AuthService implements OnModuleInit {
   private async issueSession(
     user: { id: string; email: string; name: string; role: string },
     meta: SessionMetadata,
+    options: { familyId?: string; tx?: DbTransaction } = {},
   ): Promise<IssuedSession> {
     const accessTtl = ttlSeconds(this.config.JWT_ACCESS_TTL);
     const refreshTtl = ttlSeconds(this.config.JWT_REFRESH_TTL);
@@ -493,10 +530,13 @@ export class AuthService implements OnModuleInit {
     const refreshToken = generateRefreshToken();
     const refreshTokenExpiresAt = new Date(Date.now() + refreshTtl * 1000);
 
-    await this.db.insert(refreshSessions).values({
+    await (options.tx ?? this.db).insert(refreshSessions).values({
       userId: user.id,
       tokenHash: hashRefreshToken(refreshToken),
       expiresAt: refreshTokenExpiresAt,
+      // Registration and login start a new family; a rotation keeps the one it
+      // inherited so reuse of any ancestor can revoke every descendant.
+      ...(options.familyId === undefined ? {} : { familyId: options.familyId }),
       userAgent: meta.userAgent ?? null,
       ipAddress: meta.ipAddress ?? null,
     });

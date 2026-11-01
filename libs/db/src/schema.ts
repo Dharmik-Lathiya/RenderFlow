@@ -196,6 +196,13 @@ export const refreshSessions = pgTable(
      * digest is always exactly 64 characters.
      */
     tokenHash: varchar('token_hash', { length: 64 }).notNull(),
+    /**
+     * Groups every rotation of one login. A stolen token and the real user's
+     * next refresh are two presentations of the same family; detecting the
+     * second presentation and revoking the family is what turns token theft
+     * from a permanent session into a logged-out one.
+     */
+    familyId: uuid('family_id').notNull().defaultRandom(),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'date' }),
 
@@ -207,6 +214,7 @@ export const refreshSessions = pgTable(
   (table) => ({
     tokenHashIdx: uniqueIndex('refresh_sessions_token_hash_key').on(table.tokenHash),
     userIdx: index('refresh_sessions_user_id_idx').on(table.userId),
+    familyIdx: index('refresh_sessions_family_id_idx').on(table.familyId),
     expiresIdx: index('refresh_sessions_expires_at_idx').on(table.expiresAt),
   }),
 );

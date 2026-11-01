@@ -405,7 +405,7 @@ describe('auth (Phase 1 DoD)', () => {
       expect(cookieFrom(res, 'rf_refresh')).not.toBe(cookieFrom(session, 'rf_refresh'));
     });
 
-    it('rejects reuse of a rotated token', async () => {
+    it('rejects reuse of a rotated token and revokes its whole family', async () => {
       const session = await app
         .http()
         .post('/api/v1/auth/register')
@@ -414,7 +414,7 @@ describe('auth (Phase 1 DoD)', () => {
       const staleRefresh = cookieFrom(session, 'rf_refresh') as string;
       const csrf = csrfOf(session);
 
-      await app
+      const rotated = await app
         .http()
         .post('/api/v1/auth/refresh')
         .set('Cookie', sessionCookies(session))
@@ -429,6 +429,16 @@ describe('auth (Phase 1 DoD)', () => {
         .set('x-csrf-token', csrf);
 
       expect(replay.status).toBe(401);
+
+      // Reuse is evidence of theft, not a harmless retry: the legitimate
+      // descendant issued by the rotation must stop working too.
+      const descendant = await app
+        .http()
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', sessionCookies(rotated))
+        .set('x-csrf-token', csrfOf(rotated));
+
+      expect(descendant.status).toBe(401);
     });
 
     it('requires CSRF on refresh because it changes state', async () => {
@@ -518,6 +528,51 @@ describe('auth (Phase 1 DoD)', () => {
           .set('x-csrf-token', csrf)
           .expect(204);
       }
+    });
+  });
+
+  describe('POST /auth/logout-all', () => {
+    it('revokes every device and refuses to mint another token', async () => {
+      const email = uniqueEmail('logout-all');
+      const first = await app
+        .http()
+        .post('/api/v1/auth/register')
+        .send({ email, password: UNIQUE_PASSWORD, name: 'Everywhere' });
+
+      const second = await app
+        .http()
+        .post('/api/v1/auth/login')
+        .send({ email, password: UNIQUE_PASSWORD });
+
+      const userId = await userIdByEmail(email);
+      await expect(countActiveSessions(userId)).resolves.toBe(2);
+
+      await app
+        .http()
+        .post('/api/v1/auth/logout-all')
+        .set('Cookie', sessionCookies(first))
+        .set('x-csrf-token', csrfOf(first))
+        .expect(204);
+
+      await expect(countActiveSessions(userId)).resolves.toBe(0);
+
+      // The other device still holds a refresh cookie, but its row is revoked.
+      const after = await app
+        .http()
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', sessionCookies(second))
+        .set('x-csrf-token', csrfOf(second));
+
+      expect(after.status).toBe(401);
+    });
+
+    it('requires authentication', async () => {
+      await expect(
+        app
+          .http()
+          .post('/api/v1/auth/logout-all')
+          .then((response) => response.status),
+      ).resolves.toBe(401);
     });
   });
 

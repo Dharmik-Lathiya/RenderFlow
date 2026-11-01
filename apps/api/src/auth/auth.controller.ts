@@ -128,6 +128,25 @@ export class AuthController {
   }
 
   /**
+   * POST /api/v1/auth/logout-all - "log out everywhere".
+   *
+   * Revokes every refresh session for the signed-in user, including the one
+   * making this request. The access token already issued stays valid until it
+   * expires (they are short-lived and stateless), but no new token can be minted
+   * from any device.
+   */
+  @Post('logout-all')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Revoke every session for the signed-in user' })
+  async logoutAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) response: ResponseWithCookies,
+  ): Promise<void> {
+    await this.auth.logoutAll(user.id);
+    clearSessionCookies(response);
+  }
+
+  /**
    * GET /api/v1/auth/me - the signed-in user's profile and wallet.
    *
    * This is the session bootstrap the web shell needs: one authenticated call
