@@ -40,6 +40,13 @@ export const envSchema = z.object({
 
   // --- cookies / CSRF ---
   CSRF_EXEMPT_PATHS: z.string().default(''),
+  /**
+   * Express `trust proxy` setting. `false` means the socket address is the
+   * client, so `X-Forwarded-For` is ignored and cannot be spoofed. Behind a
+   * known edge (Railway, Vercel, Cloudflare) set the number of hops or the
+   * proxy addresses; never `true` on a directly reachable API.
+   */
+  TRUST_PROXY: z.string().default('false'),
 
   // --- rate limiting (PROJECT.md section 14.10, section 15) ---
   /**
@@ -53,6 +60,12 @@ export const envSchema = z.object({
     .union([z.boolean(), z.string()])
     .default(true)
     .transform((value) => (typeof value === 'boolean' ? value : value !== 'false')),
+  /**
+   * Where counters live. `memory` is correct only for one API replica; `redis`
+   * makes every replica share one window. Multi-replica production must use
+   * `redis`.
+   */
+  RATE_LIMIT_STORE: z.enum(['memory', 'redis']).default('memory'),
   RATE_LIMIT_LOGIN_IP: rateLimitSpecSchema.default('10/15m'),
   RATE_LIMIT_LOGIN_ACCOUNT: rateLimitSpecSchema.default('30/1h'),
   RATE_LIMIT_REGISTER_IP: rateLimitSpecSchema.default('5/1h'),
@@ -72,9 +85,16 @@ export const envSchema = z.object({
   /**
    * `log` prints the message (including the one-shot link) to the log for local
    * development and is REFUSED when NODE_ENV=production; `none` drops mail.
-   * A real provider adapter plugs in at `email.module.ts`.
+   * `resend` posts to the Resend API; `mailhog` sends SMTP to the local
+   * container. A real provider adapter plugs in at `email.module.ts`.
    */
-  EMAIL_PROVIDER: z.enum(['log', 'none']).default('log'),
+  EMAIL_PROVIDER: z.enum(['log', 'none', 'resend', 'mailhog']).default('log'),
+  EMAIL_FROM: z.string().default('RenderFlow <no-reply@renderflow.local>'),
+  /** Required only when EMAIL_PROVIDER=resend. */
+  RESEND_API_KEY: z.string().default(''),
+  RESEND_BASE_URL: z.string().url().default('https://api.resend.com'),
+  MAILHOG_SMTP_HOST: z.string().default('localhost'),
+  MAILHOG_SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(1025),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
   EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().positive().default(48),
 
