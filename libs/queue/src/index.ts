@@ -9,4 +9,5 @@
 export * from './queue-config';
 export * from './queue-factory';
 export * from './redis-connection';
+export * from './redis-health';
 export * from './retry-presets';

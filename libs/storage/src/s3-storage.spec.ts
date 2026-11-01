@@ -1,3 +1,5 @@
+import { HeadBucketCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+
 import { S3Storage } from './s3-storage';
 import { StorageError, type StorageProvider } from './storage-provider';
 
@@ -95,5 +97,54 @@ describe('S3Storage error translation', () => {
 
   it('reports an unhealthy storage rather than hanging', async () => {
     await expect(unreachable.checkHealth()).rejects.toBeInstanceOf(StorageError);
+  });
+});
+
+describe('S3Storage readiness check', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('asks for the bucket itself first', async () => {
+    const send = jest.spyOn(S3Client.prototype, 'send') as jest.Mock;
+    send.mockResolvedValue({});
+    const storage = new S3Storage(OPTIONS);
+
+    await expect(storage.checkHealth()).resolves.toBeUndefined();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0]).toBeInstanceOf(HeadBucketCommand);
+  });
+
+  it('falls back to an object HEAD when ListBucket is not granted', async () => {
+    const denied = Object.assign(new Error('Access Denied'), {
+      name: 'AccessDenied',
+      $metadata: { httpStatusCode: 403 },
+    });
+    const missing = Object.assign(new Error('Not Found'), {
+      $metadata: { httpStatusCode: 404 },
+    });
+    const send = jest.spyOn(S3Client.prototype, 'send') as jest.Mock;
+    send.mockRejectedValueOnce(denied).mockRejectedValueOnce(missing);
+    const storage = new S3Storage(OPTIONS);
+
+    await expect(storage.checkHealth()).resolves.toBeUndefined();
+
+    expect(send.mock.calls[0]?.[0]).toBeInstanceOf(HeadBucketCommand);
+    expect(send.mock.calls[1]?.[0]).toBeInstanceOf(HeadObjectCommand);
+  });
+
+  it('reports a missing bucket as down instead of treating its 404 as healthy', async () => {
+    const missing = Object.assign(new Error('The specified bucket does not exist'), {
+      name: 'NoSuchBucket',
+      $metadata: { httpStatusCode: 404 },
+    });
+    const send = jest.spyOn(S3Client.prototype, 'send') as jest.Mock;
+    send.mockRejectedValueOnce(missing);
+    const storage = new S3Storage(OPTIONS);
+
+    await expect(storage.checkHealth()).rejects.toBeInstanceOf(StorageError);
+
+    expect(send).toHaveBeenCalledTimes(1);
   });
 });

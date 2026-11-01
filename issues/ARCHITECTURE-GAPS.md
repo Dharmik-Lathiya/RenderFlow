@@ -18,6 +18,9 @@ what backend interviewers ask about.
 
 **Source:** `ARCHITECTURE.md §2`, `OPERATIONS.md §2`
 
+**Status:** ✅ Resolved — `HealthProbesService` registers DB, Redis and S3 probes
+at bootstrap; `/health/ready` returns 503 with the failure report.
+
 **What it means:**
 `HealthService` supports registered probes but none are registered. The endpoint
 returns `{ "status": "ok", "checks": {} }` unconditionally. PostgreSQL can be
@@ -353,10 +356,12 @@ pretending it does not:
 > in ARCH-04. The tradeoff was: faster to ship with in-memory, and the constraint
 > is explicit rather than hidden."
 
-> "The readiness probe returns empty checks because wiring async health checks
-> into NestJS's lifecycle requires a specific pattern I noted but left for the
-> hardening phase. The `/health/live` endpoint is correct. The ready endpoint is
-> the gap."
+> "The readiness probe used to return empty checks because wiring async health
+> checks into NestJS's lifecycle needs a deliberate bootstrap step. That was a
+> real gap, so I closed it: the API registers PostgreSQL, Redis and S3 probes at
+> startup, applies a per-probe deadline, and returns 503 when one is down.
+> `/health/live` still does no dependency I/O, which keeps a transient outage
+> from causing an unnecessary restart."
 
 > "I know the workers don't expose metrics. That's why Prometheus has those
 > scrape targets listed as 'expected down' in OPERATIONS.md — it's a known gap,

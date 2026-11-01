@@ -237,8 +237,9 @@ Deploy the API image with the production environment. It should:
 - reach PostgreSQL, Redis and S3,
 - accept requests only from the configured web origin.
 
-Do **not** use `/health/ready` as the sole dependency gate until readiness probes
-are implemented; it currently returns `ok` without testing dependencies.
+Use `/health/ready` as the dependency gate: it probes PostgreSQL, Redis and S3
+and returns 503 when any is down. `/health/live` answers without touching a
+dependency, so a transient outage does not cause an unnecessary restart.
 
 ### Step 4 — Start the workers
 

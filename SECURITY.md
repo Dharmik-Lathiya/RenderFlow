@@ -337,7 +337,8 @@ rather than silently disabling a control.
 - [ ] Restrict database and S3 credentials to the minimum required.
 - [ ] Implement a real email provider before enabling password reset.
 - [ ] Keep `BULL_BOARD_ENABLED=false` unless an operator genuinely needs it.
-- [ ] Wire real readiness probes or monitor PostgreSQL, Redis and S3 directly.
+- [x] Wire real readiness probes (PostgreSQL, Redis and S3) and keep them
+      dependency-backed; `/health/ready` returns 503 when any is down.
 - [ ] Add a shared rate-limit store before running more than one API replica.
 - [ ] Add Alertmanager or another alert delivery path.
 - [ ] Pin container image digests and enable dependency update automation.
@@ -347,20 +348,19 @@ rather than silently disabling a control.
 
 ## 15. Known gaps
 
-| Gap                                      | Impact                                                                 | Status / next step                                            |
-| ---------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Readiness has no probes                  | A broken database or Redis connection can still report `ok`.           | Register DB/Redis/S3 probes or monitor dependencies directly. |
-| In-memory rate limiter                   | Effective limits multiply with API replicas.                           | Add Redis-backed store before scaling out.                    |
-| Trusted `X-Forwarded-For`                | Rate-limit key spoofing if the API is directly reachable.              | Enforce trusted-proxy deployment.                             |
-| No real email provider                   | Password reset and verification cannot work in production.             | Implement and test a provider.                                |
-| Mock social adapter only                 | No real OAuth, token refresh or publishing has been verified.          | Implement and test live adapters before enabling publishing.  |
-| No SSRF protection                       | Becomes critical if URL fetching is added.                             | Implement before that feature ships.                          |
-| Upload MIME not re-checked               | Declared type can differ from stored bytes.                            | Add content inspection or transcoding.                        |
-| No alert delivery                        | Alert rules evaluate, but no Alertmanager is deployed.                 | Add Alertmanager or an equivalent notification path.          |
-| Worker metrics absent                    | Worker health is inferred from the database, not scraped.              | Expose `/metrics` or remove dead scrape targets.              |
-| Refresh token reuse detection incomplete | A stolen refresh token is single-use, but family revocation is absent. | Add reuse detection that revokes the session family.          |
-| No WAF / DDoS protection in repo         | Volumetric attacks are an infrastructure responsibility.               | Use the hosting provider's edge protection.                   |
-| No external security audit               | Unknown unknowns remain.                                               | Commission a penetration test before launch.                  |
+| Gap                                      | Impact                                                                 | Status / next step                                           |
+| ---------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| In-memory rate limiter                   | Effective limits multiply with API replicas.                           | Add Redis-backed store before scaling out.                   |
+| Trusted `X-Forwarded-For`                | Rate-limit key spoofing if the API is directly reachable.              | Enforce trusted-proxy deployment.                            |
+| No real email provider                   | Password reset and verification cannot work in production.             | Implement and test a provider.                               |
+| Mock social adapter only                 | No real OAuth, token refresh or publishing has been verified.          | Implement and test live adapters before enabling publishing. |
+| No SSRF protection                       | Becomes critical if URL fetching is added.                             | Implement before that feature ships.                         |
+| Upload MIME not re-checked               | Declared type can differ from stored bytes.                            | Add content inspection or transcoding.                       |
+| No alert delivery                        | Alert rules evaluate, but no Alertmanager is deployed.                 | Add Alertmanager or an equivalent notification path.         |
+| Worker metrics absent                    | Worker health is inferred from the database, not scraped.              | Expose `/metrics` or remove dead scrape targets.             |
+| Refresh token reuse detection incomplete | A stolen refresh token is single-use, but family revocation is absent. | Add reuse detection that revokes the session family.         |
+| No WAF / DDoS protection in repo         | Volumetric attacks are an infrastructure responsibility.               | Use the hosting provider's edge protection.                  |
+| No external security audit               | Unknown unknowns remain.                                               | Commission a penetration test before launch.                 |
 
 ## 16. Incident response
 

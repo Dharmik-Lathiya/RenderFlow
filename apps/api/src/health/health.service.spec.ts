@@ -90,6 +90,42 @@ describe('HealthService', () => {
       });
     });
 
+    it('fails a probe that exceeds its deadline instead of hanging the endpoint', async () => {
+      jest.useFakeTimers();
+
+      try {
+        const service = new HealthService();
+        service.registerProbe('database', () => new Promise<boolean>(() => undefined), 50);
+
+        const report = service.checkReadiness();
+        await jest.advanceTimersByTimeAsync(50);
+
+        await expect(report).resolves.toEqual({
+          status: 'degraded',
+          checks: { database: 'down' },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('clears the deadline after a fast probe so no timer outlives the check', async () => {
+      jest.useFakeTimers();
+
+      try {
+        const service = new HealthService();
+        service.registerProbe('database', async () => true, 60_000);
+
+        await expect(service.checkReadiness()).resolves.toEqual({
+          status: 'ok',
+          checks: { database: 'up' },
+        });
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('runs probes concurrently rather than in sequence', async () => {
       // Sequential probes would make readiness latency the sum of every timeout.
       const service = new HealthService();

@@ -43,7 +43,7 @@ export interface StorageProvider {
     expiresInSeconds?: number,
   ): Promise<PresignedUpload>;
   createPresignedDownload(key: string, expiresInSeconds?: number): Promise<string>;
-  /** Used by /health/ready. */
+  /** Proves the configured bucket is reachable; used by /health/ready. */
   checkHealth(): Promise<void>;
 }
 

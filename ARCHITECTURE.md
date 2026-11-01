@@ -81,16 +81,16 @@ not need to know the API version:
 | Route           | Purpose                                             |
 | --------------- | --------------------------------------------------- |
 | `/health/live`  | Process liveness. No dependency I/O.                |
-| `/health/ready` | Readiness report. See the caveat below.             |
+| `/health/ready` | Readiness; probes PostgreSQL, Redis and S3.         |
 | `/metrics`      | Prometheus text exposition.                         |
 | `/docs-json`    | OpenAPI 3 document. Swagger UI is development-only. |
 
-> **Readiness caveat.** `HealthService` supports registered probes, but the
-> running API currently registers none. `/health/ready` therefore returns
-> `{ "status": "ok", "checks": {} }` without testing PostgreSQL, Redis or S3.
-> Use `/health/live` for liveness and monitor the real dependencies directly
-> until probes are wired. Do not treat `/health/ready` as proof of dependency
-> health.
+> **Readiness contract.** The API registers three probes at bootstrap:
+> PostgreSQL (`SELECT 1`, 2s), Redis (`PING`, 2s) and S3 (storage health check,
+> 3s). They run concurrently and each has a deadline, so a hung dependency
+> cannot hang the endpoint. All up returns 200 with `status: "ok"`; any failure
+> returns 503 with the same report shape and `status: "degraded"`. Point the
+> orchestrator's readiness check here; keep `/health/live` for liveness only.
 
 The global guard chain is deny-by-default:
 

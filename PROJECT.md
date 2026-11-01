@@ -1583,10 +1583,12 @@ yet, and k6 is not run in CI.
   section returning 0, and the scrape target being down.
 - Dashboards: `infra/grafana/dashboards/platform.json`, twelve panels,
   provisioned from git with `allowUiUpdates: false`.
-- Health endpoints: `/health/live`, `/health/ready`. **Known gap:** the
-  readiness service supports probes but the running API registers none, so
-  `/health/ready` currently returns `ok` with an empty `checks` object. Do not
-  treat it as a dependency check until probes are wired.
+- Health endpoints: `/health/live`, `/health/ready`. Readiness registers the real
+  dependencies at bootstrap and probes them concurrently: PostgreSQL `SELECT 1`
+  (2s budget), Redis `PING` (2s) and object storage (3s). Any failed, throwing or
+  timed-out probe produces `{"status":"degraded","checks":{"db":"down", ...}}`
+  with HTTP 503; an all-up report returns 200. `/health/live` never performs
+  dependency I/O.
 - **Known gap:** Prometheus is configured to scrape worker and Redis targets
   that do not expose `/metrics`, and no Alertmanager service is deployed. Alert
   rules evaluate, but worker scrapes fail and alerts are not delivered.

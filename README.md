@@ -17,9 +17,8 @@ generation fails.
 > panel has rendered because this environment has no Docker daemon. See
 > [`PHASES.md`](./PHASES.md) for the per-phase table and
 > [`PROJECT.md`](./PROJECT.md) §12 for the plan and §13 for the test matrix.
-> Production blockers — readiness probes, worker metrics and alert delivery —
-> are listed in [`SECURITY.md`](./SECURITY.md) and
-> [`OPERATIONS.md`](./OPERATIONS.md).
+> Production blockers such as worker metrics and alert delivery are listed in
+> [`SECURITY.md`](./SECURITY.md) and [`OPERATIONS.md`](./OPERATIONS.md).
 
 ## Production documentation
 

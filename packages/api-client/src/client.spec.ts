@@ -363,7 +363,7 @@ describe('health helpers', () => {
       jsonResponse({ status: 'ok', service: 'api', uptimeSeconds: 1 } satisfies LivenessResponse),
       jsonResponse({
         status: 'ok',
-        checks: { database: 'up', redis: 'up', storage: 'up' },
+        checks: { db: 'up', redis: 'up', s3: 'up' },
       }),
     ]);
     const client = createRenderFlowClient({ baseUrl: BASE_URL, fetchImpl: impl });
@@ -378,7 +378,7 @@ describe('health helpers', () => {
   it('strips only the version segment from a custom prefix', async () => {
     const { impl, calls } = fakeFetch([
       jsonResponse({ status: 'ok', service: 'api', uptimeSeconds: 1 }),
-      jsonResponse({ status: 'ok', checks: { database: 'up', redis: 'up', storage: 'up' } }),
+      jsonResponse({ status: 'ok', checks: { db: 'up', redis: 'up', s3: 'up' } }),
     ]);
     const client = createRenderFlowClient({
       baseUrl: 'http://api.test/gateway/api/v1',

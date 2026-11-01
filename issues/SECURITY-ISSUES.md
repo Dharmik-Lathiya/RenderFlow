@@ -14,6 +14,9 @@ fix plan so it can be turned into a task immediately.
 
 **Source:** `ARCHITECTURE.md §2`, `SECURITY.md §14`, `OPERATIONS.md §2`
 
+**Status:** ✅ Resolved — the API registers DB, Redis and S3 probes at bootstrap
+and `/health/ready` now returns 503 when any of them is down.
+
 **Problem:**
 `GET /health/ready` returns `{ "status": "ok", "checks": {} }` without checking
 PostgreSQL, Redis or S3. A broken database connection will still report healthy.

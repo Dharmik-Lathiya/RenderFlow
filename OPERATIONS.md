@@ -39,9 +39,10 @@ checks are marked as unverified.
 8. Preserve logs and row ids before restarting a process that may be holding
    evidence.
 
-`/health/ready` is not a dependency check yet. It returns `ok` with an empty
-`checks` object because no probes are registered. Do not use it to conclude that
-PostgreSQL, Redis or S3 are healthy.
+`/health/ready` probes PostgreSQL (`SELECT 1`), Redis (`PING`) and S3, each with
+a 2-3 second deadline, and returns HTTP 503 with a per-dependency report when any
+of them is down. A 200 therefore means the instance can reach its dependencies,
+not merely that the process is running.
 
 ## 3. Monitoring
 

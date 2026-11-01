@@ -1,5 +1,6 @@
 import {
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
@@ -166,8 +167,19 @@ export class S3Storage implements StorageProvider {
   }
 
   async checkHealth(): Promise<void> {
-    // A HeadBucket needs ListBucket permission; a HeadObject on a known-missing
-    // key only needs s3:GetObject and is enough to prove reachability + auth.
+    // HeadBucket is the direct question: does the configured bucket exist and is
+    // it reachable with these credentials? Some least-privilege deployments
+    // intentionally grant only object-level access, so a 403 falls back to a
+    // HeadObject on a known-missing key, which still proves reachability + auth.
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return;
+    } catch (error) {
+      if (!isAccessDenied(error)) {
+        throw new StorageError('S3 health check failed', { cause: error });
+      }
+    }
+
     try {
       await this.client.send(
         new HeadObjectCommand({ Bucket: this.bucket, Key: 'renderflow/healthcheck' }),
@@ -182,12 +194,34 @@ export class S3Storage implements StorageProvider {
 }
 
 function isNotFound(error: unknown): boolean {
+  return httpStatusOf(error) === 404;
+}
+
+function isAccessDenied(error: unknown): boolean {
+  if (httpStatusOf(error) === 403) {
+    return true;
+  }
+
   return (
     typeof error === 'object' &&
     error !== null &&
-    '$metadata' in error &&
-    typeof (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode ===
-      'number' &&
-    (error as { $metadata: { httpStatusCode: number } }).$metadata.httpStatusCode === 404
+    'name' in error &&
+    ((error as { name?: unknown }).name === 'AccessDenied' ||
+      (error as { name?: unknown }).name === 'Forbidden')
   );
+}
+
+function httpStatusOf(error: unknown): number | undefined {
+  if (
+    typeof error !== 'object' ||
+    error === null ||
+    !('$metadata' in error) ||
+    typeof (error as { $metadata?: { httpStatusCode?: unknown } }).$metadata !== 'object' ||
+    (error as { $metadata?: { httpStatusCode?: unknown } }).$metadata === null
+  ) {
+    return undefined;
+  }
+
+  const status = (error as { $metadata: { httpStatusCode?: unknown } }).$metadata.httpStatusCode;
+  return typeof status === 'number' ? status : undefined;
 }

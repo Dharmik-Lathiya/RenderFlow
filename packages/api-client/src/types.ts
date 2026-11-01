@@ -72,9 +72,9 @@ export interface LivenessResponse {
 export interface ReadinessResponse {
   status: 'ok' | 'degraded';
   checks: {
-    database: 'up' | 'down';
+    db: 'up' | 'down';
     redis: 'up' | 'down';
-    storage: 'up' | 'down';
+    s3: 'up' | 'down';
   };
 }
 
