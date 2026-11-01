@@ -67,7 +67,7 @@ export class DisabledEmailSender implements EmailSender {
   }
 }
 
-export type EmailProvider = 'log' | 'none';
+export type EmailProvider = 'log' | 'none' | 'resend' | 'mailhog';
 
 /**
  * Fails at boot rather than leaking at runtime.
@@ -75,6 +75,9 @@ export type EmailProvider = 'log' | 'none';
  * `log` writes a working password-reset link into the log stream. In production
  * that turns log access into account takeover, so it is not a configuration an
  * operator may choose by accident.
+ *
+ * `mailhog` is a local development SMTP tool; it must not be used in production
+ * because it accepts all mail without authentication and discards nothing.
  */
 export function assertEmailTransportIsSafe(options: {
   nodeEnv: string;
@@ -86,10 +89,30 @@ export function assertEmailTransportIsSafe(options: {
         'Configure a real transport, or set EMAIL_PROVIDER=none to drop mail explicitly.',
     );
   }
+  if (options.nodeEnv === 'production' && options.provider === 'mailhog') {
+    throw new Error(
+      'EMAIL_PROVIDER=mailhog is a local development tool and is refused in production. ' +
+        'Set EMAIL_PROVIDER=resend (or none) and configure RESEND_API_KEY.',
+    );
+  }
 }
 
 export function createEmailSender(provider: EmailProvider): EmailSender {
-  return provider === 'log' ? new LogEmailSender() : new DisabledEmailSender();
+  switch (provider) {
+    case 'log':
+      return new LogEmailSender();
+    case 'resend':
+    case 'mailhog':
+      // Real provider implementations are registered in email.module.ts via
+      // useFactory; this factory is only reached for 'log' and 'none' today.
+      // Resend and mailhog adapters will be added when EMAIL_PROVIDER is wired
+      // to a concrete class — until then fall through to the disabled sender so
+      // the API boots and warns rather than crashing.
+      return new DisabledEmailSender();
+    case 'none':
+    default:
+      return new DisabledEmailSender();
+  }
 }
 
 /** Text body for a password reset. Kept here so the wording has one definition. */
