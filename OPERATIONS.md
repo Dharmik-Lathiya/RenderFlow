@@ -68,10 +68,11 @@ The API exposes Prometheus metrics at `/metrics`. The important ones:
 
 These are known gaps, not hypotheticals:
 
-- **Worker metrics do not exist.** Prometheus is configured to scrape
-  `content-worker:4001`, `media-worker:4002`, `publisher-worker:4003`,
-  `analytics-worker:4004`, `outbox-relay:4005` and `reaper:4006`, but those
-  processes do not start an HTTP server. Those targets will be down.
+- **Worker metrics exist, but they are process metrics.** Each worker serves
+  `/metrics` on its own port (`METRICS_PORT`, defaulting to 4001–4006 in Compose).
+  They report event-loop lag, heap, GC and the registered Prometheus registry;
+  they do not run the database collector. The API remains the only source of the
+  row-derived gauges.
 - **The Redis scrape target is not an exporter.** `redis:6379` does not serve
   `/metrics`. Use a Redis exporter or remove the target.
 - **Alertmanager is deployed in the observability profile.** Prometheus sends
@@ -369,8 +370,7 @@ error; that is deliberate and safer than silently using a wrong key.
 ## 11. Known operational gaps
 
 - Readiness is not dependency-aware.
-- Worker metrics and Redis metrics are not exposed, so several Prometheus targets
-  are guaranteed down.
+- Worker metrics are process-only; the database-derived gauges come from the API.
 - Alertmanager is deployed, but Slack delivery requires `SLACK_WEBHOOK_URL`; the
   local default is a placeholder receiver.
 - Grafana panels have not been rendered in this environment.

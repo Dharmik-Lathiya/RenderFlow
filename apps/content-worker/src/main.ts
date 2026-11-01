@@ -8,7 +8,7 @@ import {
   validateLeaseConfig,
   type LeaseConfig,
 } from '@renderflow/jobs';
-import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
+import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
 import { S3Storage, loadStorageConfig } from '@renderflow/storage';
 
@@ -74,6 +74,7 @@ function main(): void {
     concurrency: preset.concurrency,
     redisUrl: queueConfig.safeRedisUrl,
     base: { stage: 'consume' },
+    metricsPort: readMetricsPort(process.env.METRICS_PORT, 4001),
   });
 
   const providers = createProviders({

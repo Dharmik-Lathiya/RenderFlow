@@ -1,6 +1,6 @@
 import { QUEUE_NAMES } from '@renderflow/common';
 import { disconnectDb, getDbHandle, tryAcquireAdvisoryLock } from '@renderflow/db';
-import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
+import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
 import {
   MockMetricsAdapter,
@@ -77,6 +77,7 @@ async function main(): Promise<void> {
     concurrency: queueConfig.presets[QUEUE].concurrency,
     redisUrl: queueConfig.safeRedisUrl,
     base: { stage: 'metrics' },
+    metricsPort: readMetricsPort(process.env.METRICS_PORT, 4004),
   });
 
   const processor = new MetricsSyncProcessor({

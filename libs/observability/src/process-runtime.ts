@@ -5,6 +5,8 @@ import {
 } from '@renderflow/common';
 
 import { createLogger, toShutdownLogger, type Logger } from './logger';
+import { createMetrics } from './metrics';
+import { startMetricsServer } from './metrics-server';
 
 /**
  * Shared worker bootstrap.
@@ -28,6 +30,11 @@ export interface WorkerProcessOptions {
   base?: Record<string, unknown>;
   /** Total budget for SIGTERM drains. */
   drainTimeoutMs?: number;
+  /**
+   * Port for the Prometheus scrape endpoint. Omit to disable it (tests, one-off
+   * scripts). Every long-running worker passes its own default.
+   */
+  metricsPort?: number;
 }
 
 export interface WorkerProcess {
@@ -50,6 +57,20 @@ export function startWorkerProcess(options: WorkerProcessOptions): WorkerProcess
   shutdown.install();
 
   const startedAt = new Date();
+
+  if (options.metricsPort !== undefined) {
+    const metrics = createMetrics({ labels: { service: options.appName } });
+    void startMetricsServer({ port: options.metricsPort, metrics, logger })
+      .then((server) => {
+        shutdown.registerDrain('metrics', () => server.close());
+      })
+      .catch((error: unknown) => {
+        // Metrics are observability, not correctness. A port collision should be
+        // loud but must not stop a worker from draining queues.
+        logger.error({ app: options.appName, err: error }, 'metrics server failed to start');
+      });
+  }
+
   logger.info(
     {
       app: options.appName,

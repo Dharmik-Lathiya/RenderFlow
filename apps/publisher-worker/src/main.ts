@@ -8,7 +8,7 @@ import {
   keyFromEnv,
   type SocialPlatform,
 } from '@renderflow/social';
-import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
+import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
 
 import { NotificationsBridge } from './notifications.bridge';
@@ -82,6 +82,7 @@ function main(): void {
     concurrency: preset.concurrency,
     redisUrl: queueConfig.safeRedisUrl,
     base: { stage: 'consume' },
+    metricsPort: readMetricsPort(process.env.METRICS_PORT, 4003),
   });
 
   const limiters = new Map<string, PlatformRateLimiter>();

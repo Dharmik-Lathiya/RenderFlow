@@ -1,6 +1,6 @@
 import { disconnectDb, getDbHandle, tryAcquireAdvisoryLock } from '@renderflow/db';
 import { DEFAULT_REAPER, Reaper, type ReaperConfig } from '@renderflow/jobs';
-import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
+import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { loadQueueConfig } from '@renderflow/queue';
 import { sweepStalePublishJobs } from '@renderflow/social';
 
@@ -83,6 +83,7 @@ async function main(): Promise<void> {
     concurrency: 1,
     redisUrl: queueConfig.safeRedisUrl,
     base: { stage: 'sweep' },
+    metricsPort: readMetricsPort(process.env.METRICS_PORT, 4006),
   });
 
   // The controller owns the sweep loop, not the shutdown registry: the reaper

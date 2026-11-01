@@ -1,6 +1,6 @@
 import { getDb, disconnectDb } from '@renderflow/db';
 import { BullMqPublisher, OutboxRelay, countPending } from '@renderflow/outbox';
-import { abortOnFatal, startWorkerProcess } from '@renderflow/observability';
+import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { loadQueueConfig } from '@renderflow/queue';
 
 /**
@@ -28,6 +28,7 @@ async function main(): Promise<void> {
     concurrency: 1,
     redisUrl: queueConfig.safeRedisUrl,
     base: { stage: 'relay' },
+    metricsPort: readMetricsPort(process.env.METRICS_PORT, 4005),
   });
 
   const publisher = new BullMqPublisher({
