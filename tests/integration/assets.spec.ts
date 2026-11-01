@@ -14,6 +14,21 @@ import {
 } from './helpers/test-database';
 
 /**
+ * Bytes that a real upload would carry.
+ *
+ * `confirm` now sniffs the object, so a test that only sets metadata would be
+ * rejected as "declared image/png, detected nothing" - which is the correct
+ * production behaviour, but not what these size tests are about.
+ */
+const PNG_BYTES = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+]);
+
+const MP4_BYTES = Uint8Array.from([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00,
+]);
+
+/**
  * Asset upload and download (PROJECT.md section 12 Phase 3 DoD: "assets upload
  * and download").
  *
@@ -155,6 +170,7 @@ describe('assets: presigned upload and download', () => {
       sizeBytes: 5000,
       contentType: 'image/png',
     });
+    storage.bodies.set(created.body.asset.storageKey, PNG_BYTES);
 
     const res = await app
       .http()
@@ -179,6 +195,7 @@ describe('assets: presigned upload and download', () => {
       sizeBytes: 40 * 1024 * 1024,
       contentType: 'video/mp4',
     });
+    storage.bodies.set(created.body.asset.storageKey, MP4_BYTES);
 
     const res = await app
       .http()

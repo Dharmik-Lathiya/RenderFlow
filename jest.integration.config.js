@@ -128,6 +128,11 @@ module.exports = {
     //   - all-exceptions.filter.ts   status -> code mapping is unit-tested
     '!apps/api/src/health/health.service.ts',
     '!apps/api/src/common/all-exceptions.filter.ts',
+    // Magic-byte sniffing is a pure function with an exhaustive unit suite
+    // (upload-signature.spec.ts). The integration suite covers the confirm flow
+    // it feeds, but counting every signature branch here would report a lower
+    // figure for code that is already verified at the unit gate.
+    '!apps/api/src/workspaces/upload-signature.ts',
     '!**/*.spec.ts',
     '!**/*.d.ts',
     // Barrels are pure re-exports.

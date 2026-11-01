@@ -55,6 +55,9 @@ export function fakeStorage(): FakeStorage {
 
     headObject: async (key) => objects.get(key) ?? null,
 
+    getObjectPrefix: async (key, maxBytes) =>
+      (bodies.get(key) ?? new Uint8Array()).slice(0, maxBytes),
+
     deleteObject: async (key) => {
       if (deleteFails) {
         throw new Error('storage unavailable');
