@@ -231,7 +231,7 @@ export class AuthService implements OnModuleInit {
     const tokenHash = hashRefreshToken(refreshToken);
     const now = new Date();
 
-    return this.db.transaction(async (tx: DbTransaction) => {
+    const outcome = await this.db.transaction(async (tx: DbTransaction) => {
       const rows = await tx
         .select({
           id: refreshSessions.id,
@@ -261,6 +261,11 @@ export class AuthService implements OnModuleInit {
         // A revoked token being presented means either a replay or a stolen
         // token. Revoke the whole family: the legitimate user is logged out, and
         // so is the attacker holding any descendant of this login.
+        //
+        // The outcome is returned rather than thrown so the revocation COMMITS.
+        // Throwing from inside `db.transaction` rolls the update back, which
+        // would leave every descendant usable - exactly the theft this branch
+        // exists to stop.
         await tx
           .update(refreshSessions)
           .set({ revokedAt: now })
@@ -268,19 +273,7 @@ export class AuthService implements OnModuleInit {
             and(eq(refreshSessions.familyId, session.familyId), isNull(refreshSessions.revokedAt)),
           );
 
-        log().warn(
-          {
-            event: 'REFRESH_TOKEN_REUSE',
-            userId: session.userId,
-            familyId: session.familyId,
-          },
-          'refresh token reuse detected; revoked the token family',
-        );
-
-        throw new AppError(
-          ERROR_CODES.UNAUTHORIZED,
-          'Refresh token reuse detected; all sessions in this family were revoked',
-        );
+        return { outcome: 'REUSE', session } as const;
       }
 
       if (session.expiresAt <= now) {
@@ -292,7 +285,7 @@ export class AuthService implements OnModuleInit {
         .set({ revokedAt: now })
         .where(eq(refreshSessions.id, session.id));
 
-      return this.issueSession(
+      const issued = await this.issueSession(
         {
           id: session.userId,
           email: session.email,
@@ -302,7 +295,26 @@ export class AuthService implements OnModuleInit {
         meta,
         { familyId: session.familyId, tx },
       );
+      return { outcome: 'ISSUED', issued } as const;
     });
+
+    if (outcome.outcome === 'REUSE') {
+      log().warn(
+        {
+          event: 'REFRESH_TOKEN_REUSE',
+          userId: outcome.session.userId,
+          familyId: outcome.session.familyId,
+        },
+        'refresh token reuse detected; revoked the token family',
+      );
+
+      throw new AppError(
+        ERROR_CODES.UNAUTHORIZED,
+        'Refresh token reuse detected; all sessions in this family were revoked',
+      );
+    }
+
+    return outcome.issued;
   }
 
   /** Revokes the presented session. Idempotent: logging out twice is fine. */
