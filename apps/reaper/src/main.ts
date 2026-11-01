@@ -140,42 +140,59 @@ async function main(): Promise<void> {
     }
   });
 
-  // Registered BEFORE the lock is taken, so a SIGTERM that arrives while we are
-  // still connecting does not leave a lock held by a process that has stopped.
+  // Registered BEFORE the lock loop starts, so a SIGTERM that arrives while we
+  // are still connecting does not leave a lock held by a process that has stopped.
   const controller = new AbortController();
   worker.shutdown.registerDrain('reaper-loop', () => {
     controller.abort();
   });
 
-  const leader = await tryAcquireAdvisoryLock(pool, LEADER_LOCK_ID);
+  // Hot-spare loop: instead of exiting when another reaper holds the lock, this
+  // process polls every 30 s. If the leader crashes and its session ends, the
+  // next tryAcquireAdvisoryLock call here wins the lock without needing an
+  // orchestrator restart. SIGTERM (via AbortController) still exits cleanly.
+  while (!controller.signal.aborted) {
+    const leader = await tryAcquireAdvisoryLock(pool, LEADER_LOCK_ID);
 
-  if (!leader.acquired) {
-    // Not an error. A second reaper is a spare, not a fault, and exiting
-    // non-zero would have an orchestrator restart it in a loop that loses the
-    // race every time.
+    if (!leader.acquired) {
+      worker.logger.info(
+        { app: APP_NAME, advisoryLock: LEADER_LOCK_ID },
+        'advisory lock not acquired, retrying in 30s',
+      );
+      await leader.release();
+
+      // Wait 30 s or until SIGTERM aborts the signal, whichever comes first.
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 30_000);
+        controller.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+
+      continue;
+    }
+
+    // We hold the lock. Register its release and run the sweep loop.
+    worker.shutdown.registerDrain('advisory-lock', () => leader.release());
+
     worker.logger.info(
-      { app: APP_NAME, advisoryLock: LEADER_LOCK_ID },
-      'another reaper holds the lock; standing by',
+      {
+        app: APP_NAME,
+        intervalSeconds: config.intervalSeconds,
+        leaseSeconds: config.leaseSeconds,
+        maxAttempts: config.maxAttempts,
+        advisoryLock: LEADER_LOCK_ID,
+      },
+      'reaper started',
     );
-    await leader.release();
-    await disconnectDb();
-    return;
+
+    await reaper.run(controller.signal);
+
+    // reaper.run() only resolves when the signal is aborted (SIGTERM). Break out
+    // so we do not re-enter the loop and re-acquire the lock.
+    break;
   }
-
-  worker.shutdown.registerDrain('advisory-lock', () => leader.release());
-
-  worker.logger.info(
-    {
-      app: APP_NAME,
-      intervalSeconds: config.intervalSeconds,
-      leaseSeconds: config.leaseSeconds,
-      maxAttempts: config.maxAttempts,
-      advisoryLock: LEADER_LOCK_ID,
-    },
-    'reaper started',
-  );
-
-  await reaper.run(controller.signal);
 }
 
 void main().catch((error: unknown) => {

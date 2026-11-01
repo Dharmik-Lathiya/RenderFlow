@@ -7,7 +7,16 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiClientError } from '@renderflow/api-client';
 
 import { useApi } from '../../../lib/providers';
-import { Badge, Button, Card, ErrorNotice, Field, Spinner } from '../../../components/ui';
+import { Icon } from '../../../components/icons';
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorNotice,
+  Field,
+  PageHeader,
+  Spinner,
+} from '../../../components/ui';
 import { AssetLibrary } from './asset-library';
 import { JobProgressView, useJobProgress } from './job-progress';
 import styles from '../../../components/ui.module.css';
@@ -119,96 +128,188 @@ export function PostEditor({ postId }: { postId: string }) {
 
   const current = post.data;
   const editable = current.status === 'DRAFT' || current.status === 'GENERATING';
+  const steps = workflowSteps(current.status);
+  const currentStep = steps.findIndex((step) => !step.done);
 
   return (
     <>
-      <p>
-        <Link href="/dashboard">← Dashboard</Link>
-      </p>
-      <h1>Post</h1>
+      <PageHeader
+        eyebrow="Content studio"
+        title={`${labelFor(current.type)} post`}
+        description="Write it, generate an asset, then approve and schedule it. Nothing publishes without an APPROVER."
+        meta={
+          <>
+            <Badge tone={toneFor(current.status)}>{current.status}</Badge>
+            <span className={styles.tag}>Version {current.version}</span>
+            <span className={styles.tag}>
+              {current.hashtags === '' ? 'No hashtags' : current.hashtags}
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <Link href={`/campaigns/${current.campaignId}`} className={styles.button}>
+              <Icon name="chevronLeft" size={15} />
+              Campaign
+            </Link>
+            <Link href="/calendar" className={styles.button}>
+              <Icon name="calendar" size={15} />
+              Calendar
+            </Link>
+          </>
+        }
+      />
 
-      <Card
-        title="Content"
-        actions={<Badge tone={toneFor(current.status)}>{current.status}</Badge>}
-      >
-        <Field label="Caption" id="caption">
-          {({ id }) => (
-            <textarea
-              id={id}
-              value={caption ?? ''}
-              onChange={(event) => setCaption(event.target.value)}
-              disabled={!editable}
-            />
-          )}
-        </Field>
-
-        <div className={styles.row}>
-          <Button
-            variant="secondary"
-            busy={save.isPending}
-            disabled={!editable || (caption ?? '') === (current.caption ?? '')}
-            onClick={() => save.mutate()}
+      <div className={styles.dashboardGrid}>
+        <div className={styles.dashboardColumn}>
+          <Card
+            title="Content"
+            description="The caption is the source of truth for every generated asset."
+            actions={<Badge tone={toneFor(current.status)}>{current.status}</Badge>}
           >
-            Save
-          </Button>
-          {current.status !== 'APPROVED' && (
-            <Button
-              variant="primary"
-              busy={approve.isPending}
-              disabled={!editable}
-              onClick={() => approve.mutate()}
-            >
-              Approve
-            </Button>
+            <Field label="Caption" id="caption">
+              {({ id }) => (
+                <textarea
+                  id={id}
+                  value={caption ?? ''}
+                  onChange={(event) => setCaption(event.target.value)}
+                  disabled={!editable}
+                />
+              )}
+            </Field>
+
+            <div className={styles.row}>
+              <Button
+                variant="secondary"
+                busy={save.isPending}
+                disabled={!editable || (caption ?? '') === (current.caption ?? '')}
+                onClick={() => save.mutate()}
+              >
+                Save
+              </Button>
+              {current.status !== 'APPROVED' && (
+                <Button
+                  variant="primary"
+                  busy={approve.isPending}
+                  disabled={!editable}
+                  onClick={() => approve.mutate()}
+                >
+                  Approve
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          <Card
+            title="Generate"
+            description="Each kind costs credits. Nothing is charged if the job fails."
+          >
+            <div className={styles.row}>
+              {(['CAPTION', 'POSTER', 'CAROUSEL', 'REEL'] as const).map((type) => (
+                <Button
+                  key={type}
+                  variant={type === 'REEL' ? 'primary' : 'secondary'}
+                  busy={generate.isPending && generate.variables === type}
+                  disabled={!editable}
+                  onClick={() => generate.mutate(type)}
+                >
+                  <Icon
+                    name={type === 'CAPTION' ? 'fileText' : type === 'REEL' ? 'video' : 'sparkles'}
+                    size={15}
+                  />
+                  {labelFor(type)}
+                </Button>
+              ))}
+            </div>
+
+            {generate.isError && !upsell && (
+              <ErrorNotice
+                message={
+                  generate.error instanceof ApiClientError &&
+                  generate.error.code === 'MODERATION_REJECTED'
+                    ? generate.error.message
+                    : 'Could not start that generation.'
+                }
+              />
+            )}
+          </Card>
+
+          {jobId !== null && (
+            <Card title="Progress">
+              <JobProgressView progress={progress} />
+            </Card>
           )}
-        </div>
-      </Card>
 
-      <Card
-        title="Generate"
-        description="Each kind costs credits. Nothing is charged if the job fails."
-      >
-        <div className={styles.row}>
-          {(['CAPTION', 'POSTER', 'CAROUSEL', 'REEL'] as const).map((type) => (
-            <Button
-              key={type}
-              variant={type === 'REEL' ? 'primary' : 'secondary'}
-              busy={generate.isPending && generate.variables === type}
-              disabled={!editable}
-              onClick={() => generate.mutate(type)}
-            >
-              {labelFor(type)}
-            </Button>
-          ))}
+          {workspaceId !== undefined && <AssetLibrary postId={postId} workspaceId={workspaceId} />}
         </div>
 
-        {generate.isError && !upsell && (
-          <ErrorNotice
-            message={
-              generate.error instanceof ApiClientError &&
-              generate.error.code === 'MODERATION_REJECTED'
-                ? generate.error.message
-                : 'Could not start that generation.'
-            }
-          />
-        )}
-      </Card>
+        <div className={styles.dashboardColumn}>
+          <Card title="Workflow" description="Where this post is in the review path.">
+            <ul className={styles.miniList}>
+              {steps.map((step, index) => (
+                <li key={step.label} className={styles.miniItem}>
+                  <span
+                    className={
+                      step.done ? `${styles.miniDot} ${styles.miniDotDone}` : styles.miniDot
+                    }
+                    aria-hidden="true"
+                  />
+                  <span className={styles.miniCopy}>
+                    <span className={styles.miniTitle}>{step.label}</span>
+                    <span className={styles.miniMeta}>{step.detail}</span>
+                  </span>
+                  <Badge tone={step.done ? 'good' : index === currentStep ? 'warn' : 'neutral'}>
+                    {step.done ? 'Done' : index === currentStep ? 'Current' : 'Next'}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </Card>
 
-      {jobId !== null && (
-        <Card title="Progress">
-          <JobProgressView progress={progress} />
-        </Card>
-      )}
-
-      {workspaceId !== undefined && <AssetLibrary postId={postId} workspaceId={workspaceId} />}
-
-      <PublishHistory postId={postId} workspaceId={workspaceId} publishes={publishes.data} />
+          <PublishHistory postId={postId} workspaceId={workspaceId} publishes={publishes.data} />
+        </div>
+      </div>
 
       {upsell !== null && (
         <InsufficientCreditsDialog message={upsell} onClose={() => setUpsell(null)} />
       )}
     </>
   );
+}
+
+/**
+ * The review path, as four checkpoints.
+ *
+ * Derived from the post's own status rather than stored separately: a second
+ * field saying "step 2" can disagree with the status the publisher acts on.
+ */
+function workflowSteps(status: string): { label: string; detail: string; done: boolean }[] {
+  const approved = status !== 'DRAFT' && status !== 'GENERATING';
+  const scheduled = ['SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'COMPLETED'].includes(status);
+  const published = status === 'PUBLISHED' || status === 'COMPLETED';
+
+  return [
+    {
+      label: 'Write and generate',
+      detail: 'The draft and its assets are editable until approval.',
+      done: true,
+    },
+    {
+      label: 'Approved',
+      detail: 'An APPROVER signs off on the caption and every asset.',
+      done: approved,
+    },
+    {
+      label: 'Scheduled',
+      detail: 'A connected account and a publish time claim the post.',
+      done: scheduled,
+    },
+    {
+      label: 'Published',
+      detail: 'The platform post exists; analytics starts with the next sync.',
+      done: published,
+    },
+  ];
 }
 
 /**
@@ -413,6 +514,6 @@ function toneFor(status: string): 'neutral' | 'good' | 'bad' | 'warn' {
   return 'neutral';
 }
 
-function labelFor(type: 'CAPTION' | 'POSTER' | 'CAROUSEL' | 'REEL'): string {
+function labelFor(type: string): string {
   return type.charAt(0) + type.slice(1).toLowerCase();
 }

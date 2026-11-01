@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   date,
   index,
@@ -1174,3 +1175,49 @@ export type NewAuditLog = typeof auditLogs.$inferInsert;
 
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
 export type CreditEntryType = (typeof creditEntryTypeEnum.enumValues)[number];
+
+// ---------------------------------------------------------------------------
+// festival_occasions + festival_templates (Phase 11)
+// ---------------------------------------------------------------------------
+
+/**
+ * Festival occasion catalogue.
+ *
+ * A static lookup table seeded by `pnpm db:seed`. Each occasion maps to one or
+ * more templates; the API exposes only active rows.
+ */
+export const festivalOccasions = pgTable('festival_occasions', {
+  id: text('id').primaryKey(),
+  displayName: text('display_name').notNull(),
+  iconUrl: text('icon_url'),
+  active: boolean('active').default(true),
+});
+
+/**
+ * Template library for the festival feature.
+ *
+ * `slots` is the rendering descriptor — a JSON array of `{ id, type, maxChars?,
+ * position }` objects the media-worker reads when compositing the poster.
+ * `colorScheme` and `dimensions` are also stored as JSONB so the API can return
+ * them without extra joins.
+ */
+export const festivalTemplates = pgTable('festival_templates', {
+  id: text('id').primaryKey(),
+  occasionId: text('occasion_id')
+    .notNull()
+    .references(() => festivalOccasions.id),
+  name: text('name').notNull(),
+  previewUrl: text('preview_url').notNull(),
+  slots: jsonb('slots').notNull(),
+  colorScheme: jsonb('color_scheme').notNull(),
+  audioTrack: text('audio_track'),
+  dimensions: jsonb('dimensions').notNull(),
+  reelDurationSeconds: integer('reel_duration_seconds'),
+  active: boolean('active').default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+export type FestivalOccasion = typeof festivalOccasions.$inferSelect;
+export type NewFestivalOccasion = typeof festivalOccasions.$inferInsert;
+export type FestivalTemplate = typeof festivalTemplates.$inferSelect;
+export type NewFestivalTemplate = typeof festivalTemplates.$inferInsert;

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ApiClientError } from '@renderflow/api-client';
 
 import { useApi } from '../../../lib/providers';
+import { Icon } from '../../../components/icons';
 import {
   Badge,
   Button,
@@ -13,7 +14,9 @@ import {
   EmptyState,
   ErrorNotice,
   Field,
+  PageHeader,
   Spinner,
+  StatCard,
 } from '../../../components/ui';
 import styles from '../../../components/ui.module.css';
 
@@ -93,11 +96,62 @@ export function AccountsSettings() {
   const idError =
     touched && externalAccountId.trim() === '' ? 'The platform account id is required.' : undefined;
 
+  const list = accounts.data ?? [];
+  const platforms = new Set(list.map((account) => account.platform));
+  const reconnectCount = list.filter((account) => account.needsReconnect).length;
+  const freshConnections = list.filter((account) => {
+    const created = new Date(account.createdAt).getTime();
+    return Number.isFinite(created) && Date.now() - created < 30 * 24 * 60 * 60 * 1000;
+  }).length;
+
   return (
     <>
-      <h1>Social accounts</h1>
+      <PageHeader
+        eyebrow="Settings"
+        title="Accounts"
+        description="Connect the social channels RenderFlow publishes to. Tokens are encrypted at rest and never returned by the API."
+        actions={
+          <a href="#connect-account" className={`${styles.button} ${styles.primary}`}>
+            <Icon name="plus" size={15} />
+            Connect an account
+          </a>
+        }
+      />
 
-      <Card title="Connected" description="Posts publish to these accounts.">
+      <div className={styles.kpiGrid}>
+        <StatCard
+          label="Connected"
+          value={accounts.data === undefined ? '—' : list.length}
+          hint="channels ready to publish"
+          icon={<Icon name="accounts" />}
+        />
+        <StatCard
+          label="Platforms"
+          value={accounts.data === undefined ? '—' : platforms.size}
+          hint="distinct networks"
+          icon={<Icon name="link" />}
+          tone="info"
+        />
+        <StatCard
+          label="Needs reconnect"
+          value={accounts.data === undefined ? '—' : reconnectCount}
+          hint="expired or revoked tokens"
+          icon={<Icon name="alert" />}
+          tone={reconnectCount > 0 ? 'warning' : 'success'}
+        />
+        <StatCard
+          label="Added recently"
+          value={accounts.data === undefined ? '—' : freshConnections}
+          hint="in the last 30 days"
+          icon={<Icon name="check" />}
+          tone="success"
+        />
+      </div>
+
+      <Card
+        title="Connected accounts"
+        description="Posts publish to these accounts. Disconnecting one does not delete its history."
+      >
         {disconnect.isError && <ErrorNotice message={disconnectMessage(disconnect.error)} />}
 
         {accounts.isLoading && <Spinner label="Loading accounts" />}
@@ -108,122 +162,204 @@ export function AccountsSettings() {
 
         {accounts.data !== undefined && accounts.data.length === 0 && (
           <EmptyState
+            icon={<Icon name="accounts" size={18} />}
             title="Nothing connected"
             description="Connect an account before scheduling a post to publish."
+            action={
+              <a href="#connect-account" className={`${styles.button} ${styles.primary}`}>
+                Connect your first account
+              </a>
+            }
           />
         )}
 
-        {accounts.data !== undefined && accounts.data.length > 0 && (
-          <ul className={styles.list}>
-            {accounts.data.map((account) => (
-              <li key={account.id} className={styles.listItem}>
-                <span>
-                  <strong>{account.displayName ?? account.platform}</strong>
-                  <span className={styles.cardDescription}>
-                    {' '}
-                    {account.platform} · {account.externalAccountId}
+        {list.length > 0 && (
+          <div className={styles.accountGrid}>
+            {list.map((account) => (
+              <article key={account.id} className={styles.accountCard}>
+                <div className={styles.accountCardHead}>
+                  <span
+                    className={styles.platformBadge}
+                    data-platform={account.platform}
+                    aria-hidden="true"
+                  >
+                    {account.platform.slice(0, 2).toUpperCase()}
                   </span>
-                </span>
-                <span className={styles.row}>
+                  <span className={styles.accountCopy}>
+                    <span className={styles.accountName}>
+                      {account.displayName ?? account.platform}
+                    </span>
+                    <span className={styles.accountMeta}>
+                      {account.platform} · {account.externalAccountId}
+                    </span>
+                  </span>
                   {account.needsReconnect && <Badge tone="warn">reconnect needed</Badge>}
+                </div>
+
+                <div className={styles.accountFooter}>
+                  <span className={styles.accountStatus}>
+                    <span
+                      className={
+                        account.needsReconnect
+                          ? `${styles.statusDot} ${styles.statusDotWarn}`
+                          : styles.statusDot
+                      }
+                      aria-hidden="true"
+                    />
+                    {account.needsReconnect ? 'Reconnect to resume publishing' : 'Ready to publish'}
+                  </span>
                   <Button
                     variant="danger"
-                    busy={disconnect.isPending}
+                    busy={disconnect.isPending && disconnect.variables === account.id}
                     onClick={() => disconnect.mutate(account.id)}
                   >
                     Disconnect
                   </Button>
-                </span>
-              </li>
+                </div>
+              </article>
             ))}
-          </ul>
+          </div>
         )}
       </Card>
 
-      <Card title="Connect an account">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            setTouched(true);
-
-            if (externalAccountId.trim() === '' || accessToken.trim() === '') {
-              return;
-            }
-
-            connect.mutate();
-          }}
-          noValidate
+      <div className={styles.formLayout}>
+        <Card
+          title="Connect an account"
+          description="Use the platform's stable account id. A duplicate connection is refused rather than silently replaced."
         >
-          {connect.isError && <ErrorNotice message={connectMessage(connect.error)} />}
+          <form
+            id="connect-account"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setTouched(true);
 
-          <Field label="Platform" id="account-platform">
-            {({ id, describedBy }) => (
-              <select
-                id={id}
-                aria-describedby={describedBy}
-                value={platform}
-                onChange={(event) => setPlatform(event.target.value as 'linkedin' | 'instagram')}
-              >
-                <option value="linkedin">LinkedIn</option>
-                <option value="instagram">Instagram</option>
-              </select>
-            )}
-          </Field>
+              if (externalAccountId.trim() === '' || accessToken.trim() === '') {
+                return;
+              }
 
-          <Field
-            label="Platform account id"
-            id="account-external-id"
-            error={idError}
-            hint="The id the platform gives the account, stable across reconnects."
+              connect.mutate();
+            }}
+            noValidate
           >
-            {({ id, describedBy, invalid }) => (
-              <input
-                id={id}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                value={externalAccountId}
-                onChange={(event) => setExternalAccountId(event.target.value)}
-                onBlur={() => setTouched(true)}
-              />
-            )}
-          </Field>
+            {connect.isError && <ErrorNotice message={connectMessage(connect.error)} />}
 
-          <Field label="Display name" id="account-display-name" hint="Optional.">
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                aria-describedby={describedBy}
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-              />
-            )}
-          </Field>
+            <Field label="Platform" id="account-platform">
+              {({ id, describedBy }) => (
+                <select
+                  id={id}
+                  aria-describedby={describedBy}
+                  value={platform}
+                  onChange={(event) => setPlatform(event.target.value as 'linkedin' | 'instagram')}
+                >
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="instagram">Instagram</option>
+                </select>
+              )}
+            </Field>
 
-          <Field
-            label="Access token"
-            id="account-token"
-            error={tokenError}
-            hint="Encrypted before storage and never returned by the API. Normally this comes from an OAuth redirect."
+            <Field
+              label="Platform account id"
+              id="account-external-id"
+              error={idError}
+              hint="The id the platform gives the account, stable across reconnects."
+            >
+              {({ id, describedBy, invalid }) => (
+                <input
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid || undefined}
+                  value={externalAccountId}
+                  onChange={(event) => setExternalAccountId(event.target.value)}
+                  onBlur={() => setTouched(true)}
+                />
+              )}
+            </Field>
+
+            <Field label="Display name" id="account-display-name" hint="Optional.">
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  aria-describedby={describedBy}
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                />
+              )}
+            </Field>
+
+            <Field
+              label="Access token"
+              id="account-token"
+              error={tokenError}
+              hint="Encrypted before storage and never returned by the API. Normally this comes from an OAuth redirect."
+            >
+              {({ id, describedBy, invalid }) => (
+                <input
+                  id={id}
+                  type="password"
+                  autoComplete="off"
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid || undefined}
+                  value={accessToken}
+                  onChange={(event) => setAccessToken(event.target.value)}
+                  onBlur={() => setTouched(true)}
+                />
+              )}
+            </Field>
+
+            <Button type="submit" variant="primary" busy={connect.isPending}>
+              Connect
+            </Button>
+          </form>
+        </Card>
+
+        <div className={styles.dashboardColumn}>
+          <Card
+            title="Token handling"
+            description="What happens between this form and the publisher."
           >
-            {({ id, describedBy, invalid }) => (
-              <input
-                id={id}
-                type="password"
-                autoComplete="off"
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                value={accessToken}
-                onChange={(event) => setAccessToken(event.target.value)}
-                onBlur={() => setTouched(true)}
-              />
-            )}
-          </Field>
+            <ul className={styles.miniList}>
+              <li className={styles.miniItem}>
+                <span className={styles.miniDot} aria-hidden="true" />
+                <span className={styles.miniCopy}>
+                  <span className={styles.miniTitle}>Encrypted with AES-256-GCM</span>
+                  <span className={styles.miniMeta}>
+                    The key lives in the API environment, never in the browser.
+                  </span>
+                </span>
+              </li>
+              <li className={styles.miniItem}>
+                <span className={styles.miniDot} aria-hidden="true" />
+                <span className={styles.miniCopy}>
+                  <span className={styles.miniTitle}>Never returned to the client</span>
+                  <span className={styles.miniMeta}>
+                    The API strips tokens from every response.
+                  </span>
+                </span>
+              </li>
+              <li className={styles.miniItem}>
+                <span className={styles.miniDot} aria-hidden="true" />
+                <span className={styles.miniCopy}>
+                  <span className={styles.miniTitle}>Disconnect is guarded</span>
+                  <span className={styles.miniMeta}>
+                    An account with queued posts cannot be removed until they are cancelled.
+                  </span>
+                </span>
+              </li>
+            </ul>
+          </Card>
 
-          <Button type="submit" variant="primary" busy={connect.isPending}>
-            Connect
-          </Button>
-        </form>
-      </Card>
+          <Card
+            title="Need a hand?"
+            description="A failed publish is the most common reason to land here."
+          >
+            <p className={styles.cardDescription}>
+              If an account shows <strong>reconnect needed</strong>, its token has expired or been
+              revoked. Disconnect it, then connect it again with a fresh token. Scheduled posts keep
+              their times and pick the account back up.
+            </p>
+          </Card>
+        </div>
+      </div>
     </>
   );
 }

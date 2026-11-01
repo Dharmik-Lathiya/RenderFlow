@@ -1,12 +1,15 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { ApiClientError } from '@renderflow/api-client';
 
 import { useApi } from '../../lib/providers';
-import { Button, Card, ErrorNotice, Field } from '../../components/ui';
+import { AuthShell } from '../../components/auth-shell';
+import { Icon } from '../../components/icons';
+import { Button, ErrorNotice, Field } from '../../components/ui';
 import styles from '../../components/ui.module.css';
 
 /**
@@ -72,84 +75,108 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
   }
 
   return (
-    <div className={styles.authCard}>
-      <Card
-        title={mode === 'register' ? 'Create your account' : 'Sign in'}
-        description={
-          mode === 'register' ? 'Every new account starts with 50 free credits.' : 'Welcome back.'
-        }
-      >
-        <form className={styles.authForm} onSubmit={onSubmit} noValidate>
-          {mutation.isError && <ErrorNotice message={messageFor(mutation.error, mode)} />}
-
-          {mode === 'register' && (
-            <Field label="Name" id="name" error={nameError}>
-              {({ id, describedBy, invalid }) => (
-                <input
-                  id={id}
-                  type="text"
-                  autoComplete="name"
-                  aria-describedby={describedBy}
-                  aria-invalid={invalid || undefined}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  onBlur={() => setTouched((state) => ({ ...state, name: true }))}
-                />
-              )}
-            </Field>
+    <AuthShell
+      eyebrow={mode === 'register' ? 'Start free' : 'Welcome back'}
+      title={mode === 'register' ? 'Create your account' : 'Sign in'}
+      description={
+        mode === 'register'
+          ? 'Every new account starts with 50 free credits. No card required.'
+          : 'Pick up where you left off and keep the campaign moving.'
+      }
+      footer={
+        <p className={styles.authSwitch}>
+          {mode === 'register' ? (
+            <>
+              Already have an account? <Link href="/login">Sign in</Link>
+            </>
+          ) : (
+            <>
+              New to RenderFlow? <Link href="/register">Create an account</Link>
+            </>
           )}
+        </p>
+      }
+    >
+      <form className={styles.authForm} onSubmit={onSubmit} noValidate>
+        {mutation.isError && <ErrorNotice message={messageFor(mutation.error, mode)} />}
 
-          <Field label="Email" id="email" error={emailError}>
+        {mode === 'register' && (
+          <Field label="Name" id="name" error={nameError}>
             {({ id, describedBy, invalid }) => (
               <input
                 id={id}
-                type="email"
-                autoComplete="email"
+                type="text"
+                autoComplete="name"
                 aria-describedby={describedBy}
                 aria-invalid={invalid || undefined}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                onBlur={() => setTouched((state) => ({ ...state, email: true }))}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                onBlur={() => setTouched((state) => ({ ...state, name: true }))}
               />
             )}
           </Field>
+        )}
 
-          <Field
-            label="Password"
-            id="password"
-            error={passwordError}
-            hint={
-              mode === 'register'
-                ? 'At least 10 characters, including upper and lower case and a number.'
-                : undefined
-            }
-          >
-            {({ id, describedBy, invalid }) => (
-              <input
-                id={id}
-                type="password"
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                onBlur={() => setTouched((state) => ({ ...state, password: true }))}
-              />
-            )}
-          </Field>
+        <Field label="Email" id="email" error={emailError}>
+          {({ id, describedBy, invalid }) => (
+            <input
+              id={id}
+              type="email"
+              autoComplete="email"
+              aria-describedby={describedBy}
+              aria-invalid={invalid || undefined}
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              onBlur={() => setTouched((state) => ({ ...state, email: true }))}
+            />
+          )}
+        </Field>
 
+        <Field
+          label="Password"
+          id="password"
+          error={passwordError}
+          hint={
+            mode === 'register'
+              ? 'At least 10 characters, including upper and lower case and a number.'
+              : undefined
+          }
+        >
+          {({ id, describedBy, invalid }) => (
+            <input
+              id={id}
+              type="password"
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              aria-describedby={describedBy}
+              aria-invalid={invalid || undefined}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              onBlur={() => setTouched((state) => ({ ...state, password: true }))}
+            />
+          )}
+        </Field>
+
+        <div className={styles.authActions}>
           <Button type="submit" variant="primary" busy={submitting}>
             {mode === 'register' ? 'Create account' : 'Sign in'}
+            <Icon name="chevronRight" size={15} />
           </Button>
+        </div>
 
-          {mode === 'login' && (
-            <p>
-              <a href="/forgot-password">Forgot your password?</a>
-            </p>
-          )}
-        </form>
-      </Card>
-    </div>
+        {mode === 'login' && (
+          <p className={styles.authMeta}>
+            <Link href="/forgot-password">Forgot your password?</Link>
+          </p>
+        )}
+
+        {mode === 'register' && (
+          <p className={styles.authFinePrint}>
+            By creating an account you agree to our <Link href="/terms">terms</Link> and{' '}
+            <Link href="/privacy">privacy policy</Link>.
+          </p>
+        )}
+      </form>
+    </AuthShell>
   );
 }
 

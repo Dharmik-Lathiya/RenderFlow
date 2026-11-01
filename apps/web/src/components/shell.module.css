@@ -1,0 +1,932 @@
+/* Application chrome: sidebar, top bar and command menu. */
+
+.appShell {
+  display: grid;
+  grid-template-columns: var(--shell-columns);
+  min-height: 100dvh;
+}
+
+.appShell > * {
+  min-width: 0;
+}
+
+/* --- sidebar ------------------------------------------------------------- */
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: 1.1rem 0.9rem 1rem;
+  border-right: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-raised) 0%, var(--bg) 100%);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sidebarTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 0.35rem;
+  margin-bottom: 1.2rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--fg);
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-size: 1.08rem;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 10px;
+  background: var(--gradient-accent);
+  color: var(--accent-fg);
+  box-shadow: 0 6px 18px rgb(90 80 220 / 28%);
+}
+
+.brandMark svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.brandWord {
+  white-space: nowrap;
+}
+
+.workspaceCard {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem;
+  margin-bottom: 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.workspaceAvatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-3);
+  color: var(--fg);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.workspaceInfo {
+  min-width: 0;
+  flex: 1;
+}
+
+.workspaceName {
+  display: block;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceRole {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: capitalize;
+}
+
+.workspaceChevron {
+  flex: none;
+  color: var(--muted);
+}
+
+.sidebarNav {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.navSectionTitle {
+  margin: 0 0 0.45rem;
+  padding: 0 0.55rem;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.25rem;
+  padding: 0.42rem 0.55rem;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 550;
+  text-decoration: none;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.navItem:hover {
+  background: var(--surface-3);
+  color: var(--fg);
+}
+
+.navItemActive {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+.navItemActive::before {
+  position: absolute;
+  left: -0.9rem;
+  top: 0.45rem;
+  bottom: 0.45rem;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+  content: '';
+}
+
+.navIcon {
+  flex: none;
+  color: currentColor;
+  opacity: 0.82;
+}
+
+.navItemActive .navIcon {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.navLabel {
+  flex: 1;
+}
+
+.navBadge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebarSpacer {
+  flex: 1;
+  min-height: 1.25rem;
+}
+
+/* --- credit card --------------------------------------------------------- */
+
+.creditCard {
+  padding: 0.8rem;
+  margin-bottom: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--gradient-panel), var(--bg-sunken);
+}
+
+.creditTop {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.creditIcon {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.creditLink {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.creditLink:hover {
+  text-decoration: underline;
+}
+
+.creditValue {
+  margin: 0.45rem 0 0.1rem;
+  color: var(--fg);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+.creditHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.creditLow {
+  color: var(--warning);
+}
+
+/* --- user footer --------------------------------------------------------- */
+
+.sidebarFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.2rem 0.15rem;
+}
+
+.userAvatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 999px;
+  background: var(--gradient-accent);
+  color: var(--accent-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.userInfo {
+  min-width: 0;
+  flex: 1;
+}
+
+.userName {
+  display: block;
+  overflow: hidden;
+  color: var(--fg);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userEmail {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signOutButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.55rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.signOutButton:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* --- main column and top bar -------------------------------------------- */
+
+.appMain {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100dvh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: var(--topbar-height);
+  padding: 0 clamp(1rem, 2.5vw, 2.25rem);
+  border-bottom: 1px solid var(--border);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+.topbarLeft {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+.mobileBrand {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.breadcrumbLink {
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.breadcrumbLink:hover {
+  color: var(--fg);
+}
+
+.breadcrumbCurrent {
+  overflow: hidden;
+  color: var(--fg);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumbChevron {
+  flex: none;
+  opacity: 0.55;
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: none;
+}
+
+.searchButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 12.5rem;
+  min-height: 2.3rem;
+  padding: 0.35rem 0.55rem 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.searchButton:hover {
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+
+.searchLabel {
+  flex: 1;
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-raised);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  line-height: 1.35;
+}
+
+.iconButton {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.iconButton:hover {
+  border-color: var(--border);
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.notificationBadge {
+  position: absolute;
+  top: 0.1rem;
+  right: 0.05rem;
+  display: inline-grid;
+  place-items: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border: 2px solid var(--bg);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.topbarCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.3rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.topbarCta:hover {
+  background: var(--accent-strong);
+}
+
+.topbarAvatar {
+  display: grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--gradient-accent);
+  color: var(--accent-fg);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.accountWrap {
+  position: relative;
+  flex: none;
+}
+
+.accountMenu {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 16.5rem;
+  padding: 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.accountHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.3rem 0.25rem 0.55rem;
+}
+
+.accountCredits {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-sunken);
+}
+
+.accountCreditsLabel {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.accountCreditsValue {
+  color: var(--fg);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.accountLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.accountItem {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 550;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.accountItem:hover {
+  background: var(--surface-3);
+}
+
+.accountItem svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.accountDivider {
+  height: 1px;
+  margin: 0.28rem 0;
+  background: var(--border);
+}
+
+.accountSignOut {
+  color: var(--danger);
+}
+
+.accountSignOut svg {
+  color: currentColor;
+}
+
+.content {
+  width: 100%;
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 1.75rem clamp(1rem, 2.5vw, 2.25rem) 3.5rem;
+}
+
+/* --- mobile navigation --------------------------------------------------- */
+
+.mobileNav {
+  display: none;
+}
+
+/* --- command menu -------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: min(16vh, 8rem) 1rem 1rem;
+  background: rgb(3 4 8 / 62%);
+  backdrop-filter: blur(4px);
+}
+
+.dialog {
+  width: 100%;
+  max-width: 36rem;
+  max-height: min(34rem, 76vh);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.dialogSearchIcon {
+  flex: none;
+  color: var(--muted);
+}
+
+.dialogInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.dialogInput::placeholder {
+  color: var(--muted);
+}
+
+.dialogClose {
+  display: inline-grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dialogClose:hover {
+  background: var(--surface-3);
+  color: var(--fg);
+}
+
+.dialogBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.dialogSectionLabel {
+  margin: 0.35rem 0.5rem 0.35rem;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dialogItem {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 8px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.dialogItem:hover,
+.dialogItemActive {
+  background: var(--accent-soft);
+}
+
+.dialogItemIcon {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-sunken);
+  color: var(--accent);
+}
+
+.dialogItemCopy {
+  min-width: 0;
+}
+
+.dialogItemTitle {
+  display: block;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.dialogItemDescription {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialogEmpty {
+  padding: 2.25rem 1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.dialogFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.55rem 0.8rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.dialogFooter span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* --- responsive ---------------------------------------------------------- */
+
+@media (max-width: 72rem) {
+  .appShell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobileBrand {
+    display: inline-flex;
+  }
+
+  .breadcrumb {
+    display: none;
+  }
+
+  .mobileNav {
+    position: sticky;
+    top: var(--topbar-height);
+    z-index: 19;
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.55rem clamp(0.75rem, 2.5vw, 1.5rem);
+    border-bottom: 1px solid var(--border);
+    background: var(--topbar-bg);
+    backdrop-filter: blur(16px) saturate(140%);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .mobileNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobileNavItem {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: none;
+    min-height: 2rem;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .mobileNavItem:hover {
+    color: var(--fg);
+  }
+
+  .mobileNavItemActive {
+    border-color: var(--border);
+    background: var(--accent-soft);
+    color: var(--fg);
+  }
+
+  .mobileNavIcon {
+    color: var(--accent);
+  }
+}
+
+@media (max-width: 48rem) {
+  .searchButton {
+    min-width: 0;
+    width: 2.3rem;
+    padding: 0;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .searchLabel,
+  .searchButton .kbd {
+    display: none;
+  }
+
+  .topbarCta {
+    display: none;
+  }
+
+  .topbar {
+    padding: 0 0.8rem;
+  }
+
+  .content {
+    padding: 1.15rem 0.8rem 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navItem,
+  .dialogItem {
+    transition: none;
+  }
+}

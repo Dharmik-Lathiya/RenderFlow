@@ -91,18 +91,12 @@ export const brandSchema = z.object({
   workspaceId: z.string(),
   name: z.string(),
   industry: z.string().nullable(),
+  /** Free text injected into every prompt; `null` until the user sets one. */
+  tone: z.string().nullable().optional(),
+  audience: z.string().nullable().optional(),
   /** JSON columns arrive as whatever the driver parsed; normalised here. */
   colors: z.array(z.string()),
   languages: z.array(z.string()),
-  voice: z
-    .object({
-      tone: z.string().optional(),
-      style: z.string().optional(),
-      do: z.array(z.string()).optional(),
-      dont: z.array(z.string()).optional(),
-    })
-    .partial()
-    .optional(),
 });
 
 export const createBrandRequestSchema = z.object({

@@ -15,19 +15,38 @@
 :root {
   color-scheme: dark;
 
-  --bg: #0b0d10;
-  --bg-raised: #14181d;
-  --bg-sunken: #070809;
-  --border: #262c33;
-  --border-strong: #3a434d;
+  --bg: #090a0f;
+  --bg-raised: #11141c;
+  --bg-sunken: #06070a;
+  --surface-2: #181c26;
+  --surface-3: #1f2430;
+  --border: #252a37;
+  --border-strong: #394052;
+  --topbar-bg: rgb(9 10 15 / 78%);
 
-  --fg: #e8eaed;
-  --muted: #9aa4b0;
-  --accent: #6f9dff;
-  --accent-fg: #06101f;
-  --danger: #ff7a7a;
-  --success: #5fd39a;
-  --warning: #ffcf6f;
+  --fg: #f3f5f9;
+  --muted: #9aa4b8;
+  --accent: #a99bff;
+  --accent-strong: #c0b6ff;
+  --accent-fg: #0b0a14;
+  --accent-soft: rgb(155 140 255 / 14%);
+  --danger: #ff8b93;
+  --danger-soft: rgb(255 139 147 / 12%);
+  --success: #5fe0b0;
+  --success-soft: rgb(95 224 176 / 12%);
+  --warning: #f5c96b;
+  --warning-soft: rgb(245 201 107 / 12%);
+  --info: #7bbcff;
+  --info-soft: rgb(123 188 255 / 12%);
+
+  --gradient-accent: linear-gradient(135deg, #a99bff 0%, #7bbcff 100%);
+  --gradient-panel: linear-gradient(145deg, rgb(169 155 255 / 12%), transparent 52%);
+  --glow: rgb(155 140 255 / 10%);
+  --glow-secondary: rgb(123 188 255 / 7%);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 28%);
+  --shadow-md: 0 12px 30px rgb(0 0 0 / 24%);
+  --shadow-lg: 0 24px 70px rgb(0 0 0 / 45%);
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -37,15 +56,19 @@
   --space-6: 2rem;
   --space-7: 3rem;
 
-  --radius: 8px;
-  --radius-lg: 14px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
 
-  --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font:
+    var(--font-landing-body, 'Inter'), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
   --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
-  /* Single breakpoint. Below it the shell stacks; above it is two columns. */
-  --shell-columns: 15rem 1fr;
-  --shell-columns-narrow: 1fr;
+  --sidebar-width: 17rem;
+  --topbar-height: 4.25rem;
+  --shell-columns: var(--sidebar-width) minmax(0, 1fr);
 }
 
 /*
@@ -56,19 +79,38 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  --bg: #ffffff;
-  --bg-raised: #f6f7f9;
-  --bg-sunken: #eceef1;
-  --border: #d7dbe0;
-  --border-strong: #b6bcc4;
+  --bg: #f6f7fb;
+  --bg-raised: #ffffff;
+  --bg-sunken: #eef0f6;
+  --surface-2: #fafbfe;
+  --surface-3: #f1f3f9;
+  --border: #e2e5ee;
+  --border-strong: #cbd0dd;
+  --topbar-bg: rgb(246 247 251 / 82%);
 
-  --fg: #14181d;
-  --muted: #5a6470;
-  --accent: #2f62d8;
+  --fg: #11141c;
+  --muted: #5b6476;
+  --accent: #5946d6;
+  --accent-strong: #4834c4;
   --accent-fg: #ffffff;
-  --danger: #b4231f;
-  --success: #16794a;
+  --accent-soft: rgb(89 70 214 / 8%);
+  --danger: #b42318;
+  --danger-soft: rgb(180 35 24 / 8%);
+  --success: #087a55;
+  --success-soft: rgb(8 122 85 / 8%);
   --warning: #8a5b00;
+  --warning-soft: rgb(138 91 0 / 9%);
+  --info: #1d63c7;
+  --info-soft: rgb(29 99 199 / 8%);
+
+  --gradient-accent: linear-gradient(135deg, #5946d6 0%, #1668d9 100%);
+  --gradient-panel: linear-gradient(145deg, rgb(89 70 214 / 7%), transparent 52%);
+  --glow: rgb(89 70 214 / 7%);
+  --glow-secondary: rgb(22 104 217 / 5%);
+
+  --shadow-sm: 0 1px 2px rgb(17 20 28 / 5%);
+  --shadow-md: 0 12px 30px rgb(17 20 28 / 8%);
+  --shadow-lg: 0 24px 70px rgb(17 20 28 / 14%);
 }
 
 /* No-JavaScript fallback: without the boot script there is no data-theme, so
@@ -77,19 +119,38 @@
   :root:not([data-theme]) {
     color-scheme: light;
 
-    --bg: #ffffff;
-    --bg-raised: #f6f7f9;
-    --bg-sunken: #eceef1;
-    --border: #d7dbe0;
-    --border-strong: #b6bcc4;
+    --bg: #f6f7fb;
+    --bg-raised: #ffffff;
+    --bg-sunken: #eef0f6;
+    --surface-2: #fafbfe;
+    --surface-3: #f1f3f9;
+    --border: #e2e5ee;
+    --border-strong: #cbd0dd;
+    --topbar-bg: rgb(246 247 251 / 82%);
 
-    --fg: #14181d;
-    --muted: #5a6470;
-    --accent: #2f62d8;
+    --fg: #11141c;
+    --muted: #5b6476;
+    --accent: #5946d6;
+    --accent-strong: #4834c4;
     --accent-fg: #ffffff;
-    --danger: #b4231f;
-    --success: #16794a;
+    --accent-soft: rgb(89 70 214 / 8%);
+    --danger: #b42318;
+    --danger-soft: rgb(180 35 24 / 8%);
+    --success: #087a55;
+    --success-soft: rgb(8 122 85 / 8%);
     --warning: #8a5b00;
+    --warning-soft: rgb(138 91 0 / 9%);
+    --info: #1d63c7;
+    --info-soft: rgb(29 99 199 / 8%);
+
+    --gradient-accent: linear-gradient(135deg, #5946d6 0%, #1668d9 100%);
+    --gradient-panel: linear-gradient(145deg, rgb(89 70 214 / 7%), transparent 52%);
+    --glow: rgb(89 70 214 / 7%);
+    --glow-secondary: rgb(22 104 217 / 5%);
+
+    --shadow-sm: 0 1px 2px rgb(17 20 28 / 5%);
+    --shadow-md: 0 12px 30px rgb(17 20 28 / 8%);
+    --shadow-lg: 0 24px 70px rgb(17 20 28 / 14%);
   }
 }
 
@@ -111,27 +172,44 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+body {
+  min-height: 100dvh;
+  background-image:
+    radial-gradient(70rem 32rem at 88% -8%, var(--glow), transparent 68%),
+    radial-gradient(48rem 28rem at 6% -12%, var(--glow-secondary), transparent 70%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
 /* A visible focus ring is not optional. Removing the outline without replacing
    it is the single most common way an app becomes unusable by keyboard. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
 }
 
 h1,
 h2,
 h3 {
-  line-height: 1.25;
+  line-height: 1.2;
   margin: 0 0 var(--space-3);
   font-weight: 650;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 h1 {
   font-size: 1.6rem;
 }
 h2 {
-  font-size: 1.2rem;
+  font-size: 1.15rem;
 }
 h3 {
   font-size: 1rem;
@@ -143,6 +221,14 @@ p {
 
 a {
   color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 /* Keyboard users must be able to bypass the nav without a mouse. */
@@ -153,7 +239,8 @@ a {
   padding: var(--space-2) var(--space-4);
   background: var(--accent);
   color: var(--accent-fg);
-  z-index: 10;
+  z-index: 100;
+  border-radius: 0 0 var(--radius) 0;
 }
 
 .skip-link:focus {
@@ -174,6 +261,8 @@ a {
   border: 0;
 }
 
+/* The shell owns its own layout; this stays as a fallback for any legacy
+   wrapper that still uses the old grid class. */
 .shell {
   display: grid;
   grid-template-columns: var(--shell-columns);
@@ -190,10 +279,6 @@ a {
 }
 
 @media (max-width: 48rem) {
-  :root {
-    --shell-columns: var(--shell-columns-narrow);
-  }
-
   .content {
     padding: var(--space-4) var(--space-3);
   }

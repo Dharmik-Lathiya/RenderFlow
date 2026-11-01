@@ -19,14 +19,16 @@ export function Card({
   description,
   children,
   actions,
+  className,
 }: {
   title?: string;
   description?: string;
   children: ReactNode;
   actions?: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className={styles.card}>
+    <section className={`${styles.card} ${className ?? ''}`}>
       {(title !== undefined || actions !== undefined) && (
         <header className={styles.cardHeader}>
           <div>
@@ -37,6 +39,92 @@ export function Card({
         </header>
       )}
       {children}
+    </section>
+  );
+}
+
+/**
+ * The first thing on every screen: what page this is and what it is for.
+ *
+ * A shared header keeps the title level, spacing and action placement from
+ * drifting per page, which is the difference between a product and a pile of
+ * screens that each made their own decision.
+ */
+export function PageHeader({
+  title,
+  description,
+  eyebrow,
+  actions,
+  meta,
+}: {
+  title: string;
+  description?: string;
+  eyebrow?: string;
+  actions?: ReactNode;
+  meta?: ReactNode;
+}) {
+  return (
+    <header className={styles.pageHeader}>
+      <div className={styles.pageHeaderCopy}>
+        {eyebrow !== undefined && <p className={styles.pageEyebrow}>{eyebrow}</p>}
+        <h1 className={styles.pageTitle}>{title}</h1>
+        {description !== undefined && <p className={styles.pageDescription}>{description}</p>}
+        {meta !== undefined && <div className={styles.pageMeta}>{meta}</div>}
+      </div>
+      {actions !== undefined && <div className={styles.pageActions}>{actions}</div>}
+    </header>
+  );
+}
+
+export type StatTone = 'accent' | 'success' | 'warning' | 'danger' | 'info';
+
+/**
+ * A single number with enough context to act on.
+ *
+ * The label is a heading so a screen reader can jump between the numbers rather
+ * than hearing one undifferentiated paragraph. The hint is where the unit and
+ * the comparison live; a bare "50" on a dashboard is trivia.
+ */
+export function StatCard({
+  label,
+  value,
+  hint,
+  icon,
+  tone = 'accent',
+  badge,
+  progress,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  icon?: ReactNode;
+  tone?: StatTone;
+  badge?: ReactNode;
+  progress?: number;
+}) {
+  return (
+    <section className={styles.statCard}>
+      <div className={styles.statTop}>
+        <h2 className={styles.kpiLabel}>{label}</h2>
+        {icon !== undefined && (
+          <span className={`${styles.statIcon} ${styles[`statIcon_${tone}`] ?? ''}`}>{icon}</span>
+        )}
+      </div>
+      <p className={styles.kpiValue}>{value}</p>
+      {(hint !== undefined || badge !== undefined) && (
+        <div className={styles.statFoot}>
+          {hint !== undefined && <span className={styles.statHint}>{hint}</span>}
+          {badge}
+        </div>
+      )}
+      {progress !== undefined && (
+        <div className={styles.statProgress} aria-hidden="true">
+          <span
+            className={styles.statProgressFill}
+            style={{ width: `${Math.round(Math.min(1, Math.max(0, progress)) * 100)}%` }}
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -137,13 +225,16 @@ export function EmptyState({
   title,
   description,
   action,
+  icon,
 }: {
   title: string;
   description: string;
   action?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
     <div className={styles.empty}>
+      {icon !== undefined && <span className={styles.emptyIcon}>{icon}</span>}
       <h3>{title}</h3>
       <p className={styles.cardDescription}>{description}</p>
       {action}

@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { useApi } from '../../../lib/providers';
-import { Button, Card } from '../../../components/ui';
+import { AuthShell } from '../../../components/auth-shell';
+import { Icon } from '../../../components/icons';
+import { Button } from '../../../components/ui';
 import styles from '../../../components/ui.module.css';
 
 /**
@@ -30,45 +32,71 @@ export function VerifyEmailForm({ token }: { token: string }) {
   };
 
   return (
-    <div className={styles.authCard}>
-      <Card title="Confirm your email" description="One click, and this address is verified.">
-        {token === '' ? (
-          <div role="alert">
-            <p>This page needs a verification link. Open the link from your email.</p>
+    <AuthShell
+      eyebrow="Email"
+      title="Confirm your email"
+      description="One click, and this address is verified."
+      footer={
+        <p className={styles.authSwitch}>
+          <Link href="/login">Back to sign in</Link>
+        </p>
+      }
+    >
+      {token === '' ? (
+        <div className={styles.authNotice} role="alert">
+          <span className={styles.authNoticeIcon}>
+            <Icon name="alert" size={16} />
+          </span>
+          <div>
             <p>
-              <Link href="/login">Sign in</Link>
+              <strong>This page needs a verification link.</strong>
+            </p>
+            <p>
+              Open the link from your email, then try again. <Link href="/login">Sign in</Link>.
             </p>
           </div>
-        ) : state === 'done' ? (
-          <div role="status">
-            <p>Your address is confirmed.</p>
+        </div>
+      ) : state === 'done' ? (
+        <div className={`${styles.authNotice} ${styles.authNoticeSuccess}`} role="status">
+          <span className={styles.authNoticeIcon}>
+            <Icon name="check" size={16} />
+          </span>
+          <div>
             <p>
-              <Link href="/dashboard">Go to the dashboard</Link>
+              <strong>Your address is confirmed.</strong>
+            </p>
+            <p>
+              <Link href="/dashboard">Go to the dashboard</Link>.
             </p>
           </div>
-        ) : state === 'failed' ? (
-          <div role="alert">
+        </div>
+      ) : state === 'failed' ? (
+        <div className={styles.authNotice} role="alert">
+          <span className={styles.authNoticeIcon}>
+            <Icon name="alert" size={16} />
+          </span>
+          <div>
             <p>
-              This link has expired or has already been used. Sign in and request a new one from
-              your account settings.
+              <strong>This link has expired or has already been used.</strong>
             </p>
             <p>
-              <Link href="/login">Sign in</Link>
+              Sign in and request a new one from your account settings.{' '}
+              <Link href="/login">Sign in</Link>.
             </p>
           </div>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="primary"
-              busy={state === 'busy'}
-              onClick={() => void confirm()}
-            >
-              Confirm this address
-            </Button>
-          </>
-        )}
-      </Card>
-    </div>
+        </div>
+      ) : (
+        <div className={styles.authActions}>
+          <Button
+            type="button"
+            variant="primary"
+            busy={state === 'busy'}
+            onClick={() => void confirm()}
+          >
+            Confirm this address
+          </Button>
+        </div>
+      )}
+    </AuthShell>
   );
 }

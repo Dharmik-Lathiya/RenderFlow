@@ -1,11 +1,21 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { useApi } from '../../lib/providers';
 import type { ScheduledPost } from '@renderflow/api-client';
-import { Button, Card, EmptyState, ErrorNotice, LiveRegion, Spinner } from '../../components/ui';
+import { Icon } from '../../components/icons';
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorNotice,
+  LiveRegion,
+  PageHeader,
+  Spinner,
+} from '../../components/ui';
 import styles from '../../components/ui.module.css';
 
 /**
@@ -100,6 +110,11 @@ export function Calendar() {
   }
 
   const byDay = groupByDay(scheduled.data ?? []);
+  const posts = scheduled.data ?? [];
+  const typeCounts = countByType(posts);
+  const nextPost = [...posts]
+    .filter((post) => post.scheduledAt !== null)
+    .sort((left, right) => (left.scheduledAt ?? '').localeCompare(right.scheduledAt ?? ''))[0];
 
   const moveTo = (post: ScheduledPost, day: Date): void => {
     if (post.scheduledAt === null) {
@@ -127,191 +142,297 @@ export function Calendar() {
 
   return (
     <>
-      <h1>Calendar</h1>
-      <p className={styles.cardDescription}>
-        Drag a post to another day, or use the date field on each card. Times keep their hour and
-        minute when a post moves. Only approved posts can be scheduled.
-      </p>
+      <PageHeader
+        eyebrow="Publishing"
+        title="Calendar"
+        description="Drag a post to another day, or use the date field on each card. Times keep their hour and minute when a post moves. Only approved posts can be scheduled."
+        actions={
+          <>
+            <Link href="/brands" className={styles.button}>
+              <Icon name="sparkles" size={15} />
+              Plan a campaign
+            </Link>
+            <Link href="/settings/accounts" className={`${styles.button} ${styles.primary}`}>
+              <Icon name="accounts" size={15} />
+              Manage channels
+            </Link>
+          </>
+        }
+      />
 
       <LiveRegion message={announcement} />
 
-      <Card>
-        <div className={styles.monthHeader}>
-          <div className={styles.row}>
-            <Button
-              type="button"
-              aria-label="Previous month"
-              onClick={() => setMonth(addMonths(month, -1))}
-            >
-              ←
-            </Button>
-            <h2 aria-live="polite">
-              {month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-            </h2>
-            <Button
-              type="button"
-              aria-label="Next month"
-              onClick={() => setMonth(addMonths(month, 1))}
-            >
-              →
-            </Button>
-            <Button type="button" onClick={() => setMonth(startOfMonth(new Date()))}>
-              Today
-            </Button>
+      <div className={styles.calendarLayout}>
+        <Card>
+          <div className={styles.monthHeader}>
+            <div className={styles.calendarControls}>
+              <Button
+                type="button"
+                aria-label="Previous month"
+                onClick={() => setMonth(addMonths(month, -1))}
+              >
+                <Icon name="chevronLeft" size={15} />
+              </Button>
+              <h2 aria-live="polite">
+                {month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+              </h2>
+              <Button
+                type="button"
+                aria-label="Next month"
+                onClick={() => setMonth(addMonths(month, 1))}
+              >
+                <Icon name="chevronRight" size={15} />
+              </Button>
+              <Button type="button" onClick={() => setMonth(startOfMonth(new Date()))}>
+                Today
+              </Button>
+            </div>
+            <span className={styles.cardDescription} aria-live="polite">
+              {scheduled.isFetching
+                ? 'Refreshing…'
+                : `${posts.length} ${posts.length === 1 ? 'post' : 'posts'} this month`}
+            </span>
           </div>
-          {scheduled.isFetching && <span className={styles.cardDescription}>Refreshing…</span>}
-        </div>
 
-        {scheduled.isError && (
-          <ErrorNotice
-            message="Could not load scheduled posts."
-            onRetry={() => void scheduled.refetch()}
-          />
-        )}
+          {scheduled.isError && (
+            <ErrorNotice
+              message="Could not load scheduled posts."
+              onRetry={() => void scheduled.refetch()}
+            />
+          )}
 
-        <div className={styles.calendarWrap}>
-          <div className={styles.calendarGrid} role="grid" aria-label="Scheduled posts by day">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
-              <div key={label} className={styles.calendarHead} role="columnheader">
-                {label}
-              </div>
-            ))}
-
-            {grid.days.map((day) => {
-              const key = dayKey(day);
-              const posts = byDay.get(key) ?? [];
-              const muted = day.getMonth() !== month.getMonth();
-              const today = dayKey(day) === dayKey(new Date());
-
-              return (
-                <div
-                  key={key}
-                  role="gridcell"
-                  aria-label={day.toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                  className={[
-                    styles.calendarCell,
-                    muted ? styles.calendarCellMuted : '',
-                    today ? styles.calendarCellToday : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onDragOver={(event) => {
-                    // Without preventDefault the browser refuses the drop.
-                    event.preventDefault();
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const postId = event.dataTransfer.getData('text/plain') || dragging;
-                    setDragging(null);
-
-                    const post = (scheduled.data ?? []).find(
-                      (candidate) => candidate.id === postId,
-                    );
-
-                    if (post !== undefined) {
-                      moveTo(post, day);
-                    }
-                  }}
-                >
-                  <p className={styles.calendarDay}>{day.getDate()}</p>
-
-                  <ul className={styles.calendarChips}>
-                    {posts.map((post) => (
-                      <li key={post.id}>
-                        <div
-                          draggable
-                          onDragStart={(event) => {
-                            event.dataTransfer.setData('text/plain', post.id);
-                            event.dataTransfer.effectAllowed = 'move';
-                            setDragging(post.id);
-                          }}
-                          onDragEnd={() => setDragging(null)}
-                          className={[styles.chip, dragging === post.id ? styles.chipDragging : '']
-                            .filter(Boolean)
-                            .join(' ')}
-                        >
-                          <strong>{post.type}</strong>
-                          <br />
-                          {post.scheduledAt !== null &&
-                            new Date(post.scheduledAt).toLocaleTimeString(undefined, {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          <br />
-                          <span className={styles.cardDescription}>{post.brandName}</span>
-                          <div className={styles.chipMove}>
-                            <label>
-                              <span className={styles.cardDescription}>Move</span>{' '}
-                              <input
-                                type="date"
-                                aria-label={`Move ${post.type} post to another day`}
-                                value={
-                                  post.scheduledAt !== null
-                                    ? dayKey(new Date(post.scheduledAt))
-                                    : ''
-                                }
-                                onChange={(event) => {
-                                  const value = event.target.value;
-
-                                  if (value === '') {
-                                    return;
-                                  }
-
-                                  const parts = value.split('-').map(Number);
-                                  const [year, monthIndex, dayNumber] = parts;
-
-                                  if (
-                                    year === undefined ||
-                                    monthIndex === undefined ||
-                                    dayNumber === undefined ||
-                                    !Number.isFinite(year) ||
-                                    !Number.isFinite(monthIndex) ||
-                                    !Number.isFinite(dayNumber)
-                                  ) {
-                                    return;
-                                  }
-
-                                  moveTo(post, new Date(year, monthIndex - 1, dayNumber));
-                                }}
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              className={styles.chipCancel}
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    'Cancel the remaining scheduled deliveries for this post?',
-                                  )
-                                ) {
-                                  cancel.mutate(post.id);
-                                }
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+          <div className={styles.calendarWrap}>
+            <div className={styles.calendarGrid} role="grid" aria-label="Scheduled posts by day">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label) => (
+                <div key={label} className={styles.calendarHead} role="columnheader">
+                  {label}
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              ))}
 
-        {scheduled.data !== undefined && scheduled.data.length === 0 && (
-          <EmptyState
-            title="Nothing scheduled this month"
-            description="Approve a post, then schedule it to a connected account to see it here."
-          />
-        )}
-      </Card>
+              {grid.days.map((day) => {
+                const key = dayKey(day);
+                const dayPosts = byDay.get(key) ?? [];
+                const muted = day.getMonth() !== month.getMonth();
+                const today = dayKey(day) === dayKey(new Date());
+
+                return (
+                  <div
+                    key={key}
+                    role="gridcell"
+                    aria-label={day.toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                    className={[
+                      styles.calendarCell,
+                      muted ? styles.calendarCellMuted : '',
+                      today ? styles.calendarCellToday : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    onDragOver={(event) => {
+                      // Without preventDefault the browser refuses the drop.
+                      event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const postId = event.dataTransfer.getData('text/plain') || dragging;
+                      setDragging(null);
+
+                      const post = (scheduled.data ?? []).find(
+                        (candidate) => candidate.id === postId,
+                      );
+
+                      if (post !== undefined) {
+                        moveTo(post, day);
+                      }
+                    }}
+                  >
+                    <p
+                      className={[styles.calendarDay, today ? styles.calendarDayToday : '']
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {day.getDate()}
+                    </p>
+
+                    <ul className={styles.calendarChips}>
+                      {dayPosts.map((post) => (
+                        <li key={post.id}>
+                          <div
+                            draggable
+                            onDragStart={(event) => {
+                              event.dataTransfer.setData('text/plain', post.id);
+                              event.dataTransfer.effectAllowed = 'move';
+                              setDragging(post.id);
+                            }}
+                            onDragEnd={() => setDragging(null)}
+                            className={[
+                              styles.chip,
+                              dragging === post.id ? styles.chipDragging : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' ')}
+                            data-type={post.type}
+                          >
+                            <span className={styles.chipType}>{post.type}</span>
+                            <span className={styles.chipTime}>
+                              {post.scheduledAt !== null &&
+                                new Date(post.scheduledAt).toLocaleTimeString(undefined, {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                            </span>
+                            <span className={styles.chipBrand}>{post.brandName}</span>
+                            <div className={styles.chipMove}>
+                              <label>
+                                <span className="sr-only">Move</span>
+                                <input
+                                  type="date"
+                                  aria-label={`Move ${post.type} post to another day`}
+                                  value={
+                                    post.scheduledAt !== null
+                                      ? dayKey(new Date(post.scheduledAt))
+                                      : ''
+                                  }
+                                  onChange={(event) => {
+                                    const value = event.target.value;
+
+                                    if (value === '') {
+                                      return;
+                                    }
+
+                                    const parts = value.split('-').map(Number);
+                                    const [year, monthIndex, dayNumber] = parts;
+
+                                    if (
+                                      year === undefined ||
+                                      monthIndex === undefined ||
+                                      dayNumber === undefined ||
+                                      !Number.isFinite(year) ||
+                                      !Number.isFinite(monthIndex) ||
+                                      !Number.isFinite(dayNumber)
+                                    ) {
+                                      return;
+                                    }
+
+                                    moveTo(post, new Date(year, monthIndex - 1, dayNumber));
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                className={styles.chipCancel}
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      'Cancel the remaining scheduled deliveries for this post?',
+                                    )
+                                  ) {
+                                    cancel.mutate(post.id);
+                                  }
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {scheduled.data !== undefined && scheduled.data.length === 0 && (
+            <EmptyState
+              icon={<Icon name="calendar" size={18} />}
+              title="Nothing scheduled this month"
+              description="Approve a post, then schedule it to a connected account to see it here."
+              action={
+                <Link href="/brands" className={styles.button}>
+                  Plan a campaign
+                </Link>
+              }
+            />
+          )}
+        </Card>
+
+        <aside className={styles.calendarSide} aria-label="Calendar summary">
+          <Card title="This month" description="A quick read before you move anything.">
+            <div className={styles.summaryStack}>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Scheduled posts</span>
+                <span className={styles.summaryValue}>{posts.length}</span>
+              </div>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Ready to publish</span>
+                <span className={styles.summaryValue}>
+                  {posts.filter((post) => post.status === 'SCHEDULED').length}
+                </span>
+              </div>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Approved</span>
+                <span className={styles.summaryValue}>
+                  {posts.filter((post) => post.status === 'APPROVED').length}
+                </span>
+              </div>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Days with content</span>
+                <span className={styles.summaryValue}>{byDay.size}</span>
+              </div>
+            </div>
+          </Card>
+
+          <Card title="By format" description="Where the month's effort is going.">
+            <ul className={styles.legendList}>
+              {(['REEL', 'POSTER', 'CAROUSEL', 'CAPTION'] as const).map((type) => (
+                <li key={type} className={styles.legendItem}>
+                  <span className={styles.legendDot} data-type={type} aria-hidden="true" />
+                  <span>{formatLabel(type)}</span>
+                  <span className={styles.summaryValue} style={{ marginLeft: 'auto' }}>
+                    {typeCounts.get(type) ?? 0}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
+          <Card title="Next up" description="The next post already on the calendar.">
+            {nextPost === undefined ? (
+              <p className={styles.cardDescription}>Nothing is queued in this view.</p>
+            ) : (
+              <div className={styles.summaryStack}>
+                <div className={styles.summaryRow}>
+                  <span className={styles.summaryLabel}>Campaign</span>
+                  <span className={styles.summaryValue} style={{ fontSize: '0.82rem' }}>
+                    {nextPost.campaignGoal}
+                  </span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span className={styles.summaryLabel}>Format</span>
+                  <span className={styles.typeChip}>{formatLabel(nextPost.type)}</span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span className={styles.summaryLabel}>Day</span>
+                  <span className={styles.summaryValue} style={{ fontSize: '0.82rem' }}>
+                    {nextPost.scheduledAt === null
+                      ? 'Unscheduled'
+                      : new Date(nextPost.scheduledAt).toLocaleDateString(undefined, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                  </span>
+                </div>
+              </div>
+            )}
+          </Card>
+        </aside>
+      </div>
     </>
   );
 }
@@ -371,4 +492,19 @@ function groupByDay(posts: readonly ScheduledPost[]): Map<string, ScheduledPost[
   }
 
   return byDay;
+}
+
+function countByType(posts: readonly ScheduledPost[]): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const post of posts) {
+    counts.set(post.type, (counts.get(post.type) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+/** Sentence-case format names, so a legend reads like a label rather than a constant. */
+function formatLabel(type: string): string {
+  return type.charAt(0) + type.slice(1).toLowerCase();
 }

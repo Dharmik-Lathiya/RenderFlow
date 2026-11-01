@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { useApi } from '../../../lib/providers';
+import { Icon } from '../../../components/icons';
 import {
   Badge,
   Button,
@@ -49,90 +50,158 @@ export function CampaignPosts({ campaignId }: { campaignId: string }) {
     },
   });
 
+  const list = posts.data ?? [];
+
   return (
-    <>
-      <Card title="Posts" description="Each one is edited, generated and approved on its own.">
-        {posts.isLoading && <Spinner label="Loading posts" />}
-
-        {posts.isError && (
-          <ErrorNotice message="Could not load posts." onRetry={() => void posts.refetch()} />
-        )}
-
-        {posts.data !== undefined && posts.data.length === 0 && (
-          <EmptyState
-            title="No posts yet"
-            description="Write the first one below, then generate a caption, poster or reel for it."
-          />
-        )}
-
-        {posts.data !== undefined && posts.data.length > 0 && (
-          <ul className={styles.list}>
-            {posts.data.map((post) => (
-              <li key={post.id} className={styles.listItem}>
-                <span>
-                  <Link href={`/posts/${post.id}`}>
-                    {post.caption?.slice(0, 80) || 'Untitled post'}
-                  </Link>
-                  <span className={styles.cardDescription}> · {post.type}</span>
-                </span>
-                <Badge tone={toneFor(post.status)}>{post.status}</Badge>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card title="New post">
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            setTouched(true);
-
-            if (caption.trim().length > 2_000) {
-              return;
-            }
-
-            create.mutate();
-          }}
-          noValidate
+    <div className={styles.dashboardGrid}>
+      <div className={styles.dashboardColumn}>
+        <Card
+          title="Posts"
+          description="Each one is edited, generated and approved on its own."
+          actions={
+            <span className={styles.cardDescription}>
+              {posts.data === undefined
+                ? 'Loading'
+                : `${list.length} ${list.length === 1 ? 'post' : 'posts'}`}
+            </span>
+          }
         >
-          {create.isError && <ErrorNotice message="Could not create the post." />}
+          {posts.isLoading && <Spinner label="Loading posts" />}
 
-          <Field label="Kind" id="post-type" hint="What you will generate for this post.">
-            {({ id, describedBy }) => (
-              <select
-                id={id}
-                aria-describedby={describedBy}
-                value={type}
-                onChange={(event) => setType(event.target.value)}
-              >
-                <option value="CAPTION">Caption</option>
-                <option value="POSTER">Poster</option>
-                <option value="CAROUSEL">Carousel</option>
-                <option value="REEL">Reel</option>
-              </select>
-            )}
-          </Field>
+          {posts.isError && (
+            <ErrorNotice message="Could not load posts." onRetry={() => void posts.refetch()} />
+          )}
 
-          <Field label="Caption" id="post-caption" error={captionError}>
-            {({ id, describedBy, invalid }) => (
-              <textarea
-                id={id}
-                aria-describedby={describedBy}
-                aria-invalid={invalid || undefined}
-                value={caption}
-                onChange={(event) => setCaption(event.target.value)}
-                onBlur={() => setTouched(true)}
-              />
-            )}
-          </Field>
+          {posts.data !== undefined && posts.data.length === 0 && (
+            <EmptyState
+              icon={<Icon name="fileText" size={18} />}
+              title="No posts yet"
+              description="Write the first one beside this panel, then generate a caption, poster or reel for it."
+            />
+          )}
 
-          <Button type="submit" variant="primary" busy={create.isPending}>
-            Create draft
-          </Button>
-        </form>
-      </Card>
-    </>
+          {list.length > 0 && (
+            <ul className={styles.list}>
+              {list.map((post) => (
+                <li key={post.id} className={styles.listItem}>
+                  <span className={styles.row}>
+                    <span className={styles.typeChip}>{post.type}</span>
+                    <Link href={`/posts/${post.id}`} className={styles.postLink}>
+                      {post.caption?.slice(0, 90) || 'Untitled post'}
+                    </Link>
+                  </span>
+                  <span className={styles.row}>
+                    <Badge tone={toneFor(post.status)}>{post.status}</Badge>
+                    <Link
+                      href={`/posts/${post.id}`}
+                      className={styles.minorLink}
+                      aria-label={`Open ${post.type.toLowerCase()} post`}
+                    >
+                      Edit
+                      <Icon name="arrowUpRight" size={12} />
+                    </Link>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <div className={styles.dashboardColumn}>
+        <Card
+          title="New post"
+          description="Start with a caption or a visual format. Generation comes next."
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setTouched(true);
+
+              if (caption.trim().length > 2_000) {
+                return;
+              }
+
+              create.mutate();
+            }}
+            noValidate
+          >
+            {create.isError && <ErrorNotice message="Could not create the post." />}
+
+            <Field label="Kind" id="post-type" hint="What you will generate for this post.">
+              {({ id, describedBy }) => (
+                <select
+                  id={id}
+                  aria-describedby={describedBy}
+                  value={type}
+                  onChange={(event) => setType(event.target.value)}
+                >
+                  <option value="CAPTION">Caption</option>
+                  <option value="POSTER">Poster</option>
+                  <option value="CAROUSEL">Carousel</option>
+                  <option value="REEL">Reel</option>
+                </select>
+              )}
+            </Field>
+
+            <Field
+              label="Caption"
+              id="post-caption"
+              error={captionError}
+              hint="Optional. You can write it now or generate it after the draft exists."
+            >
+              {({ id, describedBy, invalid }) => (
+                <textarea
+                  id={id}
+                  aria-describedby={describedBy}
+                  aria-invalid={invalid || undefined}
+                  value={caption}
+                  onChange={(event) => setCaption(event.target.value)}
+                  onBlur={() => setTouched(true)}
+                />
+              )}
+            </Field>
+
+            <Button type="submit" variant="primary" busy={create.isPending}>
+              <Icon name="plus" size={15} />
+              Create draft
+            </Button>
+          </form>
+        </Card>
+
+        <Card title="Review path" description="A draft cannot publish itself.">
+          <ol className={styles.miniList}>
+            <li className={styles.miniItem}>
+              <span className={styles.miniDot} aria-hidden="true" />
+              <span className={styles.miniCopy}>
+                <span className={styles.miniTitle}>1. Write and generate</span>
+                <span className={styles.miniMeta}>
+                  A generation reserves credits first and refunds them if it fails.
+                </span>
+              </span>
+            </li>
+            <li className={styles.miniItem}>
+              <span className={styles.miniDot} aria-hidden="true" />
+              <span className={styles.miniCopy}>
+                <span className={styles.miniTitle}>2. Approve</span>
+                <span className={styles.miniMeta}>
+                  An APPROVER decides what the world sees. Editing after approval bumps the version.
+                </span>
+              </span>
+            </li>
+            <li className={styles.miniItem}>
+              <span className={styles.miniDot} aria-hidden="true" />
+              <span className={styles.miniCopy}>
+                <span className={styles.miniTitle}>3. Schedule</span>
+                <span className={styles.miniMeta}>
+                  Pick an account and a time; the publisher claims it from the calendar.
+                </span>
+              </span>
+            </li>
+          </ol>
+        </Card>
+      </div>
+    </div>
   );
 }
 

@@ -1,0 +1,419 @@
+/*
+ * Auth screens sit outside the application shell, so they get their own frame.
+ *
+ * The brand panel keeps a dark, ink-coloured surface in both themes on purpose:
+ * it is a fixed piece of brand furniture, not a second content surface that has
+ * to mirror the reader's appearance choice. The form side uses the regular app
+ * tokens, so it still follows light and dark.
+ */
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 1fr);
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* --- brand panel --------------------------------------------------------- */
+
+.aside {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: clamp(1.6rem, 4vw, 3.2rem);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 14% 6%, rgb(169 155 255 / 26%), transparent 32%),
+    radial-gradient(circle at 88% 82%, rgb(123 188 255 / 16%), transparent 36%),
+    linear-gradient(158deg, #0d0f19 0%, #111424 48%, #090a11 100%);
+  color: #f4f5fa;
+  isolation: isolate;
+}
+
+.aside::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 3.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 3.5%) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: linear-gradient(180deg, rgb(0 0 0 / 55%), transparent 72%);
+  content: '';
+  pointer-events: none;
+}
+
+.aside::after {
+  position: absolute;
+  right: -11rem;
+  bottom: -13rem;
+  z-index: -1;
+  width: 32rem;
+  height: 32rem;
+  border: 1px solid rgb(169 155 255 / 16%);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 5rem rgb(169 155 255 / 4%),
+    0 0 0 10rem rgb(169 155 255 / 2.5%);
+  content: '';
+  pointer-events: none;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: fit-content;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #a99bff 0%, #7bbcff 100%);
+  color: #0b0a14;
+  box-shadow: 0 8px 24px rgb(123 188 255 / 24%);
+}
+
+.brandWord {
+  color: currentColor;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.asideCopy {
+  position: relative;
+  z-index: 1;
+  max-width: 31rem;
+  margin-top: clamp(2.6rem, 9vh, 6.2rem);
+}
+
+.asideEyebrow {
+  margin: 0;
+  color: #c4bcff;
+  font-size: 0.67rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.asideTitle {
+  max-width: 24rem;
+  margin: 0.7rem 0 0;
+  color: #f7f7fc;
+  font-size: clamp(2rem, 3.5vw, 3.15rem);
+  font-weight: 700;
+  letter-spacing: -0.048em;
+  line-height: 1.03;
+}
+
+.asideLede {
+  max-width: 29rem;
+  margin: 1rem 0 0;
+  color: rgb(228 230 242 / 72%);
+  font-size: 0.93rem;
+  line-height: 1.65;
+}
+
+.asideList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 1.9rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.asideItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  color: rgb(228 230 242 / 64%);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.asideItemIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 5%);
+  color: #c9c1ff;
+}
+
+.asideItem strong {
+  display: block;
+  margin-bottom: 0.08rem;
+  color: #f4f5fa;
+  font-size: 0.81rem;
+  font-weight: 600;
+}
+
+/* --- queue preview ------------------------------------------------------- */
+
+.preview {
+  width: 100%;
+  max-width: 27rem;
+  margin-top: auto;
+  padding: 0.85rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 4%);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 32%);
+  backdrop-filter: blur(8px);
+}
+
+.previewTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.1rem 0.15rem 0.65rem;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+}
+
+.previewLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #eef0f8;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.previewLabel svg {
+  color: #c9c1ff;
+}
+
+.previewCount {
+  color: rgb(228 230 242 / 52%);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.previewRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.15rem;
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
+}
+
+.previewRow:last-child {
+  border-bottom: 0;
+  padding-bottom: 0.15rem;
+}
+
+.previewDot {
+  flex: none;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+}
+
+.previewDotReady {
+  background: #7ee2b8;
+  box-shadow: 0 0 0 3px rgb(126 226 184 / 12%);
+}
+
+.previewDotDraft {
+  background: #f5c96b;
+  box-shadow: 0 0 0 3px rgb(245 201 107 / 12%);
+}
+
+.previewCopy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.previewTitle {
+  overflow: hidden;
+  color: #eef0f8;
+  font-size: 0.72rem;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previewMeta {
+  color: rgb(228 230 242 / 46%);
+  font-size: 0.64rem;
+}
+
+.previewStatus {
+  flex: none;
+  padding: 0.1rem 0.42rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 5%);
+  color: rgb(228 230 242 / 62%);
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+
+.asideFootnote {
+  margin: clamp(1.4rem, 4vh, 2.6rem) 0 0;
+  color: rgb(228 230 242 / 36%);
+  font-size: 0.66rem;
+}
+
+/* --- form side ----------------------------------------------------------- */
+
+.main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding: clamp(1.25rem, 3.5vw, 2.6rem);
+  background: radial-gradient(circle at 88% 0%, var(--glow), transparent 30%), var(--bg);
+}
+
+.topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.35rem;
+}
+
+.mobileBrand {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.themeSlot {
+  margin-left: auto;
+}
+
+.formWrap {
+  width: 100%;
+  max-width: 24.5rem;
+  margin: auto;
+  padding: clamp(1.6rem, 5vh, 3.4rem) 0;
+}
+
+.formHead {
+  margin-bottom: 1.7rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0.55rem 0 0;
+  color: var(--fg);
+  font-size: clamp(1.7rem, 2.6vw, 2.05rem);
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.description {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.62;
+}
+
+.footerSlot {
+  margin-top: 1.4rem;
+}
+
+.mainFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.mainFooter nav {
+  display: flex;
+  gap: 0.9rem;
+}
+
+.mainFooter a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.mainFooter a:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+@media (max-width: 960px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .aside {
+    display: none;
+  }
+
+  .mobileBrand {
+    display: inline-flex;
+    color: var(--fg);
+    text-decoration: none;
+  }
+
+  .formWrap {
+    margin: 0 auto;
+    padding-top: clamp(2.2rem, 7vh, 4rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .main {
+    padding: 1.1rem;
+  }
+
+  .formWrap {
+    padding-bottom: 2rem;
+  }
+
+  .mainFooter {
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+/* Short laptop screens: the copy is the first thing to go, not the form. */
+@media (max-height: 46rem) and (min-width: 961px) {
+  .preview {
+    display: none;
+  }
+
+  .asideCopy {
+    margin-top: 2.2rem;
+  }
+
+  .asideFootnote {
+    margin-top: auto;
+  }
+}

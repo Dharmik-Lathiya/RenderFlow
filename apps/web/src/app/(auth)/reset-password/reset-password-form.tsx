@@ -6,7 +6,9 @@ import { useState } from 'react';
 import { ApiClientError } from '@renderflow/api-client';
 
 import { useApi } from '../../../lib/providers';
-import { Button, Card, Field } from '../../../components/ui';
+import { AuthShell } from '../../../components/auth-shell';
+import { Icon } from '../../../components/icons';
+import { Button, ErrorNotice, Field } from '../../../components/ui';
 import styles from '../../../components/ui.module.css';
 
 /**
@@ -55,79 +57,95 @@ export function ResetPasswordForm({ token }: { token: string }) {
   };
 
   return (
-    <div className={styles.authCard}>
-      <Card
-        title="Choose a new password"
-        description="Signing in again will be required everywhere."
-      >
-        {token === '' ? (
-          <div role="alert">
+    <AuthShell
+      eyebrow="Account recovery"
+      title="Choose a new password"
+      description="Signing in again will be required everywhere."
+      footer={
+        <p className={styles.authSwitch}>
+          <Link href="/login">Back to sign in</Link>
+        </p>
+      }
+    >
+      {token === '' ? (
+        <div className={styles.authNotice} role="alert">
+          <span className={styles.authNoticeIcon}>
+            <Icon name="alert" size={16} />
+          </span>
+          <div>
             <p>
-              This page needs a reset link. Open the link from your email, or request a new one.
+              <strong>This page needs a reset link.</strong>
             </p>
             <p>
-              <Link href="/forgot-password">Request a reset link</Link>
+              Open the link from your email, or{' '}
+              <Link href="/forgot-password">request a new one</Link>.
             </p>
           </div>
-        ) : done ? (
-          <div role="status">
-            <p>Your password has been changed, and every other session has been signed out.</p>
+        </div>
+      ) : done ? (
+        <div className={`${styles.authNotice} ${styles.authNoticeSuccess}`} role="status">
+          <span className={styles.authNoticeIcon}>
+            <Icon name="check" size={16} />
+          </span>
+          <div>
             <p>
-              <Link href="/login">Sign in with the new password</Link>
+              <strong>Password changed.</strong>
+            </p>
+            <p>
+              Every other session has been signed out.{' '}
+              <Link href="/login">Sign in with the new password</Link>.
             </p>
           </div>
-        ) : (
-          <form className={styles.authForm} onSubmit={(event) => void onSubmit(event)} noValidate>
-            <Field
-              label="New password"
-              id="password"
-              hint="At least 10 characters, including upper and lower case and a number."
-            >
-              {({ id, describedBy, invalid }) => (
-                <input
-                  id={id}
-                  type="password"
-                  autoComplete="new-password"
-                  aria-describedby={describedBy}
-                  aria-invalid={invalid || undefined}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
-              )}
-            </Field>
+        </div>
+      ) : (
+        <form className={styles.authForm} onSubmit={(event) => void onSubmit(event)} noValidate>
+          <Field
+            label="New password"
+            id="password"
+            hint="At least 10 characters, including upper and lower case and a number."
+          >
+            {({ id, describedBy, invalid }) => (
+              <input
+                id={id}
+                type="password"
+                autoComplete="new-password"
+                aria-describedby={describedBy}
+                aria-invalid={invalid || undefined}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            )}
+          </Field>
 
-            <Field
-              label="Confirm new password"
-              id="confirm"
-              error={mismatch ? 'The two passwords do not match.' : undefined}
-            >
-              {({ id, describedBy, invalid }) => (
-                <input
-                  id={id}
-                  type="password"
-                  autoComplete="new-password"
-                  aria-describedby={describedBy}
-                  aria-invalid={invalid || undefined}
-                  value={confirm}
-                  onChange={(event) => setConfirm(event.target.value)}
-                  required
-                />
-              )}
-            </Field>
+          <Field
+            label="Confirm new password"
+            id="confirm"
+            error={mismatch ? 'The two passwords do not match.' : undefined}
+          >
+            {({ id, describedBy, invalid }) => (
+              <input
+                id={id}
+                type="password"
+                autoComplete="new-password"
+                aria-describedby={describedBy}
+                aria-invalid={invalid || undefined}
+                value={confirm}
+                onChange={(event) => setConfirm(event.target.value)}
+                required
+              />
+            )}
+          </Field>
 
-            {error === null ? null : <p role="alert">{error}</p>}
+          {error === null ? null : <ErrorNotice message={error} />}
 
+          <div className={styles.authActions}>
             <Button type="submit" variant="primary" busy={busy}>
               Set new password
             </Button>
-          </form>
-        )}
-
-        <p>
-          <Link href="/forgot-password">Request a new link</Link>
-        </p>
-      </Card>
-    </div>
+          </div>
+        </form>
+      )}
+    </AuthShell>
   );
 }

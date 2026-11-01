@@ -1,0 +1,32 @@
+[build]
+builder = "nixpacks"
+
+[[services]]
+name = "api"
+source = "apps/api"
+startCommand = "node dist/main.js"
+
+[[services]]
+name = "content-worker"
+source = "apps/content-worker"
+startCommand = "node dist/main.js"
+
+[[services]]
+name = "media-worker"
+source = "apps/media-worker"
+startCommand = "node dist/main.js"
+
+[[services]]
+name = "publisher-worker"
+source = "apps/publisher-worker"
+startCommand = "node dist/main.js"
+
+[[services]]
+name = "outbox-relay"
+source = "apps/outbox-relay"
+startCommand = "node dist/main.js"
+
+[[services]]
+name = "reaper"
+source = "apps/reaper"
+startCommand = "node dist/main.js"

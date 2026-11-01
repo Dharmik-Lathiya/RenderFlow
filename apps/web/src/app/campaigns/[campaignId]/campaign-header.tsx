@@ -1,9 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 
 import { useApi } from '../../../lib/providers';
-import { Badge, Spinner } from '../../../components/ui';
+import { Icon } from '../../../components/icons';
+import { Badge, PageHeader, Spinner } from '../../../components/ui';
 import styles from '../../../components/ui.module.css';
 
 /**
@@ -26,20 +28,48 @@ export function CampaignHeader({ campaignId }: { campaignId: string }) {
   }
 
   if (campaign.data === undefined) {
-    return <h1>Campaign</h1>;
+    return (
+      <PageHeader
+        eyebrow="Campaign"
+        title="Campaign"
+        description="This campaign could not be loaded. Its posts and analytics may still be available below."
+        actions={
+          <Link href="/dashboard" className={styles.button}>
+            <Icon name="chevronLeft" size={15} />
+            Dashboard
+          </Link>
+        }
+      />
+    );
   }
 
+  const { goal, status, startDate, endDate, brandId } = campaign.data;
+
   return (
-    <>
-      <h1>{campaign.data.goal}</h1>
-      <p className={styles.row}>
-        <Badge tone={campaign.data.status === 'ACTIVE' ? 'good' : 'warn'}>
-          {campaign.data.status}
-        </Badge>
-        <span className={styles.cardDescription}>
-          {campaign.data.startDate ?? 'No start date'} → {campaign.data.endDate ?? 'no end date'}
-        </span>
-      </p>
-    </>
+    <PageHeader
+      eyebrow="Campaign"
+      title={goal}
+      description="Write the posts, generate the assets, then send the approved ones to the calendar."
+      meta={
+        <>
+          <Badge tone={status === 'ACTIVE' ? 'good' : 'warn'}>{status}</Badge>
+          <span className={styles.tag}>
+            {startDate ?? 'No start date'} → {endDate ?? 'no end date'}
+          </span>
+        </>
+      }
+      actions={
+        <>
+          <Link href={`/brands/${brandId}`} className={styles.button}>
+            <Icon name="chevronLeft" size={15} />
+            Back to brand
+          </Link>
+          <Link href="/calendar" className={`${styles.button} ${styles.primary}`}>
+            <Icon name="calendar" size={15} />
+            Open calendar
+          </Link>
+        </>
+      }
+    />
   );
 }

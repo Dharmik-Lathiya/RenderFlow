@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ApiClientError } from '@renderflow/api-client';
 
 import { useApi } from '../../lib/providers';
+import { Icon } from '../../components/icons';
 import {
   Badge,
   Button,
@@ -14,7 +15,9 @@ import {
   ErrorNotice,
   Field,
   LiveRegion,
+  PageHeader,
   Spinner,
+  StatCard,
 } from '../../components/ui';
 import styles from '../../components/ui.module.css';
 
@@ -131,8 +134,13 @@ export function AdminConsole() {
   if (forbidden) {
     return (
       <>
-        <h1>Operator console</h1>
+        <PageHeader
+          eyebrow="Operations"
+          title="Operator console"
+          description="Recovery, reconciliation and audited credit adjustments."
+        />
         <EmptyState
+          icon={<Icon name="shield" size={18} />}
           title="Operator access required"
           description="This page is available to a global ADMIN, or to the OWNER of a workspace. It operates on real credits and real deliveries."
         />
@@ -144,15 +152,51 @@ export function AdminConsole() {
     return <Spinner label="Loading the operator console" />;
   }
 
+  const jobs = dlq.data ?? [];
+  const events = outbox.data ?? [];
+  const reservedCredits = jobs.reduce((total, job) => total + job.creditsReserved, 0);
+  const attempts = events.reduce((total, event) => total + event.attempts, 0);
+
   return (
     <>
-      <h1>Operator console</h1>
-      <p className={styles.cardDescription}>
-        The dead-letter queue is the set of jobs and events that were given up on. Replaying a job
-        re-reserves its credits; replaying an event only re-delivers it.
-      </p>
+      <PageHeader
+        eyebrow="Operations"
+        title="Operator console"
+        description="The dead-letter queue is the set of jobs and events that were given up on. Replaying a job re-reserves its credits; replaying an event only re-delivers it."
+      />
 
       <LiveRegion message={announcement} />
+
+      <div className={styles.kpiGrid}>
+        <StatCard
+          label="Failed jobs"
+          value={jobs.length}
+          hint="in the dead-letter queue"
+          icon={<Icon name="alert" />}
+          tone={jobs.length > 0 ? 'danger' : 'success'}
+        />
+        <StatCard
+          label="Reserved credits"
+          value={reservedCredits}
+          hint="would be re-reserved on replay"
+          icon={<Icon name="credits" />}
+          tone="warning"
+        />
+        <StatCard
+          label="Abandoned events"
+          value={events.length}
+          hint="undelivered outbox rows"
+          icon={<Icon name="inbox" />}
+          tone={events.length > 0 ? 'warning' : 'success'}
+        />
+        <StatCard
+          label="Delivery attempts"
+          value={attempts}
+          hint="already spent on those events"
+          icon={<Icon name="refresh" />}
+          tone="info"
+        />
+      </div>
 
       <Card
         title="Failed generation jobs"
@@ -165,11 +209,15 @@ export function AdminConsole() {
           />
         )}
 
-        {dlq.data !== undefined && dlq.data.length === 0 && (
-          <EmptyState title="No failed jobs" description="Nothing has exhausted its attempts." />
+        {dlq.data !== undefined && jobs.length === 0 && (
+          <EmptyState
+            icon={<Icon name="check" size={18} />}
+            title="No failed jobs"
+            description="Nothing has exhausted its attempts."
+          />
         )}
 
-        {dlq.data !== undefined && dlq.data.length > 0 && (
+        {jobs.length > 0 && (
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
@@ -185,7 +233,7 @@ export function AdminConsole() {
                 </tr>
               </thead>
               <tbody>
-                {dlq.data.map((job) => (
+                {jobs.map((job) => (
                   <tr key={job.id}>
                     <td>
                       <code>{job.id.slice(0, 8)}</code>
@@ -232,14 +280,15 @@ export function AdminConsole() {
           />
         )}
 
-        {outbox.data !== undefined && outbox.data.length === 0 && (
+        {outbox.data !== undefined && events.length === 0 && (
           <EmptyState
+            icon={<Icon name="check" size={18} />}
             title="No abandoned events"
             description="The relay has delivered everything."
           />
         )}
 
-        {outbox.data !== undefined && outbox.data.length > 0 && (
+        {events.length > 0 && (
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead>
@@ -253,7 +302,7 @@ export function AdminConsole() {
                 </tr>
               </thead>
               <tbody>
-                {outbox.data.map((event) => (
+                {events.map((event) => (
                   <tr key={event.id}>
                     <td>
                       {event.eventType}{' '}
@@ -280,156 +329,223 @@ export function AdminConsole() {
         )}
       </Card>
 
-      <Card
-        title="Credit reconciliation"
-        description="Rebuilds each wallet's available and reserved balances from the ledger's buckets."
-        actions={
-          <Button
-            type="button"
-            variant="primary"
-            busy={reconciliation.isPending}
-            onClick={() => reconciliation.mutate()}
-          >
-            Run reconciliation
-          </Button>
-        }
-      >
-        {reconcile === undefined ? (
-          <p className={styles.cardDescription}>
-            On demand only. It scans every wallet in scope, so it is not part of a page load.
-          </p>
-        ) : (
-          <>
-            <p>
-              <Badge tone={reconcile.drifted === 0 ? 'good' : 'bad'}>
-                {reconcile.drifted === 0 ? 'No drift' : `${reconcile.drifted} drifted`}
-              </Badge>{' '}
-              Checked {reconcile.checked} wallets.
-            </p>
-            {reconcile.drift.length > 0 && (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th scope="col">User</th>
-                      <th scope="col" className={styles.numeric}>
-                        Wallet total
-                      </th>
-                      <th scope="col" className={styles.numeric}>
-                        Ledger available
-                      </th>
-                      <th scope="col" className={styles.numeric}>
-                        Ledger reserved
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reconcile.drift.map((entry) => (
-                      <tr key={entry.userId}>
-                        <td>
-                          <code>{entry.userId}</code>
-                        </td>
-                        <td className={styles.numeric}>{entry.walletTotal}</td>
-                        <td className={styles.numeric}>{entry.ledgerAvailable}</td>
-                        <td className={styles.numeric}>{entry.ledgerReserved}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </Card>
-
-      <Card
-        title="Adjust credits"
-        description="Writes a ledger entry and an audit entry in one transaction. The reason is required."
-      >
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            setAdjustError(undefined);
-
-            if (userId.trim() === '' || amountError !== undefined || reason.trim().length < 3) {
-              setAdjustError('A user id, a non-zero integer amount and a reason are required.');
-              return;
+      <div className={styles.dashboardGrid}>
+        <div className={styles.dashboardColumn}>
+          <Card
+            title="Credit reconciliation"
+            description="Rebuilds each wallet's available and reserved balances from the ledger's buckets."
+            actions={
+              <Button
+                type="button"
+                variant="primary"
+                busy={reconciliation.isPending}
+                onClick={() => reconciliation.mutate()}
+              >
+                Run reconciliation
+              </Button>
             }
-
-            adjust.mutate();
-          }}
-        >
-          <Field label="User id" id="adjust-user" hint="The UUID shown in the user's account.">
-            {(props) => (
-              <input
-                id={props.id}
-                aria-describedby={props.describedBy}
-                aria-invalid={props.invalid}
-                value={userId}
-                onChange={(event) => setUserId(event.target.value)}
-                autoComplete="off"
-                required
-              />
-            )}
-          </Field>
-
-          <Field
-            label="Amount"
-            id="adjust-amount"
-            hint="Positive grants credits; negative removes them. Never zero."
-            error={amountError ?? adjustError}
           >
-            {(props) => (
-              <input
-                id={props.id}
-                aria-describedby={props.describedBy}
-                aria-invalid={props.invalid}
-                type="number"
-                step={1}
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                required
-              />
+            {reconcile === undefined ? (
+              <p className={styles.cardDescription}>
+                On demand only. It scans every wallet in scope, so it is not part of a page load.
+              </p>
+            ) : (
+              <>
+                <p>
+                  <Badge tone={reconcile.drifted === 0 ? 'good' : 'bad'}>
+                    {reconcile.drifted === 0 ? 'No drift' : `${reconcile.drifted} drifted`}
+                  </Badge>{' '}
+                  Checked {reconcile.checked} wallets.
+                </p>
+                {reconcile.drift.length > 0 && (
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th scope="col">User</th>
+                          <th scope="col" className={styles.numeric}>
+                            Wallet total
+                          </th>
+                          <th scope="col" className={styles.numeric}>
+                            Ledger available
+                          </th>
+                          <th scope="col" className={styles.numeric}>
+                            Ledger reserved
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reconcile.drift.map((entry) => (
+                          <tr key={entry.userId}>
+                            <td>
+                              <code>{entry.userId}</code>
+                            </td>
+                            <td className={styles.numeric}>{entry.walletTotal}</td>
+                            <td className={styles.numeric}>{entry.ledgerAvailable}</td>
+                            <td className={styles.numeric}>{entry.ledgerReserved}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
-          </Field>
+          </Card>
 
-          <Field label="Reason" id="adjust-reason" hint="Recorded in the ledger and the audit log.">
-            {(props) => (
-              <input
-                id={props.id}
-                aria-describedby={props.describedBy}
-                aria-invalid={props.invalid}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                minLength={3}
-                maxLength={500}
-                required
-              />
-            )}
-          </Field>
-
-          <Field
-            label="Reference id"
-            id="adjust-reference"
-            hint="Optional. Retrying with the same reference does not apply the adjustment twice."
+          <Card
+            title="Adjust credits"
+            description="Writes a ledger entry and an audit entry in one transaction. The reason is required."
           >
-            {(props) => (
-              <input
-                id={props.id}
-                aria-describedby={props.describedBy}
-                aria-invalid={props.invalid}
-                value={referenceId}
-                onChange={(event) => setReferenceId(event.target.value)}
-                maxLength={200}
-              />
-            )}
-          </Field>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                setAdjustError(undefined);
 
-          <Button type="submit" variant="danger" busy={adjust.isPending}>
-            Apply adjustment
-          </Button>
-        </form>
-      </Card>
+                if (userId.trim() === '' || amountError !== undefined || reason.trim().length < 3) {
+                  setAdjustError('A user id, a non-zero integer amount and a reason are required.');
+                  return;
+                }
+
+                adjust.mutate();
+              }}
+            >
+              <Field label="User id" id="adjust-user" hint="The UUID shown in the user's account.">
+                {(props) => (
+                  <input
+                    id={props.id}
+                    aria-describedby={props.describedBy}
+                    aria-invalid={props.invalid}
+                    value={userId}
+                    onChange={(event) => setUserId(event.target.value)}
+                    autoComplete="off"
+                    required
+                  />
+                )}
+              </Field>
+
+              <Field
+                label="Amount"
+                id="adjust-amount"
+                hint="Positive grants credits; negative removes them. Never zero."
+                error={amountError ?? adjustError}
+              >
+                {(props) => (
+                  <input
+                    id={props.id}
+                    aria-describedby={props.describedBy}
+                    aria-invalid={props.invalid}
+                    type="number"
+                    step={1}
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                    required
+                  />
+                )}
+              </Field>
+
+              <Field
+                label="Reason"
+                id="adjust-reason"
+                hint="Recorded in the ledger and the audit log."
+              >
+                {(props) => (
+                  <input
+                    id={props.id}
+                    aria-describedby={props.describedBy}
+                    aria-invalid={props.invalid}
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    minLength={3}
+                    maxLength={500}
+                    required
+                  />
+                )}
+              </Field>
+
+              <Field
+                label="Reference id"
+                id="adjust-reference"
+                hint="Optional. Retrying with the same reference does not apply the adjustment twice."
+              >
+                {(props) => (
+                  <input
+                    id={props.id}
+                    aria-describedby={props.describedBy}
+                    aria-invalid={props.invalid}
+                    value={referenceId}
+                    onChange={(event) => setReferenceId(event.target.value)}
+                    maxLength={200}
+                  />
+                )}
+              </Field>
+
+              <Button type="submit" variant="danger" busy={adjust.isPending}>
+                Apply adjustment
+              </Button>
+            </form>
+          </Card>
+        </div>
+
+        <div className={styles.dashboardColumn}>
+          <Card
+            title="What is safe to replay"
+            description="A short guide before touching real money."
+          >
+            <ul className={styles.miniList}>
+              <li className={styles.miniItem}>
+                <span className={styles.miniDot} aria-hidden="true" />
+                <span className={styles.miniCopy}>
+                  <span className={styles.miniTitle}>Job replay re-reserves credits</span>
+                  <span className={styles.miniMeta}>
+                    Confirm the owner can cover the amount before you press it.
+                  </span>
+                </span>
+              </li>
+              <li className={styles.miniItem}>
+                <span className={styles.miniDot} aria-hidden="true" />
+                <span className={styles.miniCopy}>
+                  <span className={styles.miniTitle}>Outbox replay moves no money</span>
+                  <span className={styles.miniMeta}>
+                    It only returns the event to the pending set.
+                  </span>
+                </span>
+              </li>
+              <li className={styles.miniItem}>
+                <span className={styles.miniDot} aria-hidden="true" />
+                <span className={styles.miniCopy}>
+                  <span className={styles.miniTitle}>Every adjustment is audited</span>
+                  <span className={styles.miniMeta}>
+                    The reason and reference id are written with the ledger row.
+                  </span>
+                </span>
+              </li>
+            </ul>
+          </Card>
+
+          <Card
+            title="Watch the ledger"
+            description="Reconciliation reports drift; it does not repair it automatically."
+          >
+            <div className={styles.summaryStack}>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Wallets checked</span>
+                <span className={styles.summaryValue}>{reconcile?.checked ?? '—'}</span>
+              </div>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>Drifted</span>
+                <span className={styles.summaryValue}>{reconcile?.drifted ?? '—'}</span>
+              </div>
+              <div className={styles.summaryRow}>
+                <span className={styles.summaryLabel}>In scope</span>
+                <span className={styles.summaryValue}>
+                  {jobs.length + events.length} queue rows
+                </span>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
     </>
   );
 }

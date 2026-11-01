@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { useApi } from '../../../lib/providers';
-import { Button, Card, Field } from '../../../components/ui';
+import { AuthShell } from '../../../components/auth-shell';
+import { Icon } from '../../../components/icons';
+import { Button, ErrorNotice, Field } from '../../../components/ui';
 import styles from '../../../components/ui.module.css';
 
 /**
@@ -40,50 +42,57 @@ export function ForgotPasswordForm() {
   };
 
   return (
-    <div className={styles.authCard}>
-      <Card
-        title="Reset your password"
-        description="We will email you a link. It works once, and expires in 30 minutes."
-      >
-        {sent ? (
-          <div role="status">
+    <AuthShell
+      eyebrow="Account recovery"
+      title="Reset your password"
+      description="We will email you a link. It works once, and expires in 30 minutes."
+      footer={
+        <p className={styles.authSwitch}>
+          Remembered it? <Link href="/login">Back to sign in</Link>
+        </p>
+      }
+    >
+      {sent ? (
+        <div className={`${styles.authNotice} ${styles.authNoticeSuccess}`} role="status">
+          <span className={styles.authNoticeIcon}>
+            <Icon name="check" size={16} />
+          </span>
+          <div>
+            <p>
+              <strong>Check your inbox.</strong>
+            </p>
             <p>
               If an account exists for <strong>{email.trim()}</strong>, the link is on its way.
               Check the spam folder if it has not arrived in a few minutes.
             </p>
-            <p>
-              <Link href="/login">Back to sign in</Link>
-            </p>
           </div>
-        ) : (
-          <form className={styles.authForm} onSubmit={(event) => void onSubmit(event)} noValidate>
-            <Field label="Email" id="email">
-              {({ id, describedBy, invalid }) => (
-                <input
-                  id={id}
-                  type="email"
-                  autoComplete="email"
-                  aria-describedby={describedBy}
-                  aria-invalid={invalid || undefined}
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                />
-              )}
-            </Field>
+        </div>
+      ) : (
+        <form className={styles.authForm} onSubmit={(event) => void onSubmit(event)} noValidate>
+          <Field label="Email" id="email">
+            {({ id, describedBy, invalid }) => (
+              <input
+                id={id}
+                type="email"
+                autoComplete="email"
+                aria-describedby={describedBy}
+                aria-invalid={invalid || undefined}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
+            )}
+          </Field>
 
-            {error === null ? null : <p role="alert">{error}</p>}
+          {error === null ? null : <ErrorNotice message={error} />}
 
+          <div className={styles.authActions}>
             <Button type="submit" variant="primary" busy={busy}>
               Send reset link
             </Button>
-          </form>
-        )}
-
-        <p>
-          <Link href="/login">Back to sign in</Link>
-        </p>
-      </Card>
-    </div>
+          </div>
+        </form>
+      )}
+    </AuthShell>
   );
 }

@@ -3,7 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useApi } from '../../../lib/providers';
-import { Card, EmptyState, ErrorNotice, Spinner } from '../../../components/ui';
+import { Icon } from '../../../components/icons';
+import { Card, EmptyState, ErrorNotice, Spinner, StatCard } from '../../../components/ui';
 import styles from '../../../components/ui.module.css';
 
 /**
@@ -48,13 +49,50 @@ export function CampaignAnalytics({ campaignId }: { campaignId: string }) {
         title="Performance"
         description="Latest snapshot per publication. A post sent to two platforms counts twice in the totals, once per audience."
       >
-        <section className={styles.statGrid} aria-label="Campaign totals">
-          <Stat label="Reach" value={totals.reach} />
-          <Stat label="Likes" value={totals.likes} />
-          <Stat label="Comments" value={totals.comments} />
-          <Stat label="Clicks" value={totals.clicks} />
-          <Stat label="Engagement rate" value={`${(totals.engagementRate * 100).toFixed(1)}%`} />
-          <Stat label="Published" value={`${totals.published}/${totals.posts}`} />
+        <section
+          className={`${styles.kpiGrid} ${styles.campaignKpiGrid}`}
+          aria-label="Campaign totals"
+        >
+          <StatCard
+            label="Reach"
+            value={totals.reach.toLocaleString()}
+            hint="latest snapshot"
+            icon={<Icon name="eye" />}
+          />
+          <StatCard
+            label="Likes"
+            value={totals.likes.toLocaleString()}
+            hint="across publications"
+            icon={<Icon name="heart" />}
+            tone="success"
+          />
+          <StatCard
+            label="Comments"
+            value={totals.comments.toLocaleString()}
+            hint="conversation volume"
+            icon={<Icon name="message" />}
+            tone="info"
+          />
+          <StatCard
+            label="Clicks"
+            value={totals.clicks.toLocaleString()}
+            hint="link clicks"
+            icon={<Icon name="click" />}
+            tone="warning"
+          />
+          <StatCard
+            label="Engagement rate"
+            value={`${(totals.engagementRate * 100).toFixed(1)}%`}
+            hint="across published posts"
+            icon={<Icon name="trend" />}
+            tone="success"
+          />
+          <StatCard
+            label="Published"
+            value={`${totals.published}/${totals.posts}`}
+            hint="posts live"
+            icon={<Icon name="check" />}
+          />
         </section>
 
         {series.length === 0 ? (
@@ -209,17 +247,6 @@ export function CampaignAnalytics({ campaignId }: { campaignId: string }) {
         )}
       </Card>
     </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className={styles.stat}>
-      <p className={styles.statLabel}>{label}</p>
-      <p className={styles.statValue}>
-        {typeof value === 'number' ? value.toLocaleString() : value}
-      </p>
-    </div>
   );
 }
 
