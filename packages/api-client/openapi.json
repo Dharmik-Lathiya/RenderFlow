@@ -125,6 +125,29 @@
         "tags": ["admin"]
       }
     },
+    "/admin/publish/{jobId}/replay": {
+      "post": {
+        "description": "Only a FAILED job with no external post id can be replayed. Refused with CONFLICT otherwise; the audit log records the operator and reason.",
+        "operationId": "AdminController_replayPublishJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "jobId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Re-queue a failed publish job",
+        "tags": ["admin"]
+      }
+    },
     "/admin/reconcile": {
       "get": {
         "operationId": "AdminController_reconcile",
@@ -297,6 +320,19 @@
           }
         },
         "summary": "Revoke the presented session",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "operationId": "AuthController_logoutAll",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "summary": "Revoke every session for the signed-in user",
         "tags": ["auth"]
       }
     },
@@ -530,6 +566,28 @@
         "tags": ["studio"]
       }
     },
+    "/campaigns/{campaignId}/festival": {
+      "post": {
+        "operationId": "FestivalController_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaignId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "summary": "Create a festival generation; reserves credits and creates the post atomically",
+        "tags": ["festival"]
+      }
+    },
     "/campaigns/{campaignId}/posts": {
       "get": {
         "operationId": "StudioController_listPosts",
@@ -621,13 +679,52 @@
         "tags": ["meta"]
       }
     },
+    "/festival/estimate": {
+      "get": {
+        "operationId": "FestivalController_estimate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Server-side credit estimate for a festival generation",
+        "tags": ["festival"]
+      }
+    },
+    "/festival/occasions": {
+      "get": {
+        "operationId": "FestivalController_occasions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Active festival occasions",
+        "tags": ["festival"]
+      }
+    },
+    "/festival/templates": {
+      "get": {
+        "operationId": "FestivalController_templates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Active templates for one occasion",
+        "tags": ["festival"]
+      }
+    },
     "/health/live": {
       "get": {
         "operationId": "HealthController_live",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "The process is accepting HTTP requests."
           }
         },
         "summary": "Liveness: the process is up",
@@ -636,11 +733,15 @@
     },
     "/health/ready": {
       "get": {
+        "description": "Returns 200 when PostgreSQL, Redis and S3 respond within their budgets, otherwise 503 with the same report body.",
         "operationId": "HealthController_ready",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Every dependency is up."
+          },
+          "503": {
+            "description": "At least one dependency is down; the body still carries the per-dependency report."
           }
         },
         "summary": "Readiness: dependencies are reachable",

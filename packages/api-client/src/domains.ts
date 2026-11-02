@@ -6,6 +6,7 @@ import { createRenderFlowClient } from './client';
 import {
   adjustCreditsRequestSchema,
   adjustCreditsResponseSchema,
+  assetSchema,
   authResponseSchema,
   brandSchema,
   campaignAnalyticsSchema,
@@ -16,6 +17,10 @@ import {
   createPostRequestSchema,
   creditsResponseSchema,
   dlqJobSchema,
+  festivalEstimateSchema,
+  festivalJobSchema,
+  festivalOccasionSchema,
+  festivalTemplateSchema,
   generateRequestSchema,
   generateResponseSchema,
   jobSchema,
@@ -24,6 +29,7 @@ import {
   notificationSchema,
   outboxEventSchema,
   postSchema,
+  presignedDownloadSchema,
   presignedUploadSchema,
   publishJobSchema,
   reconcileReportSchema,
@@ -36,6 +42,7 @@ import {
   workspaceSchema,
   type AdjustCreditsRequest,
   type AdjustCreditsResponse,
+  type Asset,
   type AuthResponse,
   type Brand,
   type Campaign,
@@ -43,6 +50,11 @@ import {
   type ConnectAccountRequest,
   type CreditsResponse,
   type DlqJob,
+  type FestivalCreateRequest,
+  type FestivalEstimate,
+  type FestivalJob,
+  type FestivalOccasion,
+  type FestivalTemplate,
   type GenerateRequest,
   type GenerateResponse,
   type Job,
@@ -51,6 +63,7 @@ import {
   type Notification,
   type OutboxEvent,
   type Post,
+  type PresignedDownload,
   type PresignedUpload,
   type PublishJob,
   type ReconcileReport,
@@ -110,6 +123,7 @@ export interface DomainClient {
     register(body: unknown, options?: RequestOptions): Promise<AuthResponse>;
     login(body: unknown, options?: RequestOptions): Promise<AuthResponse>;
     logout(options?: RequestOptions): Promise<void>;
+    logoutAll(options?: RequestOptions): Promise<void>;
     me(options?: RequestOptions): Promise<MeResponse>;
     /** Always resolves: the API answers 202 whether or not the address exists. */
     forgotPassword(email: string, options?: RequestOptions): Promise<void>;
@@ -165,7 +179,7 @@ export interface DomainClient {
       options?: RequestOptions,
     ): Promise<{ postId: string; scheduledAt: string; updated: number }>;
     publishes(postId: string, options?: RequestOptions): Promise<PublishJob[]>;
-    assets(postId: string, options?: RequestOptions): Promise<unknown[]>;
+    assets(postId: string, options?: RequestOptions): Promise<Asset[]>;
     scheduled(
       workspaceId: string,
       range?: { from?: string; to?: string },
@@ -189,6 +203,11 @@ export interface DomainClient {
       eventId: string,
       options?: RequestOptions,
     ): Promise<{ eventId: string; replayed: boolean }>;
+    replayPublishJob(
+      jobId: string,
+      reason?: string,
+      options?: RequestOptions,
+    ): Promise<{ jobId: string; postId: string; platform: string; requeued: boolean }>;
     reconcile(
       options?: RequestOptions,
     ): Promise<{ checked: number; drifted: number; drift: ReconcileReport[] }>;
@@ -205,6 +224,19 @@ export interface DomainClient {
   assets: {
     requestUpload(body: unknown, options?: RequestOptions): Promise<PresignedUpload>;
     confirm(assetId: string, options?: RequestOptions): Promise<unknown>;
+    download(assetId: string, options?: RequestOptions): Promise<PresignedDownload>;
+  };
+
+  festival: {
+    occasions(options?: RequestOptions): Promise<FestivalOccasion[]>;
+    templates(occasionId: string, options?: RequestOptions): Promise<FestivalTemplate[]>;
+    estimate(includeReel?: boolean, options?: RequestOptions): Promise<FestivalEstimate>;
+    create(
+      campaignId: string,
+      body: FestivalCreateRequest,
+      idempotencyKey?: string,
+      options?: RequestOptions,
+    ): Promise<FestivalJob>;
   };
 
   socialAccounts: {
@@ -238,6 +270,9 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
         parse(() => transport.post('/auth/login', body, opts), authResponseSchema, 'auth.login'),
       logout: async (opts) => {
         await transport.post('/auth/logout', undefined, opts);
+      },
+      logoutAll: async (opts) => {
+        await transport.post('/auth/logout-all', undefined, opts);
       },
       me: (opts) => parse(() => transport.get('/auth/me', opts), meResponseSchema, 'auth.me'),
       forgotPassword: async (email, opts) => {
@@ -378,7 +413,12 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
           asArray(publishJobSchema),
           'posts.publishes',
         ),
-      assets: (postId, opts) => transport.get(`/posts/${postId}/assets`, opts),
+      assets: (postId, opts) =>
+        parse(
+          () => transport.get(`/posts/${postId}/assets`, opts),
+          asArray(assetSchema),
+          'posts.assets',
+        ),
       scheduled: (workspaceId, range = {}, opts) =>
         parse(
           () => transport.get('/posts', { ...opts, query: { workspaceId, ...range } }),
@@ -400,6 +440,48 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
           'assets.upload',
         ),
       confirm: (assetId, opts) => transport.post(`/assets/${assetId}/confirm`, undefined, opts),
+      download: (assetId, opts) =>
+        parse(
+          () => transport.get(`/assets/${assetId}/download`, opts),
+          presignedDownloadSchema,
+          'assets.download',
+        ),
+    },
+
+    festival: {
+      occasions: (opts) =>
+        parse(
+          () => transport.get('/festival/occasions', opts),
+          asArray(festivalOccasionSchema),
+          'festival.occasions',
+        ),
+      templates: (occasionId, opts) =>
+        parse(
+          () => transport.get('/festival/templates', { ...opts, query: { occasion: occasionId } }),
+          asArray(festivalTemplateSchema),
+          'festival.templates',
+        ),
+      estimate: (includeReel = false, opts) =>
+        parse(
+          () =>
+            transport.get('/festival/estimate', {
+              ...opts,
+              query: { includeReel: includeReel ? 'true' : 'false' },
+            }),
+          festivalEstimateSchema,
+          'festival.estimate',
+        ),
+      create: (campaignId, body, idempotencyKey, opts) =>
+        parse(
+          () =>
+            transport.post(
+              `/campaigns/${campaignId}/festival`,
+              body,
+              withIdempotency(idempotencyKey, opts),
+            ),
+          festivalJobSchema,
+          'festival.create',
+        ),
     },
 
     socialAccounts: {
@@ -467,6 +549,22 @@ export function createApiClient(options: RenderFlowClientOptions): DomainClient 
           () => transport.post(`/admin/dlq/outbox/${eventId}/replay`, undefined, opts),
           replayOutboxResponseSchema,
           'admin.replayOutbox',
+        ),
+      replayPublishJob: (jobId, reason, opts) =>
+        parse(
+          () =>
+            transport.post(
+              `/admin/publish/${jobId}/replay`,
+              reason === undefined ? {} : { reason },
+              opts,
+            ),
+          z.object({
+            jobId: z.string(),
+            postId: z.string(),
+            platform: z.string(),
+            requeued: z.boolean(),
+          }),
+          'admin.replayPublishJob',
         ),
       reconcile: (opts) =>
         parse(

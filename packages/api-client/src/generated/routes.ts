@@ -43,6 +43,9 @@ export type RouteMap = {
   readonly '/admin/dlq/{jobId}/replay': {
     readonly post: ApiOperation;
   };
+  readonly '/admin/publish/{jobId}/replay': {
+    readonly post: ApiOperation;
+  };
   readonly '/admin/reconcile': {
     readonly get: ApiOperation;
   };
@@ -71,6 +74,9 @@ export type RouteMap = {
     readonly post: ApiOperation;
   };
   readonly '/auth/logout': {
+    readonly post: ApiOperation;
+  };
+  readonly '/auth/logout-all': {
     readonly post: ApiOperation;
   };
   readonly '/auth/me': {
@@ -109,6 +115,9 @@ export type RouteMap = {
   readonly '/campaigns/{campaignId}': {
     readonly get: ApiOperation;
   };
+  readonly '/campaigns/{campaignId}/festival': {
+    readonly post: ApiOperation;
+  };
   readonly '/campaigns/{campaignId}/posts': {
     readonly get: ApiOperation;
   };
@@ -122,6 +131,15 @@ export type RouteMap = {
     readonly post: ApiOperation;
   };
   readonly '/docs-json': {
+    readonly get: ApiOperation;
+  };
+  readonly '/festival/estimate': {
+    readonly get: ApiOperation;
+  };
+  readonly '/festival/occasions': {
+    readonly get: ApiOperation;
+  };
+  readonly '/festival/templates': {
     readonly get: ApiOperation;
   };
   readonly '/health/live': {
@@ -208,6 +226,7 @@ export const ROUTE_PATHS = [
   '/admin/dlq/outbox',
   '/admin/dlq/outbox/{eventId}/replay',
   '/admin/dlq/{jobId}/replay',
+  '/admin/publish/{jobId}/replay',
   '/admin/reconcile',
   '/analytics/campaigns/{campaignId}',
   '/analytics/overview',
@@ -218,6 +237,7 @@ export const ROUTE_PATHS = [
   '/auth/forgot-password',
   '/auth/login',
   '/auth/logout',
+  '/auth/logout-all',
   '/auth/me',
   '/auth/refresh',
   '/auth/register',
@@ -229,11 +249,15 @@ export const ROUTE_PATHS = [
   '/brands/{brandId}/campaigns',
   '/campaigns',
   '/campaigns/{campaignId}',
+  '/campaigns/{campaignId}/festival',
   '/campaigns/{campaignId}/posts',
   '/credits',
   '/credits/pricing',
   '/credits/top-up',
   '/docs-json',
+  '/festival/estimate',
+  '/festival/occasions',
+  '/festival/templates',
   '/health/live',
   '/health/ready',
   '/jobs/{jobId}',
@@ -305,6 +329,16 @@ export const ROUTES: RouteMap = {
   '/admin/dlq/{jobId}/replay': {
     post: {
       summary: 'Re-reserve and re-queue a failed job',
+      pathParams: [{ name: 'jobId', required: true }],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/admin/publish/{jobId}/replay': {
+    post: {
+      summary: 'Re-queue a failed publish job',
       pathParams: [{ name: 'jobId', required: true }],
       query: [],
       hasBody: true,
@@ -405,6 +439,16 @@ export const ROUTES: RouteMap = {
   '/auth/logout': {
     post: {
       summary: 'Revoke the presented session',
+      pathParams: [],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/auth/logout-all': {
+    post: {
+      summary: 'Revoke every session for the signed-in user',
       pathParams: [],
       query: [],
       hasBody: true,
@@ -546,6 +590,16 @@ export const ROUTES: RouteMap = {
       request: undefined as unknown,
     },
   },
+  '/campaigns/{campaignId}/festival': {
+    post: {
+      summary: 'Create a festival generation; reserves credits and creates the post atomically',
+      pathParams: [{ name: 'campaignId', required: true }],
+      query: [],
+      hasBody: true,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
   '/campaigns/{campaignId}/posts': {
     get: {
       summary: 'List posts in a campaign',
@@ -589,6 +643,36 @@ export const ROUTES: RouteMap = {
   '/docs-json': {
     get: {
       summary: 'The OpenAPI 3 document for this API',
+      pathParams: [],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/festival/estimate': {
+    get: {
+      summary: 'Server-side credit estimate for a festival generation',
+      pathParams: [],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/festival/occasions': {
+    get: {
+      summary: 'Active festival occasions',
+      pathParams: [],
+      query: [],
+      hasBody: false,
+      response: undefined as unknown,
+      request: undefined as unknown,
+    },
+  },
+  '/festival/templates': {
+    get: {
+      summary: 'Active templates for one occasion',
       pathParams: [],
       query: [],
       hasBody: false,

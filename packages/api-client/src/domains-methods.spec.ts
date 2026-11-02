@@ -78,6 +78,12 @@ const CASES: Case[] = [
     call: (api) => api.auth.login({ email: 'ada@example.test', password: 'correct-horse' }),
   },
   { name: 'auth.logout', method: 'POST', path: '/auth/logout', call: (api) => api.auth.logout() },
+  {
+    name: 'auth.logoutAll',
+    method: 'POST',
+    path: '/auth/logout-all',
+    call: (api) => api.auth.logoutAll(),
+  },
   { name: 'auth.me', method: 'GET', path: '/auth/me', call: (api) => api.auth.me() },
   {
     name: 'credits.balance',
@@ -250,6 +256,57 @@ const CASES: Case[] = [
     call: (api) => api.assets.confirm('a1'),
   },
   {
+    name: 'assets.download',
+    method: 'GET',
+    path: '/assets/a1/download',
+    call: (api) => api.assets.download('a1'),
+  },
+  {
+    name: 'festival.occasions',
+    method: 'GET',
+    path: '/festival/occasions',
+    call: (api) => api.festival.occasions(),
+  },
+  {
+    name: 'festival.templates',
+    method: 'GET',
+    path: '/festival/templates',
+    query: { occasion: 'DIWALI' },
+    call: (api) => api.festival.templates('DIWALI'),
+  },
+  {
+    name: 'festival.estimate',
+    method: 'GET',
+    path: '/festival/estimate',
+    query: { includeReel: 'true' },
+    call: (api) => api.festival.estimate(true),
+  },
+  {
+    name: 'festival.create',
+    method: 'POST',
+    path: '/campaigns/c1/festival',
+    body: {
+      occasionId: 'DIWALI',
+      offerText: '20% off',
+      ctaText: 'Order now',
+      language: 'both',
+      includeReel: false,
+    },
+    idempotencyKey: 'festival-key',
+    call: (api) =>
+      api.festival.create(
+        'c1',
+        {
+          occasionId: 'DIWALI',
+          offerText: '20% off',
+          ctaText: 'Order now',
+          language: 'both',
+          includeReel: false,
+        },
+        'festival-key',
+      ),
+  },
+  {
     name: 'socialAccounts.list',
     method: 'GET',
     path: '/social-accounts',
@@ -325,6 +382,13 @@ const CASES: Case[] = [
     method: 'POST',
     path: '/admin/dlq/outbox/e1/replay',
     call: (api) => api.admin.replayOutbox('e1'),
+  },
+  {
+    name: 'admin.replayPublishJob',
+    method: 'POST',
+    path: '/admin/publish/pj1/replay',
+    body: { reason: 'operator retry' },
+    call: (api) => api.admin.replayPublishJob('pj1', 'operator retry'),
   },
   {
     name: 'admin.reconcile',

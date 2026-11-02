@@ -196,6 +196,9 @@ export const assetSchema = z.object({
   sizeBytes: z.number().int(),
   width: z.number().int().nullable(),
   height: z.number().int().nullable(),
+  /** Free-form ingest metadata; the library reads `status` for pending uploads. */
+  meta: z.record(z.string(), z.unknown()).optional(),
+  durationMs: z.number().int().nullable().optional(),
   createdAt: z.string(),
 });
 
@@ -216,6 +219,86 @@ export const presignedUploadSchema = z.object({
     headers: z.record(z.string(), z.string()),
     expiresInSeconds: z.number().int().positive(),
   }),
+});
+
+/**
+ * What `GET /assets/:id/download` answers with.
+ *
+ * A URL and its lifetime, never the bytes: the browser fetches the object
+ * directly from storage, and the API never proxies a 25 MB upload through a
+ * Node process.
+ */
+export const presignedDownloadSchema = z.object({
+  url: z.string(),
+  expiresInSeconds: z.number().int().positive(),
+});
+
+// --- festival marketing (Phase 11) ----------------------------------------
+
+export const festivalColorSchemeSchema = z.object({
+  primary: z.string(),
+  accent: z.string(),
+  background: z.string(),
+});
+
+export const festivalDimensionsSchema = z.object({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export const festivalOccasionSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  iconUrl: z.string().nullable(),
+});
+
+/**
+ * A template as the catalogue endpoint returns it.
+ *
+ * `slots` is deliberately absent: the client picks a template by id and the
+ * server snapshots the render descriptor into the job. Sending the descriptor
+ * from the browser would let a caller choose text sizes and colours the
+ * renderer then trusts.
+ */
+export const festivalTemplateSchema = z.object({
+  id: z.string(),
+  occasionId: z.string(),
+  name: z.string(),
+  previewUrl: z.string(),
+  colorScheme: festivalColorSchemeSchema,
+  dimensions: festivalDimensionsSchema,
+  reelDurationSeconds: z.number().int().nullable(),
+});
+
+/**
+ * The server-side quote.
+ *
+ * `total` is authoritative; `poster` and `reelAddOn` exist so the form can
+ * explain the bundle without re-deriving prices from a table the client cannot
+ * read (AGENTS.md section 5 rule 7).
+ */
+export const festivalEstimateSchema = z.object({
+  poster: z.number().int(),
+  reelAddOn: z.number().int(),
+  total: z.number().int(),
+  includeReel: z.boolean(),
+});
+
+export const festivalCreateRequestSchema = z.object({
+  occasionId: z.string().trim().min(1).max(60),
+  templateId: z.string().trim().min(1).max(80).optional(),
+  offerText: z.string().trim().min(3).max(500),
+  ctaText: z.string().trim().min(1).max(200),
+  language: z.enum(['english', 'hindi', 'both']),
+  includeReel: z.boolean().default(false),
+});
+
+export const festivalJobSchema = z.object({
+  jobId: z.string(),
+  postId: z.string().nullable(),
+  creditsReserved: z.number().int(),
+  estimatedSeconds: z.number().int().positive(),
+  replayed: z.boolean(),
 });
 
 // --- publishing (Phase 7) -------------------------------------------------
@@ -301,6 +384,12 @@ export type Job = z.infer<typeof jobSchema>;
 export type GenerateResponse = z.infer<typeof generateResponseSchema>;
 export type Asset = z.infer<typeof assetSchema>;
 export type PresignedUpload = z.infer<typeof presignedUploadSchema>;
+export type PresignedDownload = z.infer<typeof presignedDownloadSchema>;
+export type FestivalOccasion = z.infer<typeof festivalOccasionSchema>;
+export type FestivalTemplate = z.infer<typeof festivalTemplateSchema>;
+export type FestivalEstimate = z.infer<typeof festivalEstimateSchema>;
+export type FestivalCreateRequest = z.input<typeof festivalCreateRequestSchema>;
+export type FestivalJob = z.infer<typeof festivalJobSchema>;
 export type SocialAccount = z.infer<typeof socialAccountSchema>;
 export type PublishJob = z.infer<typeof publishJobSchema>;
 export type ScheduleRequest = z.infer<typeof scheduleRequestSchema>;

@@ -30,6 +30,7 @@ describe('domain paths are documented', () => {
     { method: 'POST', path: '/auth/register' },
     { method: 'POST', path: '/auth/login' },
     { method: 'POST', path: '/auth/logout' },
+    { method: 'POST', path: '/auth/logout-all' },
     { method: 'GET', path: '/auth/me' },
     { method: 'POST', path: '/auth/forgot-password' },
     { method: 'POST', path: '/auth/reset-password' },
@@ -61,6 +62,11 @@ describe('domain paths are documented', () => {
     { method: 'GET', path: '/jobs/{jobId}' },
     { method: 'POST', path: '/assets/uploads' },
     { method: 'POST', path: '/assets/{assetId}/confirm' },
+    { method: 'GET', path: '/assets/{assetId}/download' },
+    { method: 'GET', path: '/festival/occasions' },
+    { method: 'GET', path: '/festival/templates' },
+    { method: 'GET', path: '/festival/estimate' },
+    { method: 'POST', path: '/campaigns/{campaignId}/festival' },
     { method: 'GET', path: '/social-accounts' },
     { method: 'POST', path: '/social-accounts' },
     { method: 'DELETE', path: '/social-accounts/{accountId}' },
@@ -70,6 +76,7 @@ describe('domain paths are documented', () => {
     { method: 'POST', path: '/notifications/read-all' },
     { method: 'GET', path: '/admin/dlq' },
     { method: 'POST', path: '/admin/dlq/{jobId}/replay' },
+    { method: 'POST', path: '/admin/publish/{jobId}/replay' },
     { method: 'GET', path: '/admin/dlq/outbox' },
     { method: 'POST', path: '/admin/dlq/outbox/{eventId}/replay' },
     { method: 'GET', path: '/admin/reconcile' },
@@ -97,7 +104,6 @@ describe('domain paths are documented', () => {
     '/workspaces/{workspaceId}': 'the list is enough for the dashboard; detail adds a round trip',
     '/workspaces/{workspaceId}/members/{userId}': 'member removal is Phase 9 admin work',
     '/assets/{assetId}': 'asset deletion is not in the Phase 8 journey',
-    '/assets/{assetId}/download': 'assets render from storageKey via a presigned GET in Phase 9',
     '/jobs/{jobId}/events': 'progress is consumed as SSE by the browser, not by this client',
     '/docs-json': 'the document itself; this package is generated FROM it',
     '/health/live': 'liveness is an infrastructure probe, not an app concern',
@@ -272,6 +278,42 @@ describe('response validation', () => {
     await api.posts.schedule('p1', { scheduledAt: new Date(), accountIds: ['a1'] });
 
     expect(seen).toEqual(['key-1', null]);
+  });
+
+  it('parses the festival estimate and rejects a response missing the total', async () => {
+    const quote = { poster: 6, reelAddOn: 30, total: 36, includeReel: true };
+    await expect(clientReturning(quote).festival.estimate(true)).resolves.toEqual(quote);
+
+    const broken = clientReturning({ poster: 6, reelAddOn: 30, includeReel: true });
+    await expect(broken.festival.estimate(true)).rejects.toBeInstanceOf(ApiClientError);
+  });
+
+  it('parses a festival job and keeps a null post id nullable', async () => {
+    const body = {
+      jobId: 'j1',
+      postId: null,
+      creditsReserved: 6,
+      estimatedSeconds: 20,
+      replayed: false,
+    };
+
+    await expect(
+      clientReturning(body).festival.create('c1', {
+        occasionId: 'DIWALI',
+        offerText: '20% off',
+        ctaText: 'Order now',
+        language: 'both',
+      }),
+    ).resolves.toEqual(body);
+  });
+
+  it('parses a presigned download without exposing storage credentials', async () => {
+    const body = { url: 'https://storage.test/poster.png?signature=x', expiresInSeconds: 300 };
+
+    await expect(clientReturning(body).assets.download('a1')).resolves.toEqual(body);
+    await expect(
+      clientReturning({ url: 'https://storage.test/poster.png' }).assets.download('a1'),
+    ).rejects.toBeInstanceOf(ApiClientError);
   });
 
   it('surfaces the API error code rather than a generic failure', async () => {
