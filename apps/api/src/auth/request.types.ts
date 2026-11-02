@@ -28,14 +28,17 @@ export interface CookieSerializeOptions {
  */
 export type ResponseWithCookies = import('express').Response;
 
-/** Extracts the client IP for refresh-session auditing, honouring a proxy header. */
+/**
+ * Extracts the client IP for rate limiting and refresh-session auditing.
+ *
+ * Reads `request.ip`, which Express derives from `X-Forwarded-For` ONLY for
+ * hops covered by the `trust proxy` setting (`TRUST_PROXY` in `main.ts`).
+ * Parsing the header directly would let any caller choose their own rate-limit
+ * bucket by sending `X-Forwarded-For: <random>`, which turns every IP-scoped
+ * rule into no rule at all.
+ */
 export function clientIp(request: Request): string | undefined {
-  const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded !== '') {
-    // Left-most entry is the original client when a trusted proxy appends.
-    return forwarded.split(',')[0]?.trim();
-  }
-  return request.ip ?? request.socket.remoteAddress ?? undefined;
+  return request.ip ?? request.socket?.remoteAddress ?? undefined;
 }
 
 /** Truncated user agent: enough to identify a device, short enough to store. */

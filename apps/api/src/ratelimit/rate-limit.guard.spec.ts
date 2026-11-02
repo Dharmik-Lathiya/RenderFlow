@@ -102,7 +102,7 @@ function request(overrides: Partial<FakeRequest> = {}): FakeRequest {
 
 describe('RateLimitGuard', () => {
   describe('routes without a limit', () => {
-    it('passes through when the route carries no metadata', () => {
+    it('passes through when the route carries no metadata', async () => {
       // Opt-in by decorator: a new endpoint is never accidentally throttled by a
       // neighbour's rule, and never silently inherits one either.
       const store = new InMemoryRateLimitStore();
@@ -113,18 +113,18 @@ describe('RateLimitGuard', () => {
         request: request(),
       });
 
-      expect(guard.canActivate(context)).toBe(true);
+      expect(await guard.canActivate(context)).toBe(true);
       expect(store.size()).toBe(0);
     });
 
-    it('passes through when the metadata list is empty', () => {
+    it('passes through when the metadata list is empty', async () => {
       const store = new InMemoryRateLimitStore();
       const { guard, context } = harness({ env: {}, store, metadata: [], request: request() });
 
-      expect(guard.canActivate(context)).toBe(true);
+      expect(await guard.canActivate(context)).toBe(true);
     });
 
-    it('passes everything through when the master switch is off', () => {
+    it('passes everything through when the master switch is off', async () => {
       // The documented escape hatch for load testing and incident response.
       const store = new InMemoryRateLimitStore();
       const rules = [{ name: 'LOGIN_IP', scope: 'ip' }];
@@ -136,17 +136,17 @@ describe('RateLimitGuard', () => {
           metadata: rules,
           request: request(),
         });
-        expect(guard.canActivate(context)).toBe(true);
+        expect(await guard.canActivate(context)).toBe(true);
       }
       expect(store.size()).toBe(0);
     });
   });
 
   describe('rejecting', () => {
-    it('allows up to the limit, then raises RATE_LIMITED', () => {
+    it('allows up to the limit, then raises RATE_LIMITED', async () => {
       const store = new InMemoryRateLimitStore();
       const rules = [{ name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' as const }];
-      const run = (): boolean => {
+      const run = async (): Promise<boolean> => {
         const { guard, context } = harness({
           env: { RATE_LIMIT_LOGIN_IP: '2/15m' },
           store,
@@ -156,12 +156,12 @@ describe('RateLimitGuard', () => {
         return guard.canActivate(context);
       };
 
-      expect(run()).toBe(true);
-      expect(run()).toBe(true);
-      expect(run).toThrow(RateLimitedError);
+      expect(await run()).toBe(true);
+      expect(await run()).toBe(true);
+      await expect(run()).rejects.toThrow(RateLimitedError);
     });
 
-    it('raises an error the exception filter turns into a 429', () => {
+    it('raises an error the exception filter turns into a 429', async () => {
       const store = new InMemoryRateLimitStore();
       const rules = [{ name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' as const }];
       const setup = (): { guard: RateLimitGuard; context: ExecutionContext; response: Response } =>
@@ -173,13 +173,13 @@ describe('RateLimitGuard', () => {
         });
 
       // First hit spends the only slot.
-      setup().guard.canActivate(contextFor(request(), responseDouble()));
+      await setup().guard.canActivate(contextFor(request(), responseDouble()));
 
       const { guard, context } = setup();
 
       let thrown: unknown;
       try {
-        guard.canActivate(context);
+        await guard.canActivate(context);
       } catch (error) {
         thrown = error;
       }
@@ -191,7 +191,7 @@ describe('RateLimitGuard', () => {
       expect(error.details).toMatchObject({ rule: 'LOGIN_IP', limit: 1 });
     });
 
-    it('skips a rule explicitly configured to 0', () => {
+    it('skips a rule explicitly configured to 0', async () => {
       // `0` means "disabled", not "reject everything".
       const store = new InMemoryRateLimitStore();
       const rules = [{ name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' as const }];
@@ -203,23 +203,23 @@ describe('RateLimitGuard', () => {
           metadata: rules,
           request: request(),
         });
-        expect(guard.canActivate(context)).toBe(true);
+        expect(await guard.canActivate(context)).toBe(true);
       }
     });
   });
 
   describe('key derivation', () => {
     /** Number of distinct keys the guard created after N requests. */
-    function keysAfter(
+    async function keysAfter(
       env: Record<string, unknown>,
       rules: Array<{ name: string; scope: RateLimitScope }>,
       requests: FakeRequest[],
-    ): number {
+    ): Promise<number> {
       const store = new InMemoryRateLimitStore();
       for (const req of requests) {
         const { guard, context } = harness({ env, store, metadata: rules, request: req });
         try {
-          guard.canActivate(context);
+          await guard.canActivate(context);
         } catch {
           // A rejection is expected on the requests that breach the limit.
         }
@@ -227,9 +227,9 @@ describe('RateLimitGuard', () => {
       return store.size();
     }
 
-    it('separates callers by IP', () => {
+    it('separates callers by IP', async () => {
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_LOGIN_IP: '10/15m' },
           [{ name: 'LOGIN_IP', scope: 'ip' }],
           [request({ ip: '1.1.1.1' }), request({ ip: '2.2.2.2' })],
@@ -237,32 +237,31 @@ describe('RateLimitGuard', () => {
       ).toBe(2);
     });
 
-    it('prefers the left-most forwarded address over the socket address', () => {
-      // Behind a trusted proxy, `req.ip` is the proxy: keying on it would put
-      // every user of the internet in one bucket and deny them all together.
+    it('keys by the address Express resolved behind a trusted proxy', async () => {
+      // `main.ts` sets `trust proxy`, so Express turns X-Forwarded-For into
+      // `req.ip`. Keying on the socket address instead would put every user of
+      // the internet in one bucket; parsing the raw header in the guard would
+      // let the caller choose their bucket.
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_LOGIN_IP: '10/15m' },
           [{ name: 'LOGIN_IP', scope: 'ip' }],
-          [request({ headers: { 'x-forwarded-for': '198.51.100.9, 10.0.0.1' } })],
+          [request({ ip: '198.51.100.9' })],
         ),
       ).toBe(1);
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_LOGIN_IP: '10/15m' },
           [{ name: 'LOGIN_IP', scope: 'ip' }],
-          [
-            request({ headers: { 'x-forwarded-for': '198.51.100.9, 10.0.0.1' } }),
-            request({ headers: { 'x-forwarded-for': '203.0.113.4, 10.0.0.1' } }),
-          ],
+          [request({ ip: '198.51.100.9' }), request({ ip: '203.0.113.4' })],
         ),
       ).toBe(2);
     });
 
-    it('keys per-user routes by the authenticated id', () => {
+    it('keys per-user routes by the authenticated id', async () => {
       // This is the "per-user API limits" PROJECT.md section 14 asks for.
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_REFRESH_IP: '10/15m' },
           [{ name: 'REFRESH_IP', scope: 'user' }],
           [
@@ -274,9 +273,9 @@ describe('RateLimitGuard', () => {
       ).toBe(2);
     });
 
-    it('falls back to the IP when a user-scoped route has no session', () => {
+    it('falls back to the IP when a user-scoped route has no session', async () => {
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_REFRESH_IP: '10/15m' },
           [{ name: 'REFRESH_IP', scope: 'user' }],
           [request({ ip: '5.5.5.5' }), request({ ip: '6.6.6.6' })],
@@ -284,12 +283,12 @@ describe('RateLimitGuard', () => {
       ).toBe(2);
     });
 
-    it('normalises the submitted email so casing and padding cannot evade it', () => {
+    it('normalises the submitted email so casing and padding cannot evade it', async () => {
       // Without normalisation an attacker could reset the counter with
       // `victim@x.com`, `Victim@X.com` and ` victim@x.com `, and a limit that
       // can be evaded that easily is not a limit.
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_LOGIN_ACCOUNT: '10/1h' },
           [{ name: 'LOGIN_ACCOUNT', scope: 'email' }],
           [
@@ -301,9 +300,9 @@ describe('RateLimitGuard', () => {
       ).toBe(1);
     });
 
-    it('keeps distinct emails on distinct counters', () => {
+    it('keeps distinct emails on distinct counters', async () => {
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_LOGIN_ACCOUNT: '10/1h' },
           [{ name: 'LOGIN_ACCOUNT', scope: 'email' }],
           [
@@ -314,7 +313,7 @@ describe('RateLimitGuard', () => {
       ).toBe(2);
     });
 
-    it('falls back to the IP when the body carries no email', () => {
+    it('falls back to the IP when the body carries no email', async () => {
       // Bounds the key space: garbage bodies must not mint unbounded keys.
       const requests = [
         request({ body: {} }),
@@ -325,7 +324,7 @@ describe('RateLimitGuard', () => {
       ];
 
       expect(
-        keysAfter(
+        await keysAfter(
           { RATE_LIMIT_LOGIN_ACCOUNT: '10/1h' },
           [{ name: 'LOGIN_ACCOUNT', scope: 'email' }],
           requests,
@@ -333,7 +332,7 @@ describe('RateLimitGuard', () => {
       ).toBe(1);
     });
 
-    it('caps the email key length', () => {
+    it('caps the email key length', async () => {
       const long = `${'a'.repeat(1_000)}@example.com`;
       const store = new InMemoryRateLimitStore();
       const { guard, context } = harness({
@@ -343,14 +342,14 @@ describe('RateLimitGuard', () => {
         request: request({ body: { email: long } }),
       });
 
-      guard.canActivate(context);
+      await guard.canActivate(context);
 
       expect(store.size()).toBe(1);
     });
   });
 
   describe('multiple rules on one route', () => {
-    it('counts each rule separately and reports the one that rejected', () => {
+    it('counts each rule separately and reports the one that rejected', async () => {
       // Login carries an IP limit and an account limit; the 429 must name which.
       const store = new InMemoryRateLimitStore();
       const rules = [
@@ -358,8 +357,8 @@ describe('RateLimitGuard', () => {
         { name: RATE_LIMIT_RULES.LOGIN_ACCOUNT, scope: 'email' as const },
       ];
       const body = { email: 'a@example.com' };
-      const run = (): void => {
-        harness({
+      const run = async (): Promise<void> => {
+        await harness({
           env: { RATE_LIMIT_LOGIN_IP: '100/15m', RATE_LIMIT_LOGIN_ACCOUNT: '1/1h' },
           store,
           metadata: rules,
@@ -367,11 +366,11 @@ describe('RateLimitGuard', () => {
         }).guard.canActivate(contextFor(request({ body }), responseDouble()));
       };
 
-      run();
+      await run();
 
       let thrown: unknown;
       try {
-        run();
+        await run();
       } catch (error) {
         thrown = error;
       }
@@ -379,7 +378,7 @@ describe('RateLimitGuard', () => {
       expect((thrown as RateLimitedError).rule).toBe('LOGIN_ACCOUNT');
     });
 
-    it('stops at the first rule that rejects, so later rules are not charged', () => {
+    it('stops at the first rule that rejects, so later rules are not charged', async () => {
       // Charging a rule whose request was already refused would let a caller
       // exhaust the per-account allowance with IP-blocked requests.
       const store = new InMemoryRateLimitStore();
@@ -388,8 +387,8 @@ describe('RateLimitGuard', () => {
         { name: RATE_LIMIT_RULES.LOGIN_ACCOUNT, scope: 'email' as const },
       ];
       const body = { email: 'a@example.com' };
-      const run = (): void => {
-        harness({
+      const run = async (): Promise<void> => {
+        await harness({
           env: { RATE_LIMIT_LOGIN_IP: '1/15m', RATE_LIMIT_LOGIN_ACCOUNT: '100/1h' },
           store,
           metadata: rules,
@@ -399,19 +398,19 @@ describe('RateLimitGuard', () => {
 
       // First request is within both limits: the IP slot and the account slot are
       // both spent by exactly one call each.
-      run();
+      await run();
 
       // Every request after that is blocked by the IP rule. The account rule
       // must never be reached, or a caller who is already IP-blocked could
       // still exhaust the per-account allowance using requests that were
       // refused.
       for (let i = 0; i < 5; i += 1) {
-        expect(run).toThrow(RateLimitedError);
+        await expect(run()).rejects.toThrow(RateLimitedError);
       }
 
       // Read the account counter directly: it must still show a single hit.
       const accountKey = 'LOGIN_ACCOUNT:a@example.com';
-      const afterRejections = store.hit(
+      const afterRejections = await store.hit(
         accountKey,
         { limit: 100, windowMs: 3_600_000 },
         Date.now(),
@@ -422,7 +421,7 @@ describe('RateLimitGuard', () => {
   });
 
   describe('headers', () => {
-    it('writes limit, remaining and reset on an allowed request', () => {
+    it('writes limit, remaining and reset on an allowed request', async () => {
       const store = new InMemoryRateLimitStore();
       const { guard, context, response } = harness({
         env: { RATE_LIMIT_LOGIN_IP: '10/15m' },
@@ -431,7 +430,7 @@ describe('RateLimitGuard', () => {
         request: request(),
       });
 
-      guard.canActivate(context);
+      await guard.canActivate(context);
 
       expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Limit', '10');
       expect(response.setHeader).toHaveBeenCalledWith('RateLimit-Remaining', '9');
@@ -439,7 +438,7 @@ describe('RateLimitGuard', () => {
       expect(response.setHeader).not.toHaveBeenCalledWith('Retry-After', expect.anything());
     });
 
-    it('adds Retry-After when rejecting', () => {
+    it('adds Retry-After when rejecting', async () => {
       const store = new InMemoryRateLimitStore();
       const rules = [{ name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' as const }];
       const setup = (): { guard: RateLimitGuard; context: ExecutionContext; response: Response } =>
@@ -451,10 +450,10 @@ describe('RateLimitGuard', () => {
         });
 
       // First hit spends the only slot.
-      setup().guard.canActivate(contextFor(request(), responseDouble()));
+      await setup().guard.canActivate(contextFor(request(), responseDouble()));
 
       const { guard, context, response } = setup();
-      expect(() => guard.canActivate(context)).toThrow(RateLimitedError);
+      await expect(guard.canActivate(context)).rejects.toThrow(RateLimitedError);
 
       expect(response.setHeader).toHaveBeenCalledWith('Retry-After', expect.any(String));
     });
@@ -472,19 +471,19 @@ describe('RateLimitGuard', () => {
       return Reflect.getMetadata('renderflow:rateLimits', Target.prototype);
     }
 
-    it('RateLimitByIp records the rule and scope', () => {
+    it('RateLimitByIp records the rule and scope', async () => {
       expect(metadataFor(RateLimitByIp(RATE_LIMIT_RULES.REGISTER_IP))).toEqual([
         { name: 'REGISTER_IP', scope: 'ip' },
       ]);
     });
 
-    it('RateLimitByUser records the user scope', () => {
+    it('RateLimitByUser records the user scope', async () => {
       expect(metadataFor(RateLimitByUser(RATE_LIMIT_RULES.REFRESH_IP))).toEqual([
         { name: 'REFRESH_IP', scope: 'user' },
       ]);
     });
 
-    it('RateLimit accepts several rules', () => {
+    it('RateLimit accepts several rules', async () => {
       const decorate = RateLimit(
         { name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' },
         { name: RATE_LIMIT_RULES.LOGIN_ACCOUNT, scope: 'email' },
@@ -507,7 +506,7 @@ describe('tightestDecision', () => {
     retryAfterSeconds: 1,
   });
 
-  it('compares the fraction of budget left, not the raw count', () => {
+  it('compares the fraction of budget left, not the raw count', async () => {
     // Login runs an IP rule and an account rule with very different budgets.
     // Reporting "30 remaining" from the generous one while 1 of 2 is left on the
     // tight one would tell the client it has room when it does not.
@@ -515,18 +514,18 @@ describe('tightestDecision', () => {
     expect(tightestDecision([decision(30, 29), decision(2, 1)]).limit).toBe(2);
   });
 
-  it('ignores disabled rules', () => {
+  it('ignores disabled rules', async () => {
     expect(tightestDecision([decision(0, 0), decision(5, 4)]).limit).toBe(5);
     expect(tightestDecision([decision(5, 4), decision(0, 0)]).limit).toBe(5);
   });
 
-  it('keeps the first when two are equally tight', () => {
+  it('keeps the first when two are equally tight', async () => {
     expect(tightestDecision([decision(10, 5), decision(20, 10)]).limit).toBe(10);
   });
 });
 
 describe('setRateLimitHeaders', () => {
-  it('writes the three standard headers', () => {
+  it('writes the three standard headers', async () => {
     const setHeader = jest.fn();
     setRateLimitHeaders({ setHeader } as unknown as Response, {
       allowed: true,
@@ -540,7 +539,7 @@ describe('setRateLimitHeaders', () => {
     expect(setHeader).toHaveBeenCalledWith('RateLimit-Remaining', '59');
   });
 
-  it('omits Retry-After for an allowed request', () => {
+  it('omits Retry-After for an allowed request', async () => {
     const setHeader = jest.fn();
     setRateLimitHeaders({ setHeader } as unknown as Response, {
       allowed: true,
@@ -553,7 +552,7 @@ describe('setRateLimitHeaders', () => {
     expect(setHeader).not.toHaveBeenCalledWith('Retry-After', expect.anything());
   });
 
-  it('never reports a negative reset time', () => {
+  it('never reports a negative reset time', async () => {
     // A window that has already elapsed must not produce `RateLimit-Reset: -1`.
     const setHeader = jest.fn();
     setRateLimitHeaders({ setHeader } as unknown as Response, {
@@ -570,7 +569,7 @@ describe('setRateLimitHeaders', () => {
 });
 
 describe('store injection token', () => {
-  it('is a symbol, so it cannot collide with a class token', () => {
+  it('is a symbol, so it cannot collide with a class token', async () => {
     expect(typeof RATE_LIMIT_STORE).toBe('symbol');
   });
 });
@@ -583,7 +582,7 @@ describe('store injection token', () => {
  * generation budget while each of them was told the limit was theirs.
  */
 describe('guard phases', () => {
-  it('the pre-auth guard leaves user rules to the post-auth guard', () => {
+  it('the pre-auth guard leaves user rules to the post-auth guard', async () => {
     const store = new InMemoryRateLimitStore();
     const guard = new PreAuthRateLimitGuard(
       reflectorReturning([{ name: RATE_LIMIT_RULES.GENERATE_USER, scope: 'user' }]),
@@ -591,7 +590,7 @@ describe('guard phases', () => {
       store,
     );
 
-    const allowed = guard.canActivate(
+    const allowed = await guard.canActivate(
       contextFor(request({ user: { id: 'user-a' } }), responseDouble()),
     );
 
@@ -600,7 +599,7 @@ describe('guard phases', () => {
     expect(store.size()).toBe(0);
   });
 
-  it('the post-auth guard counts per user, not per address', () => {
+  it('the post-auth guard counts per user, not per address', async () => {
     const store = new InMemoryRateLimitStore();
     const guard = new UserRateLimitGuard(
       reflectorReturning([{ name: RATE_LIMIT_RULES.GENERATE_USER, scope: 'user' }]),
@@ -608,19 +607,19 @@ describe('guard phases', () => {
       store,
     );
 
-    const pass = (user: string): boolean =>
+    const pass = (user: string): Promise<boolean> =>
       guard.canActivate(
         contextFor(request({ ip: '203.0.113.9', user: { id: user } }), responseDouble()),
       );
 
-    expect(pass('user-a')).toBe(true);
-    expect(() => pass('user-a')).toThrow(RateLimitedError);
+    expect(await pass('user-a')).toBe(true);
+    await expect(pass('user-a')).rejects.toThrow(RateLimitedError);
 
     // A colleague behind the same NAT has their own budget.
-    expect(pass('user-b')).toBe(true);
+    expect(await pass('user-b')).toBe(true);
   });
 
-  it('the post-auth guard ignores ip rules', () => {
+  it('the post-auth guard ignores ip rules', async () => {
     const store = new InMemoryRateLimitStore();
     const guard = new UserRateLimitGuard(
       reflectorReturning([{ name: RATE_LIMIT_RULES.LOGIN_IP, scope: 'ip' }]),
@@ -628,7 +627,7 @@ describe('guard phases', () => {
       store,
     );
 
-    expect(guard.canActivate(contextFor(request(), responseDouble()))).toBe(true);
+    expect(await guard.canActivate(contextFor(request(), responseDouble()))).toBe(true);
     expect(store.size()).toBe(0);
   });
 });

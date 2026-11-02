@@ -1,0 +1,28 @@
+{
+  "name": "@renderflow/email",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Transactional email transports shared by the API and workers",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .turbo coverage tsconfig.tsbuildinfo",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
+  },
+  "dependencies": {
+    "@renderflow/observability": "workspace:*",
+    "nodemailer": "^7.0.9"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^7.0.4"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}

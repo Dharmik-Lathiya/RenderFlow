@@ -131,7 +131,7 @@ export class RateLimitGuard implements CanActivate {
     }
   }
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const declared = this.reflector.getAllAndOverride<RateLimitRuleRef[]>(RATE_LIMIT_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -160,7 +160,10 @@ export class RateLimitGuard implements CanActivate {
       }
 
       const key = `${rule.name}:${this.identityFor(rule.scope, request)}`;
-      const decision = this.store.hit(key, policy, now);
+      // A Redis-backed store is a network round trip; the guard awaits either
+      // store. Any failure there degrades to "allow" rather than blocking the
+      // API, so this await cannot throw for availability reasons.
+      const decision = await this.store.hit(key, policy, now);
       decisions.push({ name: rule.name, decision });
 
       if (!decision.allowed) {

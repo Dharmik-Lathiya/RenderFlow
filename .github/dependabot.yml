@@ -1,0 +1,65 @@
+# Automated dependency updates (SEC-09).
+#
+# `pnpm audit` in CI catches advisories for versions already pinned; it cannot
+# move them. Dependabot is what turns an advisory or an ageing digest into a
+# reviewed pull request. Security updates are opened immediately, independent of
+# this schedule; the weekly run is for routine bumps.
+#
+# Groups: patch and minor updates for npm arrive as one PR per week, so a
+# routine refresh does not produce fifty individually-tested branches. Major
+# updates stay separate because they need a human decision and a migration.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      npm-patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  # Base images are digest-pinned (SEC-08). This ecosystem is what moves those
+  # digests: Dependabot notices a new digest for the tag and opens a PR with the
+  # old and new value, which is reviewable in a way that a floating tag is not.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'chore(docker)'
+    groups:
+      docker-patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(ci)'
+    groups:
+      actions-patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch

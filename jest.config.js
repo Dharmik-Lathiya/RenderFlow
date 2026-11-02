@@ -53,6 +53,8 @@ module.exports = {
     tsProject('libs/outbox', '@renderflow/outbox'),
     tsProject('libs/social', '@renderflow/social'),
     tsProject('libs/observability', '@renderflow/observability'),
+    tsProject('libs/email', '@renderflow/email'),
+    tsProject('apps/publisher-worker', '@renderflow/publisher-worker'),
     tsProject('packages/api-client', '@renderflow/api-client'),
     // The browser project needs jsdom, .tsx and CSS stubbing, so it brings its
     // own config rather than being squeezed into `tsProject()`.

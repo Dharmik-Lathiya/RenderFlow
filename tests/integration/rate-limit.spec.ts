@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
 import { DEFAULT_SPECS, parseRateLimitSpec } from '../../apps/api/src/ratelimit/rate-limit.config';
+import { RedisRateLimitStore } from '../../apps/api/src/ratelimit/rate-limit.store.redis';
 import { uniqueEmail } from './helpers/auth-fixtures';
 import {
   authHeaders,
@@ -593,6 +596,62 @@ describe('rate limiting (PROJECT.md section 15)', () => {
       expect(parseRateLimitSpec(DEFAULT_SPECS.LOGIN_ACCOUNT).limit).toBeGreaterThan(
         parseRateLimitSpec(DEFAULT_SPECS.LOGIN_IP).limit,
       );
+    });
+  });
+
+  /**
+   * The shared store is what makes horizontal scaling safe.
+   *
+   * Two SEPARATE store instances stand in for two API replicas: each holds its
+   * own process memory, so the only way they can agree on a budget is Redis.
+   * With the in-memory store this test fails by design - each replica would
+   * allow the full limit.
+   *
+   * Keys are random so repeated runs (and other suites sharing Redis) cannot
+   * collide; the TTL removes them without a teardown flush that would wipe
+   * another replica's counters.
+   */
+  describe('shared Redis store', () => {
+    const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+
+    it('enforces one budget across two API replicas', async () => {
+      const replicaA = new RedisRateLimitStore(redisUrl);
+      const replicaB = new RedisRateLimitStore(redisUrl);
+      const key = `shared:${randomUUID()}`;
+      const policy = { limit: 2, windowMs: 60_000 };
+
+      try {
+        expect((await replicaA.hit(key, policy, Date.now())).allowed).toBe(true);
+        expect((await replicaB.hit(key, policy, Date.now())).allowed).toBe(true);
+
+        // The third request lands on the second replica but sees the first
+        // replica's two hits, so the shared ceiling is 2, not 4.
+        const third = await replicaB.hit(key, policy, Date.now());
+        expect(third.allowed).toBe(false);
+        expect(third.remaining).toBe(0);
+      } finally {
+        await replicaA.onModuleDestroy();
+        await replicaB.onModuleDestroy();
+      }
+    });
+
+    it('allows traffic when Redis is unreachable rather than failing closed', async () => {
+      // A rate limiter protects availability; turning a Redis outage into a
+      // total API outage is a worse failure than briefly losing the limit.
+      const store = new RedisRateLimitStore('redis://127.0.0.1:1');
+
+      try {
+        const decision = await store.hit(
+          `unreachable:${randomUUID()}`,
+          { limit: 1, windowMs: 60_000 },
+          Date.now(),
+        );
+
+        expect(decision.allowed).toBe(true);
+        expect(decision.remaining).toBe(1);
+      } finally {
+        await store.onModuleDestroy();
+      }
     });
   });
 });

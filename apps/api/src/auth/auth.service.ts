@@ -379,7 +379,22 @@ export class AuthService implements OnModuleInit {
     const token = await this.issueAuthToken(user.id, 'PASSWORD_RESET', ttlMinutes * 60_000);
     const link = `${this.webBaseUrl()}/reset-password?token=${encodeURIComponent(token)}`;
 
-    await this.email.send({ to: user.email, ...passwordResetEmail(link, ttlMinutes) });
+    // A provider outage must not turn this endpoint into an account-existence
+    // oracle: an unknown address returns 202, so a registered address that
+    // fails to send must also return 202. The failure is logged without the
+    // token or link.
+    try {
+      await this.email.send({ to: user.email, ...passwordResetEmail(link, ttlMinutes) });
+    } catch (error) {
+      log().error(
+        {
+          event: 'PASSWORD_RESET_EMAIL_FAILED',
+          userId: user.id,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'password reset mail could not be sent',
+      );
+    }
   }
 
   /**

@@ -6,9 +6,13 @@
 # Build args:
 #   APP_DIR   workspace directory of the app (e.g. apps/api)
 #   APP_NAME  turbo package name (e.g. @renderflow/api)
+#
+# The base image is pinned by DIGEST, not just by tag: a tag can be re-pointed,
+# and a poisoned `node:24-bookworm-slim` would silently run inside every image.
+# Dependabot's docker ecosystem opens a PR when the pinned digest ages.
 
 # ---- base ---------------------------------------------------------------
-FROM node:24-bookworm-slim AS base
+FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
@@ -54,9 +58,11 @@ RUN pnpm --filter "${APP_NAME}" deploy --prod /out
 # ---- runtime ------------------------------------------------------------
 FROM base AS runtime
 ARG APP_DIR
-# ffmpeg is required by media-worker; harmless elsewhere and keeps one image.
+# ffmpeg is required by media-worker, and fonts-dejavu-core supplies the font
+# the festival poster renderer draws text with. Without it, every festival
+# poster fails PERMANENT at render time - after credits were reserved.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl \
+ && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 # `pnpm deploy` puts the deployed project at the ROOT of the target directory,

@@ -12,6 +12,7 @@ import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
+import { AdminService } from './admin/admin.service';
 import { assertCorsIsExplicit, corsOrigins, loadEnv } from './config/env';
 import { assertBillingIsSafe } from './credits/billing';
 import { assertEmailTransportIsSafe } from './email/email';
@@ -52,6 +53,25 @@ async function bootstrap(): Promise<void> {
   });
 
   app.setGlobalPrefix('api/v1', { exclude: UNVERSIONED_ROUTES });
+
+  // Trust proxy controls how Express resolves the client IP from X-Forwarded-For.
+  // `false` (default) means the socket address is the client — safe for a
+  // directly reachable server. Behind Railway / Vercel / Cloudflare set the
+  // number of trusted hops (e.g. "1") or the proxy CIDR; never use `true` on an
+  // internet-facing host as it lets any caller spoof their IP and bypass rate
+  // limiting.
+  const trustProxy = env.TRUST_PROXY;
+  if (trustProxy !== 'false') {
+    // NestJS wraps Express; `getHttpAdapter().getInstance()` is the raw Express app.
+    const expressApp = app.getHttpAdapter().getInstance() as {
+      set(key: string, value: unknown): void;
+    };
+    // A numeric string means "trust N hops"; anything else is passed as-is
+    // (CIDR, hostname, etc.).
+    const parsed = Number(trustProxy);
+    expressApp.set('trust proxy', Number.isFinite(parsed) ? parsed : trustProxy);
+  }
+
   // Security headers for every response (PROJECT.md Phase 10). CSP is disabled
   // because the only HTML this process serves is Swagger UI and Bull Board, both
   // of which use inline assets; the API itself returns JSON. Everything else
@@ -77,7 +97,10 @@ async function bootstrap(): Promise<void> {
   // before listen. Its router bypasses Nest guards, so `mountBullBoard` carries
   // its own admin check - see the comment in that file.
   if (env.BULL_BOARD_ENABLED) {
-    const board = await mountBullBoard(app, authConfig);
+    const admin = app.get(AdminService);
+    const board = await mountBullBoard(app, authConfig, {
+      record: (access) => admin.recordQueueBoardAccess(access),
+    });
     shutdown.registerDrain('bull-board', () => board.close());
   }
 

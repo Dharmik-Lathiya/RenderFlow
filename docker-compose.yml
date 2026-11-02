@@ -8,6 +8,11 @@
 # Compose reads the root `.env` for interpolation, so JWT and token-encryption
 # secrets stay out of this file. The application containers talk to services by
 # name (postgres, redis, minio); only the API and web ports are published.
+#
+# Every third-party image is pinned to a digest as well as a tag (SEC-08). A tag
+# is a mutable pointer: if `prom/prometheus:latest` were re-pointed at a poisoned
+# image, the next `pull` would run it with access to this stack's config and
+# network. Dependabot opens a reviewed PR when a pinned digest ages.
 
 name: renderflow
 
@@ -48,6 +53,13 @@ x-app-environment: &app-environment
   # fast runner. Zero keeps ordinary local runs instant.
   MOCK_LATENCY_MS: ${MOCK_LATENCY_MS:-0}
   SMTP_URL: smtp://mailhog:1025
+  # Compose runs a MailHog container, so the default here is the transport that
+  # actually delivers somewhere a developer can inspect. A `.env` that sets
+  # EMAIL_PROVIDER explicitly (for example `log`) still wins.
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-mailhog}
+  EMAIL_FROM: ${EMAIL_FROM:-RenderFlow <no-reply@renderflow.local>}
+  MAILHOG_SMTP_HOST: mailhog
+  MAILHOG_SMTP_PORT: '1025'
   QUEUE_PREFIX: ${QUEUE_PREFIX:-renderflow}
   OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE:-50}
   OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS:-1000}
@@ -73,7 +85,7 @@ x-app-dependencies: &app-dependencies
 services:
   postgres:
     # pgvector image: brand_memory.embedding is a `vector` column (Phase 6).
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg16@sha256:0dd3149a06e4579a0d70d8fef9945636cd514005e7237deb27f9b67886f8dc4f
     restart: unless-stopped
     environment:
       POSTGRES_USER: renderflow
@@ -93,7 +105,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1']
     ports:
@@ -110,7 +122,7 @@ services:
     # MinIO removed its community images from Docker Hub and Quay in September
     # 2026. pgsty publishes the maintained fork from the same source tree; pinned
     # tags keep a CI pull reproducible.
-    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372
     restart: unless-stopped
     command: ['server', '/data', '--console-address', ':9001']
     environment:
@@ -128,7 +140,7 @@ services:
   minio-init:
     # One-shot bucket bootstrap: `depends_on: service_completed_successfully`
     # guarantees the bucket exists before the API or a worker boots.
-    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd
     depends_on:
       minio:
         condition: service_started
@@ -143,7 +155,7 @@ services:
     restart: 'no'
 
   mailhog:
-    image: mailhog/mailhog:latest
+    image: mailhog/mailhog:latest@sha256:8d76a3d4ffa32a3661311944007a415332c4bb855657f4f6c57996405c009bea
     restart: unless-stopped
     ports:
       - '1025:1025' # SMTP
@@ -256,7 +268,7 @@ services:
     # Receives firing alerts from Prometheus and delivers them to Slack. Kept in
     # the observability profile so `docker compose up` stays the lightweight app
     # stack; `--profile observability` brings the whole monitoring path up.
-    image: prom/alertmanager:v0.27.0
+    image: prom/alertmanager:v0.27.0@sha256:e13b6ed5cb929eeaee733479dce55e10eb3bc2e9c4586c705a4e8da41e5eacf5
     profiles: ['observability']
     restart: unless-stopped
     command:
@@ -276,7 +288,7 @@ services:
       - '9093:9093'
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:latest@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
     profiles: ['observability']
     restart: unless-stopped
     command:
@@ -295,7 +307,7 @@ services:
       - alertmanager
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:latest@sha256:488984b716c0862639f91a698adbe2862677a5a07bad42da5f03f3030883b205
     profiles: ['observability']
     restart: unless-stopped
     environment:

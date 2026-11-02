@@ -3,16 +3,14 @@ import type { RateLimitPolicy } from './rate-limit.config';
 /**
  * Rate limit accounting.
  *
- * An interface rather than a concrete class because the counter is per-process
- * and therefore only correct for a single API instance. `REDIS_URL` is already
- * configured, so a shared store can be added later without touching call sites -
- * but wiring Redis into the API's boot path would make a resilience mechanism
- * into a startup dependency, so that trade is deferred deliberately.
+ * An interface rather than a concrete class because the counter may live in the
+ * process or in Redis. The in-memory store is correct only for a single API
+ * instance; `RATE_LIMIT_STORE=redis` shares one budget across replicas.
  *
- * KNOWN LIMITATION: with N API instances the effective ceiling is N x the
- * configured limit. That is a weakening, not a hole - it cannot make the limit
- * stricter than configured - and it is the correct trade while the API runs as a
- * single instance. Revisit before the first horizontal scale-out.
+ * `hit` is asynchronous because a shared store is a network call. A store that
+ * implements Redis cannot answer synchronously without either blocking the event
+ * loop or returning a decision it has not actually enforced, so the contract is
+ * async all the way up to the guard.
  */
 
 export interface RateLimitDecision {
@@ -31,9 +29,10 @@ export interface RateLimitStore {
    * Records one hit and reports whether it is within the limit.
    *
    * `now` is passed in rather than read from the clock so the logic is testable
-   * without sleeping (AGENTS.md section 9).
+   * without sleeping (AGENTS.md section 9). A shared store uses it to describe
+   * the window; the authoritative count still comes from the store itself.
    */
-  hit(key: string, policy: RateLimitPolicy, now: number): RateLimitDecision;
+  hit(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitDecision>;
   /** Drops all counters. Used between integration tests. */
   reset(): void;
   /** Live entry count. Exposed so the memory-safety test can assert on it. */
@@ -67,7 +66,7 @@ export class InMemoryRateLimitStore implements RateLimitStore {
     this.maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
   }
 
-  hit(key: string, policy: RateLimitPolicy, now: number): RateLimitDecision {
+  hit(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitDecision> {
     const existing = this.buckets.get(key);
 
     // Window is derived from the *first* hit in it, so the count cannot be reset
@@ -85,7 +84,7 @@ export class InMemoryRateLimitStore implements RateLimitStore {
     this.enforceCap(now);
 
     const allowed = bucket.count <= policy.limit;
-    return {
+    return Promise.resolve({
       allowed,
       limit: policy.limit,
       remaining: Math.max(0, policy.limit - bucket.count),
@@ -93,7 +92,7 @@ export class InMemoryRateLimitStore implements RateLimitStore {
       // Ceiling so a client told to retry "0 seconds" never immediately fails
       // again on the same boundary.
       retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
-    };
+    });
   }
 
   reset(): void {

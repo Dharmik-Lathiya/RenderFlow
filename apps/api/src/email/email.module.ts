@@ -17,7 +17,13 @@ import { EMAIL_SENDER, createEmailSender } from './email';
     {
       provide: EMAIL_SENDER,
       useFactory: (config: ConfigService<Env, true>) =>
-        createEmailSender(config.get('EMAIL_PROVIDER', { infer: true })),
+        createEmailSender(config.get('EMAIL_PROVIDER', { infer: true }), {
+          from: config.get('EMAIL_FROM', { infer: true }),
+          resendApiKey: config.get('RESEND_API_KEY', { infer: true }),
+          resendBaseUrl: config.get('RESEND_BASE_URL', { infer: true }),
+          mailhogHost: config.get('MAILHOG_SMTP_HOST', { infer: true }),
+          mailhogPort: config.get('MAILHOG_SMTP_PORT', { infer: true }),
+        }),
       inject: [ConfigService],
     },
   ],

@@ -3,9 +3,12 @@
 # `output: 'standalone'` (apps/web/next.config.ts) produces a self-contained
 # server with only the modules it actually imports, which is what makes the
 # runtime image small and avoids shipping node_modules at all.
+#
+# Base images are digest-pinned (SEC-08): a tag can be re-pointed at a poisoned
+# image, and Dependabot updates the digest through a reviewed PR.
 
 # ---- deps ---------------------------------------------------------------
-FROM node:24-bookworm-slim AS deps
+FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS deps
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
@@ -31,7 +34,7 @@ COPY apps/web ./apps/web
 RUN pnpm turbo run build --filter=@renderflow/web...
 
 # ---- runtime ------------------------------------------------------------
-FROM node:24-bookworm-slim AS runtime
+FROM node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS runtime
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000

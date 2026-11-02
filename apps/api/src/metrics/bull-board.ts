@@ -4,6 +4,7 @@ import type { Queue } from 'bullmq';
 
 import { ALL_QUEUE_NAMES } from '@renderflow/common';
 import { createQueue, loadQueueConfig } from '@renderflow/queue';
+import { createLogger } from '@renderflow/observability';
 
 import { ACCESS_TOKEN_COOKIE, type AuthConfig } from '../auth/auth.config';
 import { verifyAccessToken } from '../auth/token.service';
@@ -31,9 +32,30 @@ export interface BullBoardMount {
   close: () => Promise<void>;
 }
 
+/**
+ * What the board records for each operator visit.
+ *
+ * Deliberately not the query string or any payload: a path is enough to say
+ * "this admin opened the queue board", and job payloads may contain brand text
+ * that AGENTS.md forbids logging.
+ */
+export interface BullBoardAccess {
+  actorId: string;
+  role: string;
+  method: string;
+  path: string;
+  ip?: string;
+}
+
+export interface BullBoardAudit {
+  /** Resolves once the access is durable. Rejecting denies the request. */
+  record(access: BullBoardAccess): Promise<void>;
+}
+
 export async function mountBullBoard(
   app: INestApplication,
   authConfig: AuthConfig,
+  audit: BullBoardAudit,
   basePath = '/api/v1/admin/queues',
 ): Promise<BullBoardMount> {
   // Imported lazily: these are CJS packages with a UI bundle, and loading them at
@@ -63,7 +85,7 @@ export async function mountBullBoard(
     serverAdapter,
   });
 
-  app.use(basePath, adminOnly(authConfig), serverAdapter.getRouter());
+  app.use(basePath, adminOnly(authConfig, audit), serverAdapter.getRouter());
 
   return {
     close: async () => {
@@ -75,12 +97,17 @@ export async function mountBullBoard(
 /**
  * The guard the Nest pipeline cannot apply to this router.
  *
- * Asynchronous because a future version may need to check the role against the
- * database; today the role is in the signed token, and a token that says ADMIN
- * is a token the server issued to an admin.
+ * Asynchronous because the audit write must complete before the board is
+ * served: an access that cannot be recorded is refused. The token check itself
+ * needs no database - `verifyAccessToken` is the same function the Nest guard
+ * uses, so there is one definition of "authenticated".
+ *
+ * Static assets are not audited. They contain no tenant data, and a single board
+ * page loads several of them; writing a row per asset would bury the actual
+ * visits in noise.
  */
-export function adminOnly(authConfig: AuthConfig) {
-  return (request: Request, response: Response, next: NextFunction): void => {
+export function adminOnly(authConfig: AuthConfig, audit?: BullBoardAudit) {
+  return async (request: Request, response: Response, next: NextFunction): Promise<void> => {
     const token = extractToken(request);
 
     if (token === null) {
@@ -88,22 +115,68 @@ export function adminOnly(authConfig: AuthConfig) {
       return;
     }
 
+    let claims: ReturnType<typeof verifyAccessToken>;
     try {
-      const claims = verifyAccessToken(token, authConfig.JWT_ACCESS_SECRET);
-
-      if (claims.role !== 'ADMIN') {
-        response.status(403).json({ code: 'FORBIDDEN', message: 'Global ADMIN role required' });
-        return;
-      }
-
-      next();
+      claims = verifyAccessToken(token, authConfig.JWT_ACCESS_SECRET);
     } catch {
       // The verifier's message is deliberately not echoed: it distinguishes an
       // expired token from a forged one, and that is a hint an attacker does not
       // need.
       response.status(401).json({ code: 'UNAUTHORIZED', message: 'Invalid access token' });
+      return;
     }
+
+    if (claims.role !== 'ADMIN') {
+      response.status(403).json({ code: 'FORBIDDEN', message: 'Global ADMIN role required' });
+      return;
+    }
+
+    if (audit !== undefined && !isStaticAsset(request.path)) {
+      try {
+        await audit.record({
+          actorId: claims.sub,
+          role: claims.role,
+          method: request.method,
+          path: truncatePath(request.path),
+          ...(request.ip === undefined ? {} : { ip: request.ip }),
+        });
+      } catch {
+        // Fail closed: the board exposes every tenant's job payloads, and an
+        // unauditable visit is exactly what this control exists to prevent.
+        // Operators still have `redis-cli` and the DLQ endpoints during an
+        // incident.
+        log().error(
+          { event: 'BULL_BOARD_AUDIT_FAILED', actorId: claims.sub },
+          'refusing queue board access because the audit write failed',
+        );
+        response.status(503).json({
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Queue board access could not be audited',
+        });
+        return;
+      }
+    }
+
+    next();
   };
+}
+
+/** Bull Board serves its UI bundle below `/static/`; those requests carry no data. */
+function isStaticAsset(path: string): boolean {
+  return path.startsWith('/static/') || path === '/favicon.ico';
+}
+
+/** `audit_logs.entity_id` is 64 characters; a path is bounded, not trusted. */
+function truncatePath(path: string): string {
+  return path.slice(0, 64);
+}
+
+let logger: ReturnType<typeof createLogger> | null = null;
+
+function log(): ReturnType<typeof createLogger> {
+  const level = process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'test' ? 'silent' : 'info');
+  logger ??= createLogger({ service: 'bull-board', level });
+  return logger;
 }
 
 function extractToken(request: Request): string | null {

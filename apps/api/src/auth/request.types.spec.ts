@@ -23,11 +23,10 @@ function request(
 }
 
 describe('clientIp', () => {
-  it('prefers the left-most X-Forwarded-For entry', () => {
-    // A trusted proxy appends to the header, so the original client is first.
-    const req = request({
-      headers: { 'x-forwarded-for': '203.0.113.7, 10.0.0.1, 10.0.0.2' },
-    });
+  it('uses the address Express resolved for the request', () => {
+    // Express applies the `trust proxy` setting before populating `req.ip`, so
+    // behind a configured proxy this is the original client address.
+    const req = request({ ip: '203.0.113.7', remoteAddress: '10.0.0.1' });
     expect(clientIp(req)).toBe('203.0.113.7');
   });
 
@@ -35,16 +34,16 @@ describe('clientIp', () => {
     expect(clientIp(request({ remoteAddress: '198.51.100.4' }))).toBe('198.51.100.4');
   });
 
-  it('prefers the forwarded header over the socket address', () => {
+  it('ignores a forged X-Forwarded-For when Express did not trust the proxy', () => {
+    // The header is attacker-controlled. With trust proxy disabled Express keeps
+    // `req.ip` as the socket peer; reading the header would hand the caller an
+    // unlimited supply of fresh rate-limit buckets.
     const req = request({
       headers: { 'x-forwarded-for': '203.0.113.7' },
+      ip: '10.0.0.1',
       remoteAddress: '10.0.0.1',
     });
-    expect(clientIp(req)).toBe('203.0.113.7');
-  });
-
-  it('ignores an empty forwarded header', () => {
-    expect(clientIp(request({ headers: { 'x-forwarded-for': '' } }))).toBeUndefined();
+    expect(clientIp(req)).toBe('10.0.0.1');
   });
 
   it('returns undefined when nothing identifies the client', () => {
