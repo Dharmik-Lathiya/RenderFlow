@@ -4,8 +4,8 @@ The authoritative version of this table lives in [`PROJECT.md` §12](./PROJECT.m
 This file exists so progress can be read without scrolling a thousand lines of
 specification.
 
-**Last updated:** after the index review, manual k6 load test and production
-documentation pass.
+**Last updated:** after the festival marketing generator (Phase 11) and the
+production documentation pass.
 
 | #   | Phase                             | Status                                                       |
 | --- | --------------------------------- | ------------------------------------------------------------ |
@@ -16,12 +16,13 @@ documentation pass.
 | 4   | Job pipeline with mock AI         | Shipped                                                      |
 | 5   | Reliability layer                 | Shipped — R5 is a real SIGKILL, not a simulated state        |
 | 6   | Real AI integration               | **Partial** — never run against a real provider key          |
-| 7   | Scheduling and publishing         | Shipped (mocks only — no real adapter, no OAuth, no email)   |
+| 7   | Scheduling and publishing         | Shipped (mocks only — no real adapter or OAuth)              |
 | 8   | Frontend (Next.js)                | Shipped — 14/14 browser journeys pass locally                |
 | 9   | Analytics, admin, observability   | **Partial** — analytics built; no Grafana panel has rendered |
 | 10  | Hardening and launch polish       | **Partial** — security pass started                          |
+| 11  | Festival marketing generator      | Shipped — poster and reel on the existing pipeline           |
 
-**8 shipped · 3 partial · 0 untouched**
+**9 shipped · 3 partial · 0 untouched**
 
 ## Unphased launch-readiness work
 
@@ -32,15 +33,26 @@ are recorded in `PROJECT.md` §12 Phase 10:
   `/security`, `/terms`, `/privacy`, sitemap, crawling rules, icon, OG card, 404 /
   error / loading routes.
 - Account recovery: forgot-password, reset-password, verify-email with one-shot
-  tokens; a reset revokes every session. Mail sits behind an `EmailSender` seam
-  whose development transport is refused in production.
+  tokens; a reset revokes every session. Mail sits behind a shared
+  `@renderflow/email` seam with Resend and SMTP transports; the log and MailHog
+  transports are refused in production.
 - Rate limits on generation, campaign, schedule and admin routes. User-scoped
   limits now run after authentication instead of degrading to the client IP.
 - Editing an approved post withdraws the approval; scheduled posts refuse edits.
 - `purchase()` + a stub top-up endpoint (disabled by default, refused in production).
 
-Still missing for a commercial launch: a real payment provider, a real email
-transport, real social adapters and OAuth.
+Still missing for a commercial launch: a real payment provider, a verified email
+sender domain, real social adapters and OAuth.
+
+## Festival marketing (Phase 11)
+
+`FESTIVAL_IMAGE` and `FESTIVAL_REEL` are job kinds on the existing stage machine.
+The studio picks an occasion and template, the API snapshots the descriptor into
+the job, and the existing content and media workers produce the caption, poster
+and optional 15-second reel. Credits reserve before work and capture or refund
+through the same runner as every other generation. `tests/integration/festival.spec.ts`
+covers the transaction, estimate, moderation ordering, stage sequence, assets and
+the failure/refund path. No real AI provider was called for it.
 
 ## What "partial" means here
 

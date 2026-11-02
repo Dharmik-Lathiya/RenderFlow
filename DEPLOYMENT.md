@@ -8,7 +8,7 @@ and a Vercel configuration. It does **not** ship Kubernetes manifests, Terraform
 a managed-database module or an alert delivery service. The operator supplies
 those.
 
-**Verified against:** repository at 2026-11-01. The compose stack is a local
+**Verified against:** repository at 2026-11-02. The compose stack is a local
 development environment, not a production deployment.
 
 ## 1. Current deployment state
@@ -143,24 +143,29 @@ or commit them. At minimum:
 | `S3_SECRET_KEY`        | Secret key.                                                           |
 | `S3_FORCE_PATH_STYLE`  | `true` for MinIO; usually `false` for AWS S3.                         |
 | `API_PORT`             | Default `4000`.                                                       |
+| `METRICS_PORT`         | Per-process scrape port: API `4000`; workers `4001`-`4006`.           |
 
 Generate secrets with `openssl rand -base64 48` for JWT secrets and
 `openssl rand -base64 32` for `TOKEN_ENCRYPTION_KEY`.
 
 ### Production-safe feature settings
 
-| Variable                    | Recommended              | Why                                                      |
-| --------------------------- | ------------------------ | -------------------------------------------------------- |
-| `EMAIL_PROVIDER`            | `none` until implemented | `log` is refused in production; `none` sends no mail.    |
-| `BILLING_PROVIDER`          | `disabled`               | `stub` mints credits and is refused in production.       |
-| `BULL_BOARD_ENABLED`        | `false`                  | Board exposes cross-tenant job payloads.                 |
-| `AI_PROVIDER`               | `mock` until validated   | Real provider keys have never been exercised.            |
-| `IMAGE_PROVIDER`            | `mock` until validated   | Same.                                                    |
-| `TTS_PROVIDER`              | `mock` until validated   | Same.                                                    |
-| `SOCIAL_PROVIDER`           | `mock` until validated   | No live OAuth flow has been implemented or verified.     |
-| `METRICS_ENABLED`           | `true`                   | Enables process metrics.                                 |
-| `METRICS_COLLECTOR_ENABLED` | `true`                   | Enables database-derived business gauges.                |
-| `METRICS_INTERVAL_MS`       | `15000` or more          | Must not be shorter than the Prometheus scrape interval. |
+| Variable                    | Recommended            | Why                                                                                                                             |
+| --------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `EMAIL_PROVIDER`            | `resend`               | Needs `RESEND_API_KEY` and a verified `EMAIL_FROM` domain. `log` and `mailhog` are refused in production; `none` sends no mail. |
+| `RESEND_API_KEY`            | secret                 | Required when `EMAIL_PROVIDER=resend`.                                                                                          |
+| `EMAIL_FROM`                | verified address       | Sender for reset, verification and publish-failure mail.                                                                        |
+| `RATE_LIMIT_STORE`          | `redis`                | `memory` multiplies limits by the replica count.                                                                                |
+| `TRUST_PROXY`               | hop count (`1`)        | `false` behind no proxy; never `true` on a public API.                                                                          |
+| `BILLING_PROVIDER`          | `disabled`             | `stub` mints credits and is refused in production.                                                                              |
+| `BULL_BOARD_ENABLED`        | `false`                | Board exposes cross-tenant job payloads.                                                                                        |
+| `AI_PROVIDER`               | `mock` until validated | Real provider keys have never been exercised.                                                                                   |
+| `IMAGE_PROVIDER`            | `mock` until validated | Same.                                                                                                                           |
+| `TTS_PROVIDER`              | `mock` until validated | Same.                                                                                                                           |
+| `SOCIAL_PROVIDER`           | `mock` until validated | No live OAuth flow has been implemented or verified.                                                                            |
+| `METRICS_ENABLED`           | `true`                 | Enables process metrics.                                                                                                        |
+| `METRICS_COLLECTOR_ENABLED` | `true`                 | Enables database-derived business gauges.                                                                                       |
+| `METRICS_INTERVAL_MS`       | `15000` or more        | Must not be shorter than the Prometheus scrape interval.                                                                        |
 
 Keep every rate-limit variable at its documented default unless there is an
 incident-specific reason to change it. A bare `0` disables a rule; an unparseable
@@ -197,7 +202,9 @@ prefix.
 - [ ] `CORS_ORIGINS` contains the exact web origin.
 - [ ] DNS/TLS certificates are ready for both web and API hosts.
 - [ ] The API hostname is on the same registrable site as the web app.
-- [ ] The proxy is configured to overwrite `X-Forwarded-For`.
+- [ ] `TRUST_PROXY` matches the edge: `false` with no proxy, or the number of
+      trusted hops. The proxy overwrites `X-Forwarded-For`.
+- [ ] `RATE_LIMIT_STORE=redis` if more than one API replica will run.
 - [ ] `EMAIL_PROVIDER` and `BILLING_PROVIDER` are safe for production.
 - [ ] You know which image tag is currently deployed, for rollback.
 
@@ -244,17 +251,20 @@ dependency, so a transient outage does not cause an unnecessary restart.
 ### Step 4 — Start the workers
 
 Start each worker image with the same database, Redis, S3, provider and lease
-configuration as the API. Workers do not serve HTTP today and do not need public
-ports.
+configuration as the API. Workers do not serve the product API, but each one
+exposes `GET /metrics` on its own `METRICS_PORT` for Prometheus:
 
-| Worker             | Notes                                                                  |
-| ------------------ | ---------------------------------------------------------------------- |
-| `outbox-relay`     | Must run for any generation or schedule to leave PostgreSQL.           |
-| `content-worker`   | Required for PLAN/SCRIPT stages.                                       |
-| `media-worker`     | Required for IMAGE/VOICE/RENDER; needs FFmpeg (included in the image). |
-| `publisher-worker` | Required for scheduled publishing; polls the database every second.    |
-| `analytics-worker` | Optional for publishing; required for metrics snapshots.               |
-| `reaper`           | Required for crash recovery and stale publish reclaim.                 |
+| Worker             | Default metrics port | Notes                                                                                                                     |
+| ------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `content-worker`   | `4001`               | Required for PLAN/SCRIPT and festival copy.                                                                               |
+| `media-worker`     | `4002`               | Required for IMAGE/VOICE/RENDER and festival posters/reels; needs FFmpeg and `fonts-dejavu-core` (included in the image). |
+| `publisher-worker` | `4003`               | Required for scheduled publishing and the `notifications` consumer.                                                       |
+| `analytics-worker` | `4004`               | Optional for publishing; required for metrics snapshots.                                                                  |
+| `outbox-relay`     | `4005`               | Must run for any generation or schedule to leave PostgreSQL.                                                              |
+| `reaper`           | `4006`               | Required for crash recovery and stale publish reclaim.                                                                    |
+
+Do not publish these ports to the internet; scrape them over the private
+network. Restrict `/metrics` at the proxy if a port is exposed.
 
 All workers handle `SIGTERM` gracefully. Give the orchestrator a termination
 grace period longer than the configured drain timeout.
@@ -284,6 +294,12 @@ curl -fsS https://api.example.com/api/v1/credits/pricing
 curl -fsSI https://app.example.com/ | head -20
 ```
 
+For each worker, scrape its metrics port over the private network:
+
+```bash
+curl -fsS http://content-worker.internal:4001/metrics | grep renderflow_
+```
+
 Then, in a browser:
 
 1. Load the public landing page and pricing page.
@@ -293,7 +309,13 @@ Then, in a browser:
 5. Confirm the job reaches `COMPLETED` and credits are captured.
 6. Schedule a post to a mock social account and confirm it publishes once.
 7. Confirm a failed job is refunded and appears in the notification centre.
-8. Confirm `/metrics` reports `renderflow_jobs_by_status` and `renderflow_ledger_drift_users == 0`.
+8. Open the campaign, choose **Festival campaign**, pick an occasion and
+   template, enter an offer and CTA, and generate a poster. Confirm the job
+   advances PLAN → SCRIPT → IMAGE, the post becomes `READY`, the poster
+   downloads, and the estimate matched the captured credits. Repeat with the
+   reel enabled on a host that has FFmpeg and the DejaVu fonts.
+9. Confirm `/metrics` reports `renderflow_jobs_by_status`,
+   `renderflow_outbox_pending` and `renderflow_ledger_drift_users == 0`.
 
 ## 6. Vercel specifics
 
@@ -334,8 +356,14 @@ release needs an expand/contract plan before rollout.
 
 ## 8. Scaling and high availability
 
-Before scaling the API horizontally, replace the in-process rate-limit store with
-a shared store. Until then, N replicas multiply every configured limit by N.
+Set `RATE_LIMIT_STORE=redis` before running more than one API replica. The store
+uses one atomic Lua increment across replicas; with `memory`, N replicas
+multiply every configured limit by N. A Redis outage degrades to allowing
+traffic rather than failing the API closed, so keep the API's own rate limits
+as the first line of defence and the edge/WAF as the second.
+
+`TRUST_PROXY` must match the proxy chain. `req.ip` is the only source of the
+client address; a raw `X-Forwarded-For` header is never parsed.
 
 Content, media, publisher and relay workers can scale independently. Analytics
 and reaper use PostgreSQL advisory locks and are single-leader: a second replica
@@ -349,23 +377,73 @@ For high availability:
 - run PostgreSQL with a managed failover replica and tested backups,
 - run Redis with persistence and a replica if delayed wake-ups matter,
 - use a private S3 bucket with versioning and lifecycle rules,
-- run at least two API replicas only after the shared limiter exists,
+- run two or more API replicas only after `RATE_LIMIT_STORE=redis`,
 - run two or more content, media, publisher and relay workers where the queue can
   absorb it,
 - run one analytics worker and one reaper, each with restart-on-exit,
 - terminate TLS at a proxy that overwrites `X-Forwarded-For`,
+- scrape every worker's `METRICS_PORT` over the private network,
 - deploy Alertmanager or an equivalent alert path.
 
-## 9. What is not deployable yet
+## 9. Demo deployment
 
-- Real email delivery (password reset and verification are non-functional with
-  `EMAIL_PROVIDER=none`).
+The portfolio demo is a smaller version of the same topology, with no real
+provider keys:
+
+```text
+Vercel (free)                 Railway ($5 hobby) or one compose host
+┌──────────┐                  ┌─────────────────────────────────────────┐
+│ apps/web │ ───────────────► │ apps/api, content-worker, media-worker, │
+│ Next.js  │                  │ publisher-worker, outbox-relay, reaper  │
+└──────────┘                  └───────┬──────────────────┬──────────────┘
+                                      │                  │
+                              ┌───────▼──────┐   ┌───────▼───────┐
+                              │ Neon Postgres│   │ Upstash Redis │
+                              └──────────────┘   └───────────────┘
+                                      │
+                              ┌───────▼────────────┐
+                              │ Cloudflare R2      │
+                              └────────────────────┘
+```
+
+The full setup checklist lives in [`issues/DEPLOYMENT-DEMO.md`](./issues/DEPLOYMENT-DEMO.md).
+Two things matter beyond the production guide:
+
+1. **Set `RATE_LIMIT_STORE=redis` and `TRUST_PROXY=1`.** Railway and Vercel sit
+   in front of the API; `memory` limits and an ignored forwarded header both
+   look healthy while allowing more traffic than configured.
+2. **Verify the backup path before the interview.** Neon's point-in-time restore
+   is the demo default; `scripts/backup-to-s3.sh` is the portable daily dump for
+   a self-hosted database. Run `scripts/backup-restore-check.sh` against the
+   provider at least once so the RPO in the interview is a measured number, not
+   a plan.
+
+Demo credentials and the seeded brand/campaign come from
+`scripts/seed-demo.mjs`. It talks to the public API rather than inserting rows, so
+the demo wallet reconciles with its ledger. Run it after `pnpm db:seed`:
+
+```bash
+BASE_URL=https://api.example.com \
+DEMO_ACCOUNT_EMAIL=demo@renderflow.dev \
+DEMO_ACCOUNT_PASSWORD='Demo1234!' \
+ADMIN_TOKEN=... \
+node scripts/seed-demo.mjs
+```
+
+## 10. What is not deployable yet
+
 - Real social OAuth and publishing.
 - Real AI providers (adapters exist, but no live call has been verified).
 - Real billing (the stub is refused in production).
 - A production API host in the current Vercel deployment.
-- Worker `/metrics` endpoints, despite Prometheus scrape targets.
 - Alert delivery, despite alert rules.
+
+Email delivery is implemented for Resend and SMTP, but no live message has been
+accepted by a provider in this repository's verification. Verify the sender
+domain and send a password-reset message before treating it as production-ready.
+Postgres backup automation is documented and the scripts are CI-shell-checked;
+Neon PITR (demo) or the S3 dump schedule (self-hosted) still has to be enabled in
+the operator's account.
 
 Treat these as launch gates, not as configuration details. They are tracked in
 [`PHASES.md`](./PHASES.md), [`SECURITY.md`](./SECURITY.md) and

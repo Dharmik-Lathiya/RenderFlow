@@ -182,18 +182,26 @@ Rules that keep this honest:
 
 ### 5.2 Pricing table (configurable in DB `pricing_rules`)
 
-| Action                        | Credits |
-| ----------------------------- | ------- |
-| Content plan (7-day calendar) | 2       |
-| Caption + hashtags set        | 1       |
-| Poster / photo (1 image)      | 5       |
-| Carousel (up to 5 images)     | 15      |
-| Reel / video up to 15 s       | 30      |
-| Reel / video 16-30 s          | 50      |
-| Regenerate a single scene     | 8       |
-| Translation of a caption      | 1       |
+| Action                                | Credits |
+| ------------------------------------- | ------- |
+| Content plan (7-day calendar)         | 2       |
+| Caption + hashtags set                | 1       |
+| Poster / photo (1 image)              | 5       |
+| Carousel (up to 5 images)             | 15      |
+| Reel / video up to 15 s               | 30      |
+| Reel / video 16-30 s                  | 50      |
+| Regenerate a single scene             | 8       |
+| Translation of a caption              | 1       |
+| Festival poster + caption             | 6       |
+| Festival poster + caption + 15 s reel | 36      |
 
-50 free credits ≈ 1 reel + a few captions, or ~10 posters. Good for a demo.
+Festival prices are bundled: the reel includes the poster and caption, because a
+reel without either is not the product the user asked for. The estimate endpoint
+shows the reel as a 30-credit add-on so the breakdown still reads
+"poster + reel".
+
+50 free credits ≈ 1 reel + a few captions, or ~10 posters, or 8 festival posters.
+Good for a demo.
 
 ### 5.3 Ledger entry types
 
@@ -446,12 +454,12 @@ surface). Routes opt in with `@RateLimit({ name, scope })`; scopes are `ip`,
 
 Three deliberate design decisions:
 
-- **The store is in-memory and per-process, behind `RATE_LIMIT_STORE`.** With N
-  API instances the effective ceiling is N× the configured limit — a weakening,
-  not a hole. Redis is already available (`REDIS_URL`), but making the API's boot
-  path depend on it would turn a resilience mechanism into a startup dependency.
-  Adding a shared store touches one provider and no call sites. Revisit before
-  the first horizontal scale-out.
+- **The store is pluggable, behind `RATE_LIMIT_STORE`.** `memory` (the default)
+  is correct for one API instance; `redis` shares one window across replicas via
+  an atomic Lua increment. Set `redis` before scaling out. A Redis outage
+  degrades to allowing traffic rather than failing the API closed, and IP keys
+  come from Express's `req.ip`, which honours `TRUST_PROXY` — a raw
+  `X-Forwarded-For` header is never trusted.
 - **Login carries a per-account limit as well as per-IP.** IP-only cannot stop a
   credential-stuffing run spread across many hosts but aimed at one account. The
   per-account limit is generous on purpose: a tight one is a lockout tool against
@@ -491,6 +499,7 @@ Notify:    GET  /notifications | GET /notifications/unread-count
 Analytics: GET  /analytics/overview?workspaceId=:id | GET /analytics/campaigns/:id
 Admin:     GET  /admin/dlq | POST /admin/dlq/:jobId/replay
            GET  /admin/dlq/outbox | POST /admin/dlq/outbox/:eventId/replay
+           POST /admin/publish/:jobId/replay
            GET  /admin/reconcile | POST /admin/credits/adjust
 Probes:    GET  /health/live | /health/ready | GET /metrics | GET /docs-json
 ```
@@ -748,8 +757,9 @@ DoD's assertions are written and passing; "partial" means some of them are not.
 | 8   | Frontend (Next.js)                | **Shipped**                                   | 68 jsdom tests in 9 suites plus 14/14 Playwright journeys (Chromium and Pixel 7) against a live API, including generation over SSE and scheduling. Every screen built, including the public landing page and calendar.                                                                               |
 | 9   | Analytics, admin, observability   | **Partial** - dashboards never rendered       | Analytics worker + metrics sync (8 integration), workspace/campaign analytics (10), admin console + audited adjust (10), Bull Board and queue depth (14 unit). Alerts and dashboard are drift-tested; no panel has rendered (no Docker).                                                             |
 | 10  | Hardening and launch polish       | **Partial** - security pass started           | Helmet headers, explicit CORS, CSRF, encrypted tokens, upload validation, a CI dependency audit at high/critical, a backup/restore drill that hashes every table in CI, an index review with the reviewed indexes pinned by a test, and a manual k6 read load test. No CI load job or chaos GIF yet. |
+| 11  | Festival marketing generator      | **Shipped**                                   | Shared descriptor + zod schemas, two job kinds on the existing stage machine, festival copy for mock/OpenAI/Anthropic, ffmpeg poster and reel rendering, server-side estimate, atomic reserve + post creation, festival studio UI, 10 integration tests and unit/component coverage.                 |
 
-**8 of 11 phases shipped** (0-5, 7, 8), **3 partial** (6, 9, 10), **0
+**9 of 12 phases shipped** (0-5, 7, 8, 11), **3 partial** (6, 9, 10), **0
 untouched**.
 
 Phase 7 is counted as shipped because its DoD is met end to end — but only
@@ -1198,10 +1208,13 @@ Known gaps:
   authorization-code flow - `POST /social-accounts` receives an already-obtained
   token. The interface is the seam the real adapters plug into; none has been
   written, so no post has gone to a real platform.
-- **No email is sent.** Phase 7 says "failure notifications (in-app + email)";
-  only the in-app half exists. Mail has different failure modes (bounced
-  addresses, unverified domains) and belongs behind its own seam rather than as
-  a second thing `NotificationsService` does.
+- **Email delivery is implemented, not exercised against a live provider.**
+  Phase 7 says "failure notifications (in-app + email)". The in-app half is a
+  direct write from the publisher worker; the email half is the `notifications`
+  queue consumer, behind the shared `@renderflow/email` transports. Resend and
+  SMTP adapters exist and are unit-tested with fakes, but no real message has
+  been accepted by a provider. Mail has different failure modes (bounced
+  addresses, unverified domains), so verify the sender domain before launch.
 - **Token refresh is deduped per process, not per cluster.**
   `TokenRefresherRegistry` collapses concurrent refreshes inside one worker. Two
   `publisher-worker` processes can still both refresh the same account at the
@@ -1470,6 +1483,33 @@ Also delivered (launch-readiness work that was not in any phase):
 Outstanding: a CI-hosted load job, SSRF hardening for any future user-supplied
 fetch, and the README chaos GIF.
 
+### Phase 11: Festival marketing generator
+
+- A festival studio inside a campaign: occasion gallery, template picker, offer
+  and CTA, language, optional 15-second reel.
+- Two new generation kinds, `FESTIVAL_IMAGE` and `FESTIVAL_REEL`, mapped onto the
+  existing stage machine: `PLAN → SCRIPT → IMAGE` and
+  `PLAN → SCRIPT → IMAGE → RENDER`. No new workers, queues or tables for the
+  pipeline itself.
+- `festival_occasions` and `festival_templates` store the catalogue. The API
+  snapshots the selected template descriptor and brand into the job payload, so
+  a later template edit cannot change a job that is already running.
+- `festivalCopy` on `TextProvider` produces the caption, hashtags and poster
+  slots. The mock is deterministic; OpenAI and Anthropic share the same schema
+  and repair-once policy as the existing copy path.
+- `renderFestivalPoster` and `renderFestivalReel` reuse the ffmpeg renderer:
+  wrapped text, an accent rule, optional logo, a zoom/fade reel and optional
+  audio. Missing fonts fail `PERMANENT` rather than producing a blank image; the
+  worker image installs `fonts-dejavu-core`.
+- Credits are reserved with a server-side estimate before any work, the post is
+  created and the job updated in the same transaction, capture happens after the
+  assets are written, and a terminal failure marks the post `FAILED` and refunds
+  once.
+- **DoD:** a user can create a festival poster or reel from the campaign screen,
+  watch it progress over SSE, download the result, and see the post ready for
+  approval. `tests/integration/festival.spec.ts` covers the API transaction,
+  estimate, moderation-before-reserve, runtime stages, assets and failure path.
+
 ---
 
 ## 13. Testing strategy
@@ -1589,9 +1629,10 @@ yet, and k6 is not run in CI.
   timed-out probe produces `{"status":"degraded","checks":{"db":"down", ...}}`
   with HTTP 503; an all-up report returns 200. `/health/live` never performs
   dependency I/O.
-- **Known gap:** Prometheus is configured to scrape worker and Redis targets
-  that do not expose `/metrics`, and no Alertmanager service is deployed. Alert
-  rules evaluate, but worker scrapes fail and alerts are not delivered.
+- **Known gap:** every worker now exposes `/metrics` on `METRICS_PORT`, but the
+  Prometheus scrape targets are only exercised in the compose stack. Alertmanager
+  is deployed there; delivery to a real receiver still depends on the operator's
+  webhook configuration.
 
 ---
 

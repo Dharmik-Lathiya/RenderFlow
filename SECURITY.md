@@ -156,19 +156,26 @@ and related headers on API responses. CSP is disabled because the API itself
 returns JSON and the only HTML it can serve is Swagger UI (development-only) and
 Bull Board (opt-in).
 
+The Next.js app sets a nonce-based `Content-Security-Policy` in `proxy.ts` plus
+`Referrer-Policy`, `Permissions-Policy` and a frame policy on every response.
+Nonce CSP requires dynamic rendering: if a page were statically prerendered its
+scripts would carry no nonce and the browser would block them, so the root layout
+reads the nonce and opts every page into dynamic rendering.
+
 Swagger UI is not mounted in production. The raw OpenAPI document remains
 available at `/docs-json`; treat it as public API metadata, not a secret.
 
-The Next.js app does not currently configure a Content Security Policy or other
-custom response headers. Add an explicit CSP, `Referrer-Policy` and a frame
-policy at the edge or in `next.config.ts` before launch.
-
 ### Bull Board
 
-Bull Board is disabled by default. When enabled it is mounted outside Nest's
-guard pipeline, so it carries its own authentication middleware: a valid access
-token with the global `ADMIN` role. It exposes every tenant's job payloads and
-must not be enabled for ordinary workspace owners.
+Bull Board is disabled by default (`BULL_BOARD_ENABLED=false`). When enabled it
+is mounted outside Nest's guard pipeline, so it carries its own authentication
+middleware: a valid access token with the global `ADMIN` role. It exposes every
+tenant's job payloads and must not be enabled for ordinary workspace owners.
+
+Every non-static board request writes an `audit_logs` row (`queue_board.access`)
+with the operator, method and path. If that write fails the request is refused
+with 503: an unauditable access to cross-tenant job data is the failure the
+control exists to prevent. Static assets are not audited.
 
 ## 6. Input validation and uploads
 
@@ -329,19 +336,27 @@ rather than silently disabling a control.
 ## 14. Infrastructure checklist before launch
 
 - [ ] Serve the API and web app over HTTPS only.
-- [ ] Put the API behind a proxy that overwrites `X-Forwarded-For`.
+- [ ] Put the API behind a proxy that overwrites `X-Forwarded-For`, and set
+      `TRUST_PROXY` to the hop count or proxy CIDR. `TRUST_PROXY=false` is correct
+      only when the API is directly reachable; `true` lets any caller spoof the
+      header.
 - [ ] Set `NODE_ENV=production`, explicit `CORS_ORIGINS`, and secure cookies.
 - [ ] Generate unique, high-entropy JWT and token-encryption secrets; store them
       in a secret manager, not in an image or a repository.
 - [ ] Enable encryption at rest for PostgreSQL, S3 and backups.
 - [ ] Restrict database and S3 credentials to the minimum required.
-- [ ] Implement a real email provider before enabling password reset.
+- [x] Implement a real email provider before enabling password reset: the
+      `resend` adapter is wired (`EMAIL_PROVIDER=resend`, `RESEND_API_KEY`) and
+      refuses to boot without a key; `mailhog` remains local-only.
 - [ ] Keep `BULL_BOARD_ENABLED=false` unless an operator genuinely needs it.
 - [x] Wire real readiness probes (PostgreSQL, Redis and S3) and keep them
       dependency-backed; `/health/ready` returns 503 when any is down.
-- [ ] Add a shared rate-limit store before running more than one API replica.
-- [ ] Add Alertmanager or another alert delivery path.
-- [ ] Pin container image digests and enable dependency update automation.
+- [x] Add a shared rate-limit store before running more than one API replica:
+      `RATE_LIMIT_STORE=redis` shares one atomic window; `memory` remains the
+      single-replica default.
+- [x] Add Alertmanager or another alert delivery path.
+- [x] Pin container image digests and enable dependency update automation
+      (`.github/dependabot.yml` covers npm, Docker and GitHub Actions).
 - [ ] Review provider data-processing terms and configure retention.
 - [ ] Run a restore drill and an incident tabletop.
 - [ ] Commission an external penetration test before handling real customer data.

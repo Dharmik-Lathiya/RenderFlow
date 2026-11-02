@@ -389,18 +389,20 @@ database/queue connections within a bounded drain window.
 These are real and should be resolved or explicitly accepted before production
 traffic:
 
-- The API readiness endpoint has no registered dependency probes.
-- Worker processes do not expose `/metrics`, although Prometheus is configured
-  to scrape them. The API's metrics endpoint is the only working application
-  target.
-- Prometheus has an `alertmanager` target but no Alertmanager service, so alerts
-  are evaluated but not delivered.
-- The `notifications` queue has a producer route but no consumer.
-- Rate limiting is per-process and therefore only correct for a single API
-  instance.
-- `X-Forwarded-For` is trusted as supplied. The API must sit behind a proxy that
-  overwrites the header; otherwise a direct client can spoof its rate-limit key.
-- No real AI, social, email or billing provider has been exercised.
+- The `notifications` queue is consumed by the publisher worker and delivers a
+  publish-failure email through `@renderflow/email`; `EMAIL_PROVIDER=none`
+  still drops mail explicitly. The in-app notification remains a direct write,
+  so it does not depend on the mail path being healthy.
+- Rate limiting is per-process by default (`RATE_LIMIT_STORE=memory`) and must
+  be switched to `redis` before running more than one API instance.
+- `TRUST_PROXY` must match the deployment's edge. It defaults to `false`, which
+  ignores `X-Forwarded-For`; setting it to `true` on a directly reachable API
+  lets any caller spoof their rate-limit key.
+- No real AI, social or billing provider has been exercised. Email has real
+  Resend and SMTP adapters, but neither has been verified against a live
+  account.
+- `analytics-worker` and `reaper` elect a single leader and exit on lock loss,
+  so recovery depends on the orchestrator restarting the process.
 - SSRF hardening is not implemented because no feature fetches user-supplied
   URLs yet. It becomes a launch blocker when one does.
 

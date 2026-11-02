@@ -162,9 +162,10 @@ or `publish_jobs.status = FAILED`.
 3. If the error is an expired/revoked social token, the user must reconnect the
    account. Do not edit the encrypted token by hand.
 4. A transient failure leaves the row `PENDING` for automatic retry. Once a row
-   is `FAILED` there is no publish-replay endpoint, and the reschedule endpoint
-   only updates `PENDING` or `SCHEDULED` rows. Recreate the schedule after the
-   platform recovers, but only when `external_post_id` is empty.
+   is `FAILED`, use `POST /api/v1/admin/publish/:jobId/replay` after the platform
+   recovers. It refuses a job whose `external_post_id` is set, resets the row to
+   `PENDING`, writes an audit row and emits a `publish.retry` outbox event. Do
+   not retry by recreating the schedule: that can produce a second post.
 5. Check `social_accounts.token_expires_at` and the adapter logs.
 6. Publishing is free; a failed publish does not refund generation credits.
 
@@ -275,10 +276,14 @@ not repair the underlying bug. File a follow-up.
 ### 5.11 Notifications are missing
 
 - Publish failures write in-app notifications directly from the publisher worker.
-- The `notifications` queue has no consumer. Do not assume a notification will be
-  delivered because an outbox event was routed to that queue.
+- The same failure is routed through the outbox to the `notifications` queue,
+  consumed by the publisher worker, which sends an email to the account's
+  connector. Inspect failed jobs on that queue when the in-app notification
+  exists but no mail arrived.
 - Check `notifications` rows for the user and the dedupe key.
-- Email is not implemented. `EMAIL_PROVIDER=none` sends nothing.
+- Email transport is selected by `EMAIL_PROVIDER`: `none` drops mail, `log`
+  prints it locally (and is refused in production), `resend` needs
+  `RESEND_API_KEY`, and `mailhog` sends to the local MailHog container.
 
 ## 6. Operator API
 
@@ -286,14 +291,15 @@ All admin routes require a global `ADMIN` or a workspace `OWNER` scoped to the
 affected workspace. Use a short-lived session or a bearer token from an
 authenticated admin. Do not put admin tokens in shell history on a shared host.
 
-| Route                                 | Method | Purpose                                               |
-| ------------------------------------- | ------ | ----------------------------------------------------- |
-| `/api/v1/admin/dlq`                   | GET    | Failed generation jobs, refunded and awaiting replay. |
-| `/api/v1/admin/dlq/:jobId/replay`     | POST   | Re-reserve and requeue a failed job.                  |
-| `/api/v1/admin/dlq/outbox`            | GET    | Abandoned outbox events.                              |
-| `/api/v1/admin/dlq/outbox/:id/replay` | POST   | Put an abandoned event back in the pending set.       |
-| `/api/v1/admin/reconcile`             | GET    | Per-bucket wallet/ledger comparison.                  |
-| `/api/v1/admin/credits/adjust`        | POST   | Audited credit grant or removal.                      |
+| Route                                 | Method | Purpose                                                |
+| ------------------------------------- | ------ | ------------------------------------------------------ |
+| `/api/v1/admin/dlq`                   | GET    | Failed generation jobs, refunded and awaiting replay.  |
+| `/api/v1/admin/dlq/:jobId/replay`     | POST   | Re-reserve and requeue a failed job.                   |
+| `/api/v1/admin/dlq/outbox`            | GET    | Abandoned outbox events.                               |
+| `/api/v1/admin/dlq/outbox/:id/replay` | POST   | Put an abandoned event back in the pending set.        |
+| `/api/v1/admin/publish/:jobId/replay` | POST   | Re-queue a terminal publish failure (never if posted). |
+| `/api/v1/admin/reconcile`             | GET    | Per-bucket wallet/ledger comparison.                   |
+| `/api/v1/admin/credits/adjust`        | POST   | Audited credit grant or removal.                       |
 
 Every operator mutation writes an `audit_logs` row with the actor and action.
 `limit` query parameters are bounded; do not script unbounded polling.

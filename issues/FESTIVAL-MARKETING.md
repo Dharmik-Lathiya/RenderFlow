@@ -343,3 +343,42 @@ This feature is **Phase 11** of RenderFlow (after the existing 0–10 phases).
 > then sharp composites into a poster, then FFmpeg turns into a reel. The credit
 > system handles it automatically because the new generation kind produces
 > checkpoints that the existing runner settles."
+
+---
+
+## 13. Implementation notes (as shipped)
+
+The plan above describes the intended shape. These are the decisions that
+changed during implementation, recorded so the code and this document agree:
+
+- **Rendering stays in ffmpeg.** The poster is drawn with `lavfi` colour plus
+  `drawtext` filters — wrapped text, accent rule, optional logo — and the reel is
+  the same poster animated with zoom/fade and optional audio. This keeps the
+  1080×1080 and 1080×1920 outputs deterministic in tests and adds no native image
+  dependency.
+- **Stage names are reused.** `FESTIVAL_IMAGE` runs `PLAN → SCRIPT → IMAGE`;
+  `FESTIVAL_REEL` runs `PLAN → SCRIPT → IMAGE → RENDER`. The plan's
+  `TEMPLATE_SELECT`/`COPY_FILL` names are UI language, not stage names, so the
+  global `JOB_STAGES` list did not change.
+- **Prices are bundled.** `FESTIVAL_IMAGE` is 6 credits (poster + caption) and
+  `FESTIVAL_REEL` is 36 (poster + caption + 15-second reel). The estimate shows
+  the reel as a 30-credit add-on so the breakdown still matches the public
+  pricing table. Both rows live in `pricing_rules`, seeded from
+  `DEFAULT_PRICES`.
+- **The template is snapshotted, not referenced.** The request selects a
+  template id; the API copies the full descriptor and brand into the job payload.
+  A template edit mid-job therefore cannot change the output or the price the
+  user saw.
+- **The post and job are created together.** The initial reserve uses
+  `postId: null`; the post row is created and the job updated in the same
+  transaction. An idempotent replay returns the original job instead of creating
+  an orphan post.
+- **Moderation runs before reservation.** Rejected offer text costs nothing.
+- **A terminal render failure marks the post `FAILED` and refunds once.** The
+  refund is the same runner settlement path as every other kind; the post status
+  is updated in the same failure transaction.
+- **Fonts are a deployment requirement.** The poster renderer fails `PERMANENT`
+  when no usable font exists rather than emitting a blank image.
+  `infra/docker/node-app.Dockerfile` installs `fonts-dejavu-core`.
+- **The browser derives its stage list from the job kind.** A festival job hides
+  the `VOICE` stage it will never run, so progress reaches 100%.

@@ -36,11 +36,12 @@ This is the index for RenderFlow's engineering and production documentation.
 
 ## Documentation status
 
-These guides were verified against the repository on **2026-11-01**. The project
+These guides were verified against the repository on **2026-11-02**. The project
 is not fully production-ready:
 
-- Phases 0–5, 7 and 8 are shipped; 6, 9 and 10 are partial.
-- No real AI, social, email or billing provider has been exercised.
+- Phases 0–5, 7, 8 and 11 are shipped; 6, 9 and 10 are partial.
+- No real AI, social or billing provider has been exercised. Email has Resend
+  and SMTP adapters, but no live message has been accepted by a provider.
 - The Vercel production deployment is marketing-only and has no API host.
 - Docker-dependent checks (full compose stack, Grafana rendering) have not been
   run in this environment. CI runs the compose/E2E path.

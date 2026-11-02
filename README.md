@@ -6,18 +6,19 @@ publishes to social platforms on schedule. Usage is credit based — new account
 **50 free credits**, credits are reserved before work starts and refunded if
 generation fails.
 
-> **Status: 8 of 11 phases shipped** (0–5, 7, 8), 3 partial (6, 9, 10). The
+> **Status: 9 of 12 phases shipped** (0–5, 7, 8, 11), 3 partial (6, 9, 10). The
 > credit engine, studio APIs, generation pipeline, scheduling, publishing, the
-> browser frontend and the reliability layer are built. The full browser journey
-> passes locally (14/14, Chromium and a Pixel 7 viewport) and runs in CI against
-> compose; chaos R1–R5 includes a real SIGKILL and passes without a broker.
+> browser frontend, the reliability layer and the festival marketing generator
+> are built. The full browser journey passes locally (14/14, Chromium and a Pixel
+> 7 viewport) and runs in CI against compose; chaos R1–R5 includes a real SIGKILL
+> and passes without a broker.
 >
 > The remaining gaps are deliberately unverified rather than quietly counted as
 > done: no real AI provider or social platform has been called, and no Grafana
 > panel has rendered because this environment has no Docker daemon. See
 > [`PHASES.md`](./PHASES.md) for the per-phase table and
 > [`PROJECT.md`](./PROJECT.md) §12 for the plan and §13 for the test matrix.
-> Production blockers such as worker metrics and alert delivery are listed in
+> Production blockers such as alert delivery and unverified email are listed in
 > [`SECURITY.md`](./SECURITY.md) and [`OPERATIONS.md`](./OPERATIONS.md).
 
 ## Production documentation
@@ -112,6 +113,7 @@ libs/
   db/                   Drizzle schema, client, migrations
   queue/                BullMQ factories, retry presets
   storage/              S3 abstraction
+  email/                shared transactional email transports
   observability/        pino logger, prometheus metrics, process lifecycle
 packages/
   api-client/           typed SDK generated from the API OpenAPI document
@@ -242,16 +244,18 @@ Pricing lives in the `pricing_rules` table, never in code and never on the clien
 The table below is what `pnpm db:seed` inserts; the live rows win, and the public
 pricing page reads them from `GET /credits/pricing` rather than restating this:
 
-| Action                        | Credits |
-| ----------------------------- | ------- |
-| Content plan (7-day calendar) | 2       |
-| Caption + hashtags set        | 1       |
-| Poster / photo                | 5       |
-| Carousel (up to 5 images)     | 15      |
-| Reel ≤ 15 s                   | 30      |
-| Reel 16–30 s                  | 50      |
-| Regenerate one scene          | 8       |
-| Caption translation           | 1       |
+| Action                                | Credits |
+| ------------------------------------- | ------- |
+| Content plan (7-day calendar)         | 2       |
+| Caption + hashtags set                | 1       |
+| Poster / photo                        | 5       |
+| Carousel (up to 5 images)             | 15      |
+| Reel ≤ 15 s                           | 30      |
+| Reel 16–30 s                          | 50      |
+| Festival poster + caption             | 6       |
+| Festival poster + caption + 15 s reel | 36      |
+| Regenerate one scene                  | 8       |
+| Caption translation                   | 1       |
 
 Publishing and scheduling are free. Only generation costs credits.
 
@@ -261,6 +265,24 @@ reserve(30) ──► available:20, reserved:30
   success ──► reserved:0                  (CAPTURE)
   failure ──► available:50, reserved:0    (REFUND)
 ```
+
+### Festival marketing
+
+The campaign screen has a **Festival campaign** flow: choose Diwali, Christmas,
+New Year or another published occasion, pick a template, describe the offer and
+CTA, choose English/Hindi/Both, and optionally add a 15-second reel. The server
+quotes the price, reserves credits atomically with the post and outbox event, and
+the existing workers run `PLAN → SCRIPT → IMAGE` (plus `RENDER` for a reel). The
+finished caption, hashtags, poster and reel are attached to a new post in the
+campaign, ready for approval and scheduling.
+
+The implementation adds no workers or queues. `FESTIVAL_IMAGE` and
+`FESTIVAL_REEL` are job kinds on the existing stage machine; the template and
+brand are snapshotted into the job payload so an edit during generation cannot
+change the output. The catalogue lives in `festival_occasions` and
+`festival_templates`; `pnpm db:seed` inserts the demo set. Poster and reel
+rendering uses ffmpeg and needs `fonts-dejavu-core` (installed in the worker
+image). A missing font is a permanent failure, not a blank poster.
 
 ---
 

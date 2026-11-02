@@ -163,16 +163,22 @@ MOCK_LATENCY_MS=1500
 # S3 / Cloudflare R2
 S3_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
 S3_BUCKET=renderflow
-S3_ACCESS_KEY_ID=<r2 access key>
-S3_SECRET_ACCESS_KEY=<r2 secret key>
+S3_ACCESS_KEY=<r2 access key>
+S3_SECRET_KEY=<r2 secret key>
 S3_REGION=auto
-S3_PATH_STYLE=true
+S3_FORCE_PATH_STYLE=true
 
-# Email — none for demo (sends nothing)
+# Email — none unless you verify a sender domain and set RESEND_API_KEY
 EMAIL_PROVIDER=none
 
 # CORS — will be updated after Vercel deploy
 CORS_ORIGINS=https://renderflow.vercel.app
+
+# Rate limiting and proxy. Railway is in front of the API and the demo runs one
+# API instance, but Redis is already present; use the shared store so a second
+# replica or restart does not silently multiply limits.
+RATE_LIMIT_STORE=redis
+TRUST_PROXY=1
 
 # Credits
 SIGNUP_BONUS_CREDITS=50
@@ -212,43 +218,43 @@ NEXT_PUBLIC_SITE_URL=https://renderflow.vercel.app
 
 ### Step 8 — Create demo account
 
-Once deployed, run this against the live API:
+The demo seeder talks to the public API, so it exercises the same signup,
+workspace, brand, campaign and credit paths a user does:
 
 ```bash
-curl -X POST https://api-production.up.railway.app/api/v1/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "email": "demo@renderflow.dev",
-    "password": "Demo1234!",
-    "name": "Demo User"
-  }'
+BASE_URL=https://api-production.up.railway.app \
+DEMO_ACCOUNT_EMAIL=demo@renderflow.dev \
+DEMO_ACCOUNT_PASSWORD='Demo1234!' \
+DEMO_ACCOUNT_CREDITS=100 \
+ADMIN_TOKEN=... \
+node scripts/seed-demo.mjs
 ```
 
-Or the seed script creates it automatically if `SEED_DEMO_ACCOUNT=true` is set.
+`ADMIN_TOKEN` is required only for the credit top-up; without it the seeder
+leaves the signup-bonus balance alone. The script is idempotent: rerunning it
+reuses the existing user, workspace, `Demo Brand` and `Festival marketing demo`
+campaign.
 
 ---
 
 ## 3. Demo account pre-seeded data
 
-Set `SEED_DEMO_ACCOUNT=true` in the API environment. The seed script creates:
+`scripts/seed-demo.mjs` creates:
 
 ```
 User:      demo@renderflow.dev / Demo1234!
 Credits:   100 (double the normal signup bonus for a better demo)
-Workspace: "Demo Workspace"
-Brand:     "Denny's Bakery"
-           primaryColor: #E67E22
-           tagline: "Fresh baked every morning"
-           logo: placeholder SVG
-Campaign:  "November Festival Campaign"
-Posts:     3 example posts in various states:
-           - One COMPLETED (generated, approved, scheduled)
-           - One PROCESSING (currently generating — use SSE demo)
-           - One DRAFT
+Workspace: "Demo User's workspace" (created by registration)
+Brand:     "Demo Brand"
+           colors: #E67E22, #7C3AED, #F59E0B
+           languages: en, hi
+Campaign:  "Festival marketing demo"
 ```
 
-This means an interviewer can log in and immediately see a working dashboard
-without having to create anything from scratch.
+The festival catalogue itself comes from `pnpm db:seed`, not from the demo
+script. The interviewer can open the campaign and generate a festival poster or
+reel immediately; the caption, assets and every ledger row are produced by the
+real pipeline.
 
 ---
 
@@ -307,12 +313,14 @@ To prevent random internet users from abusing the demo deployment:
    see one or two generations but not enough to abuse the system.
 2. Set tight rate limits:
    ```
-   RATE_LIMIT_REGISTER=3/1h    # 3 signups per IP per hour
-   RATE_LIMIT_GENERATE=5/1h    # 5 generations per user per hour
+   RATE_LIMIT_REGISTER_IP=3/1h    # 3 signups per IP per hour
+   RATE_LIMIT_GENERATE_USER=5/1h  # 5 generations per user per hour
+   RATE_LIMIT_STORE=redis         # shared across restarts/replicas
+   TRUST_PROXY=1                  # Railway terminates TLS in front of the API
    ```
 3. Do not publicise the URL. Share it only in interview contexts.
-4. The demo account with 100 credits is hardcoded and refilled by the seed
-   script if needed.
+4. The demo account with 100 credits is topped up by `scripts/seed-demo.mjs`
+   when re-run with `ADMIN_TOKEN`.
 
 ---
 
@@ -321,12 +329,19 @@ To prevent random internet users from abusing the demo deployment:
 - [ ] `NODE_ENV=production` on all services
 - [ ] Real JWT secrets (not the dev placeholders from `.env.example`)
 - [ ] `CORS_ORIGINS` set to your Vercel URL only
-- [ ] `EMAIL_PROVIDER=none` (not `log`)
-- [ ] `BILLING_PROVIDER=stub` is the default — check it is NOT set to anything real
+- [ ] `EMAIL_PROVIDER=none` (not `log`) unless a sender domain is verified
+- [ ] `BILLING_PROVIDER=disabled` (`stub` is refused in production)
+- [ ] `RATE_LIMIT_STORE=redis`, `TRUST_PROXY=1`
 - [ ] `BULL_BOARD_ENABLED=false`
 - [ ] Migrations ran: `pnpm db:migrate`
 - [ ] Seed ran: `pnpm db:seed`
-- [ ] Demo account created and has 100 credits
+- [ ] Demo seed ran: `node scripts/seed-demo.mjs` (with `ADMIN_TOKEN` for top-up)
+- [ ] Demo account has 100 credits
 - [ ] Login works: `demo@renderflow.dev` / `Demo1234!`
+- [ ] Festival catalogue loads and a festival poster completes
 - [ ] Generate a post and confirm credits are deducted
 - [ ] SSE progress bar works end to end
+- [ ] Neon PITR is enabled, or `scripts/backup-to-s3.sh` is scheduled and the
+      restore drill has passed once
+- [ ] Worker `/metrics` ports are reachable from Prometheus over the private
+      network (or accept that the demo runs without dashboards)
