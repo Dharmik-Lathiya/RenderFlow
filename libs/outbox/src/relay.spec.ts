@@ -37,6 +37,13 @@ describe('queueForEvent', () => {
     expect(queueForEvent('post.scheduled')).toBe('publish');
   });
 
+  it('routes an operator publish replay to the publish queue', () => {
+    // The row is already PENDING, so this is a wake-up rather than the schedule.
+    // Falling through to content would make the replay do nothing until the
+    // publisher's next poll.
+    expect(queueForEvent('publish.retry')).toBe(QUEUE_NAMES.PUBLISH);
+  });
+
   it('wakes analytics when a post publishes', () => {
     // Without this route the event falls through to the content queue, so the
     // analytics worker only ever sees its poll and a fresh post waits a full

@@ -57,6 +57,20 @@ jobs:
       - name: prettier check
         run: pnpm format:check
 
+      # ARCH-09. The scheduled backup script is shell, so a typo is invisible to
+      # tsc. Check syntax, prove the dry-run path works without a database, and
+      # prove missing configuration is a refusal rather than an empty upload.
+      - name: backup script smoke test
+        run: |
+          bash -n scripts/backup-to-s3.sh
+          bash -n scripts/backup-restore-check.sh
+          BACKUP_DRY_RUN=1 BACKUP_S3_URL=s3://example/backups \
+            bash scripts/backup-to-s3.sh | grep -q 'dry run'
+          if DATABASE_URL='' BACKUP_S3_URL='' bash scripts/backup-to-s3.sh >/dev/null 2>&1; then
+            echo 'backup script must refuse missing configuration' >&2
+            exit 1
+          fi
+
   audit:
     name: dependency audit
     runs-on: ubuntu-latest

@@ -1,9 +1,10 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { AppError, ERROR_CODES } from '@renderflow/common';
-import { auditLogs, getDb, type Database } from '@renderflow/db';
+import { auditLogs, getDb, outboxEvents, type Database } from '@renderflow/db';
 import { findAbandonedOutbox, replayOutboxEvent } from '@renderflow/jobs';
 import {
   CreditError,
@@ -134,6 +135,13 @@ export interface AdjustResult {
    * request can be answered without applying anything twice.
    */
   applied: boolean;
+}
+
+export interface PublishReplayResult {
+  jobId: string;
+  postId: string;
+  platform: string;
+  requeued: boolean;
 }
 
 @Injectable()
@@ -337,6 +345,123 @@ export class AdminService implements OnModuleInit {
     });
 
     return { jobId: reservation.jobId, requeued: true };
+  }
+
+  /**
+   * Replays a terminal publish failure (ARCH-08).
+   *
+   * Asymmetric with generation jobs on purpose: a publish job was never charged
+   * per attempt (the credits belong to the post's generation), so there is
+   * nothing to re-reserve. What has to be protected is the opposite invariant -
+   * a job that already produced an external post must NEVER be replayed, or the
+   * user's audience sees the same post twice.
+   *
+   * `external_post_id IS NULL` is therefore a hard precondition, checked inside
+   * the same transaction that flips the row and writes the outbox event. The
+   * `FOR UPDATE` row lock makes two operators pressing replay at once a
+   * sequence: the first resets the row, the second sees PENDING and is refused.
+   */
+  async replayPublishJob(
+    scope: OperatorScope,
+    jobId: string,
+    reason?: string,
+  ): Promise<PublishReplayResult> {
+    return this.db.transaction(async (tx) => {
+      const rows = await tx.execute<{
+        id: string;
+        post_id: string;
+        status: string;
+        external_post_id: string | null;
+        platform: string;
+        workspace_id: string;
+      }>(sql`
+        SELECT pj.id,
+               pj.post_id,
+               pj.status::text AS status,
+               pj.external_post_id,
+               sa.platform::text AS platform,
+               b.workspace_id
+          FROM publish_jobs pj
+          JOIN posts p ON p.id = pj.post_id
+          JOIN brands b ON b.id = p.brand_id
+          JOIN social_accounts sa ON sa.id = pj.social_account_id
+         WHERE pj.id = ${jobId}::uuid
+         FOR UPDATE OF pj
+      `);
+
+      const job = rows.rows[0];
+
+      // Same 404 for "never existed" and "not yours": a scoped operator probing
+      // ids must not learn whether another tenant's publish job exists.
+      if (
+        job === undefined ||
+        (!scope.global &&
+          (job.workspace_id === null || !scope.workspaceIds.includes(job.workspace_id)))
+      ) {
+        throw new AppError(ERROR_CODES.NOT_FOUND, 'No such publish job', { details: { jobId } });
+      }
+
+      if (job.status !== 'FAILED' || job.external_post_id !== null) {
+        throw new AppError(ERROR_CODES.CONFLICT, 'Publish job is not a replayable failure', {
+          details: { jobId, status: job.status },
+        });
+      }
+
+      await tx.execute(sql`
+        UPDATE publish_jobs
+           SET status = 'PENDING',
+               attempts = 0,
+               error = NULL,
+               worker_id = NULL,
+               heartbeat_at = NULL,
+               locked_until = NULL,
+               published_at = NULL,
+               -- A replay is an explicit "now", not "whenever the original
+               -- schedule was". The job failed because it was already due, but
+               -- an operator may replay it days later.
+               scheduled_for = now(),
+               updated_at = now()
+         WHERE id = ${jobId}::uuid
+           AND status = 'FAILED'
+           AND external_post_id IS NULL
+      `);
+
+      await tx.insert(auditLogs).values({
+        actorId: scope.userId,
+        action: 'publish.replay',
+        entity: 'publish_job',
+        entityId: jobId,
+        meta: {
+          reason: reason ?? null,
+          postId: job.post_id,
+          platform: job.platform,
+        },
+      });
+
+      // A fresh event per replay, not `post.scheduled`'s dedupe key: the
+      // original schedule event has already been processed, and reusing its key
+      // would be swallowed by the unique index. The random suffix makes each
+      // deliberate replay distinct.
+      await tx.insert(outboxEvents).values({
+        aggregateType: 'PUBLISH_JOB',
+        aggregateId: jobId,
+        eventType: 'publish.retry',
+        dedupeKey: `PUBLISH:${jobId}:publish.retry:${randomUUID()}`,
+        payload: {
+          eventType: 'publish.retry',
+          postId: job.post_id,
+          publishJobId: jobId,
+          platform: job.platform,
+        },
+      });
+
+      return {
+        jobId,
+        postId: job.post_id,
+        platform: job.platform,
+        requeued: true,
+      };
+    });
   }
 
   async listOutbox(scope: OperatorScope, maxAttempts: number, limit: number) {
@@ -561,6 +686,26 @@ export class AdminService implements OnModuleInit {
     meta: Record<string, unknown>,
   ): Promise<void> {
     await this.db.insert(auditLogs).values({ actorId, action, entity, entityId, meta });
+  }
+
+  /**
+   * Records an operator opening the Bull Board.
+   *
+   * The board is mounted outside Nest's guard pipeline, so its middleware calls
+   * this directly. `path` is the board route, never a job payload or query
+   * string; those can contain brand text that must not be logged.
+   */
+  async recordQueueBoardAccess(access: {
+    actorId: string;
+    method: string;
+    path: string;
+    ip?: string;
+  }): Promise<void> {
+    await this.record(access.actorId, 'queue_board.access', 'queue_board', 'bull-board', {
+      method: access.method,
+      path: access.path,
+      ...(access.ip === undefined ? {} : { ip: access.ip }),
+    });
   }
 
   /**

@@ -4,11 +4,13 @@ Phase 10 asks for a backup/restore document and a drill. This is that runbook.
 It describes what to back up, how to prove a restore works, and the order to do
 it in without double-publishing a post or charging a credit twice.
 
-**The repository does not schedule production backups.** Postgres and object
-storage are infrastructure; the operator of that infrastructure owns the
-schedule and retention. What is in this repository is the drill
-(`scripts/backup-restore-check.sh`) that proves a dump can be restored, and the
-procedure below for doing it safely.
+**The demo deployment uses Neon's automatic backups.** Neon takes continuous
+backups and offers point-in-time restore on its paid plans; enabling PITR is a
+project setting, not code. For a self-hosted Postgres (or an independent copy
+outside the database provider), `scripts/backup-to-s3.sh` takes a daily
+`pg_dump`, verifies the archive, uploads it with a SHA-256 sidecar, and prunes
+old objects. The drill (`scripts/backup-restore-check.sh`) is what proves either
+kind of backup can actually be restored.
 
 ## Targets
 
@@ -40,6 +42,61 @@ portable fallback and the restore drill, not a substitute for PITR.
    durable record of work to publish. After a restore, flush Redis and let the
    relay republish pending outbox events. Keeping a Redis snapshot from a later
    point than the database is how a job runs against a row that no longer exists.
+
+## Scheduled backups
+
+### Option A — Neon (recommended for the demo)
+
+1. Create the project on a Neon plan that includes point-in-time restore.
+2. Enable **Point-in-time restore** in the project settings and note the
+   retention window (7 days on the Launch plan; check the current plan).
+3. Set the API's `DATABASE_URL` to the **pooled** connection string and the
+   migration/backup job's to the **direct** connection string.
+4. Once a quarter, restore a branch at an arbitrary timestamp and run
+   `scripts/backup-restore-check.sh` against it. A provider setting is not a
+   tested restore.
+
+Neon's restore creates a new branch; it does not rewind the primary. Follow
+"Restoring production" below to cut over.
+
+### Option B — self-hosted `pg_dump` to S3
+
+`scripts/backup-to-s3.sh` is the portable option. It needs `pg_dump`,
+`pg_restore`, `gzip`, `sha256sum` and the AWS CLI on the runner.
+
+| Variable                | Required | Meaning                                              |
+| ----------------------- | -------- | ---------------------------------------------------- |
+| `DATABASE_URL`          | yes      | Source database (a read-only role is enough).        |
+| `BACKUP_S3_URL`         | yes      | Destination prefix, e.g. `s3://rf-backups/postgres`. |
+| `BACKUP_RETENTION_DAYS` | no       | Days to keep; default `7`.                           |
+| `AWS_*`                 | no       | Standard AWS CLI credentials/region.                 |
+| `AWS_ENDPOINT_URL`      | no       | Set for R2/MinIO instead of AWS S3.                  |
+
+The script:
+
+1. writes a custom-format `pg_dump` to a mode-700 temporary directory;
+2. runs `pg_restore --list` to reject a truncated archive **before** upload;
+3. uploads `renderflow-<timestamp>.dump.gz` and a `.sha256` sidecar;
+4. deletes objects older than the retention window.
+
+Run it daily from a scheduler. On Railway, create a cron service from the same
+image with schedule `0 2 * * *` and start command
+`./scripts/backup-to-s3.sh`; on Kubernetes, a `CronJob` with the same command.
+Keep the bucket private: the dump contains password hashes and encrypted social
+tokens.
+
+```bash
+DATABASE_URL=... BACKUP_S3_URL=s3://rf-backups/postgres \
+AWS_ENDPOINT_URL=https://<account>.r2.cloudflarestorage.com \
+  ./scripts/backup-to-s3.sh
+
+# Prove the newest object is intact after a restore:
+aws s3 cp s3://rf-backups/postgres/renderflow-<timestamp>.dump.gz .
+sha256sum -c renderflow-<timestamp>.dump.gz.sha256
+```
+
+Never treat "the cron ran" as the check. Alert on a missing object for the
+current day, and run the restore drill quarterly.
 
 ## The drill
 

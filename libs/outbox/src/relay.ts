@@ -106,6 +106,11 @@ export function queueForEvent(eventType: string, payload?: Record<string, unknow
     }
     case 'post.scheduled':
       return QUEUE_NAMES.PUBLISH;
+    case 'publish.retry':
+      // An operator replay: the row is already PENDING with a scheduled time in
+      // the past, so the publisher worker's poll would find it. This message is
+      // what makes it happen now rather than on the next poll.
+      return QUEUE_NAMES.PUBLISH;
     case 'post.published':
       // A wake-up, not the schedule: analytics-worker polls regardless, but
       // this lets a freshly published post appear without waiting a full cycle.

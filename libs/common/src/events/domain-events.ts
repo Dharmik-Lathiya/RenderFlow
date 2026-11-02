@@ -22,6 +22,7 @@ export const DOMAIN_EVENT_TYPES = [
   'post.scheduled',
   'post.published',
   'post.publish_failed',
+  'publish.retry',
 ] as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENT_TYPES)[number];
@@ -115,6 +116,21 @@ export const postPublishFailedEventSchema = z.object({
 });
 
 /**
+ * An operator put a terminal publish failure back in the pending set.
+ *
+ * Distinct from `post.scheduled`: that event is written when a user schedules a
+ * post and may carry a delay, while this one is always immediate and records an
+ * operator decision. Keeping them apart means a replay is visible as a replay in
+ * the outbox and in audit history, not indistinguishable from the original.
+ */
+export const publishRetryEventSchema = z.object({
+  eventType: z.literal('publish.retry'),
+  postId: idSchema,
+  publishJobId: idSchema,
+  platform: z.enum([...SOCIAL_PLATFORMS]),
+});
+
+/**
  * Discriminated on `eventType`, so `parseDomainEvent` narrows the payload type
  * for the caller and an unknown event type is a validation error.
  */
@@ -130,6 +146,7 @@ export const domainEventSchema = z.discriminatedUnion('eventType', [
   postScheduledEventSchema,
   postPublishedEventSchema,
   postPublishFailedEventSchema,
+  publishRetryEventSchema,
 ]);
 
 export type DomainEvent = z.infer<typeof domainEventSchema>;

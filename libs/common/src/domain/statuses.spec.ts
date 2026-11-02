@@ -91,5 +91,9 @@ describe('enum guards', () => {
       expect(isSocialPlatform(platform)).toBe(true);
     }
     expect(isSocialPlatform('TIKTOK')).toBe(false);
+    // Mixed case is not a platform: the database enum and the event contract
+    // both use lowercase, so accepting 'LinkedIn' here would let a payload pass
+    // validation and then fail to match an account row.
+    expect(isSocialPlatform('LINKEDIN')).toBe(false);
   });
 });

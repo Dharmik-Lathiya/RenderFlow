@@ -131,10 +131,10 @@ describe('parseDomainEvent', () => {
       eventType: 'post.published',
       postId: POST_ID,
       publishJobId: PUBLISH_JOB_ID,
-      platform: 'LINKEDIN',
+      platform: 'linkedin',
       externalPostId: 'urn:li:share:123',
     });
-    expect(event).toMatchObject({ eventType: 'post.published', platform: 'LINKEDIN' });
+    expect(event).toMatchObject({ eventType: 'post.published', platform: 'linkedin' });
   });
 
   it('rejects an unsupported platform on post.published', () => {
@@ -147,6 +147,16 @@ describe('parseDomainEvent', () => {
         externalPostId: 'x',
       }),
     ).toThrow();
+  });
+
+  it('accepts a publish.retry replay event', () => {
+    const event = parseDomainEvent({
+      eventType: 'publish.retry',
+      postId: POST_ID,
+      publishJobId: PUBLISH_JOB_ID,
+      platform: 'linkedin',
+    });
+    expect(event).toMatchObject({ eventType: 'publish.retry', publishJobId: PUBLISH_JOB_ID });
   });
 
   it('rejects an unknown event type', () => {

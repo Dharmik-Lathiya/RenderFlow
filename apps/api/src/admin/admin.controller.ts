@@ -81,6 +81,37 @@ export class AdminController {
     return this.admin.replayJob(scope, jobId, parsed.data.reason);
   }
 
+  /**
+   * Replays a publish job that gave up (ARCH-08).
+   *
+   * Separate from the DLQ replay above because the money is already settled:
+   * this endpoint never touches credits. Its safety property is that a job
+   * with an `external_post_id` is refused, so an operator cannot make the same
+   * post appear twice on a user's timeline.
+   */
+  @Post('publish/:jobId/replay')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Re-queue a failed publish job',
+    description:
+      'Only a FAILED job with no external post id can be replayed. Refused with ' +
+      'CONFLICT otherwise; the audit log records the operator and reason.',
+  })
+  async replayPublishJob(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('jobId', uuidParam) jobId: string,
+    @Body() body: unknown,
+  ) {
+    const scope = await this.assertOperator(user);
+
+    const parsed = replaySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new ValidationFailedError({ body: 'must be an object with an optional `reason`' });
+    }
+
+    return this.admin.replayPublishJob(scope, jobId, parsed.data.reason);
+  }
+
   @Get('dlq/outbox')
   @ApiOperation({ summary: 'Outbox events the relay gave up on' })
   async listOutbox(@CurrentUser() user: AuthenticatedUser, @Query('limit') limit?: string) {

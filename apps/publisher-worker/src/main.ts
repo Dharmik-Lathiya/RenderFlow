@@ -1,5 +1,10 @@
 import { QUEUE_NAMES } from '@renderflow/common';
 import { disconnectDb, getDb } from '@renderflow/db';
+import {
+  assertEmailTransportIsSafe,
+  createEmailSender,
+  type EmailProvider,
+} from '@renderflow/email';
 import { workerIdForProcess } from '@renderflow/jobs';
 import {
   MockSocialAdapter,
@@ -12,6 +17,7 @@ import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/o
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
 
 import { NotificationsBridge } from './notifications.bridge';
+import { DrizzlePublishFailureRecipients, PublishFailureEmailNotifier } from './notification-email';
 
 /**
  * publisher-worker: posts approved content to LinkedIn and Instagram on schedule.
@@ -65,6 +71,24 @@ function positiveInt(raw: string | undefined, name: string, fallback: number): n
     throw new Error(`${name} must be a positive integer, received "${raw}"`);
   }
   return value;
+}
+
+/** Narrows EMAIL_PROVIDER without a second schema that can drift from the API's. */
+function emailProvider(raw: string | undefined): EmailProvider {
+  switch (raw) {
+    case undefined:
+    case '':
+    case 'log':
+      return 'log';
+    case 'none':
+    case 'resend':
+    case 'mailhog':
+      return raw;
+    default:
+      throw new Error(
+        `EMAIL_PROVIDER must be one of log, none, resend or mailhog, received "${raw}"`,
+      );
+  }
 }
 
 function main(): void {
@@ -142,6 +166,50 @@ function main(): void {
     worker.logger.error({ app: APP_NAME, jobId: job?.id, err: error }, 'publish wake-up failed');
   });
 
+  // The `notifications` queue's consumer (ARCH-05). It lives here rather than in
+  // a new process because every event on it is a publish outcome, and this
+  // process already owns that vocabulary. Email is the only channel today; the
+  // in-app notification is the direct DB write above.
+  const provider = emailProvider(process.env.EMAIL_PROVIDER);
+  assertEmailTransportIsSafe({
+    nodeEnv: process.env.NODE_ENV ?? 'development',
+    provider,
+  });
+  const notifier = new PublishFailureEmailNotifier({
+    recipients: new DrizzlePublishFailureRecipients(db),
+    email: createEmailSender(provider, {
+      from: process.env.EMAIL_FROM ?? 'RenderFlow <no-reply@renderflow.local>',
+      ...(process.env.RESEND_API_KEY === undefined
+        ? {}
+        : { resendApiKey: process.env.RESEND_API_KEY }),
+      ...(process.env.RESEND_BASE_URL === undefined
+        ? {}
+        : { resendBaseUrl: process.env.RESEND_BASE_URL }),
+      ...(process.env.MAILHOG_SMTP_HOST === undefined
+        ? {}
+        : { mailhogHost: process.env.MAILHOG_SMTP_HOST }),
+      ...(process.env.MAILHOG_SMTP_PORT === undefined
+        ? {}
+        : { mailhogPort: positiveInt(process.env.MAILHOG_SMTP_PORT, 'MAILHOG_SMTP_PORT', 1025) }),
+    }),
+    dashboardUrl: process.env.WEB_BASE_URL ?? 'http://localhost:3000',
+  });
+
+  const notificationPreset = queueConfig.presets[QUEUE_NAMES.NOTIFICATIONS];
+  const notifications = createWorker<unknown>(QUEUE_NAMES.NOTIFICATIONS, notificationPreset, {
+    factory: { redisUrl: queueConfig.redisUrl, prefix: queueConfig.prefix },
+    processor: async (job) => {
+      await notifier.handle(job.data);
+    },
+  });
+
+  notifications.on('failed', (job, error) => {
+    worker.logger.error(
+      { app: APP_NAME, queue: QUEUE_NAMES.NOTIFICATIONS, jobId: job?.id, err: error },
+      'notification delivery failed',
+    );
+  });
+
   // The safety net for a delayed message that Redis lost.
   const pollMs = positiveInt(process.env.PUBLISH_POLL_MS, 'PUBLISH_POLL_MS', 1_000);
   const poll = setInterval(() => {
@@ -152,6 +220,7 @@ function main(): void {
   poll.unref();
 
   worker.shutdown.registerDrain('bullmq', () => consumer.close());
+  worker.shutdown.registerDrain('notifications', () => notifications.close());
   worker.shutdown.registerDrain('poll', () => clearInterval(poll));
   worker.shutdown.registerDrain('postgres', () => disconnectDb());
 

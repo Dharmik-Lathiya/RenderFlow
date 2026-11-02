@@ -133,8 +133,16 @@ export function isWorkspaceRole(value: unknown): value is WorkspaceRole {
   return typeof value === 'string' && (WORKSPACE_ROLES as readonly string[]).includes(value);
 }
 
-/** Social platforms. PROJECT.md section 1: Instagram + LinkedIn in v1. */
-export const SOCIAL_PLATFORMS = ['INSTAGRAM', 'LINKEDIN'] as const;
+/**
+ * Social platforms. PROJECT.md section 1: Instagram + LinkedIn in v1.
+ *
+ * Lowercase, matching the `social_platform` database enum and the platform
+ * names the adapters use. This was uppercase once, while the publisher wrote
+ * lowercase payloads into the outbox - so every `post.published` and
+ * `post.publish_failed` event failed schema validation outside the process that
+ * produced it. One spelling, from the database to the event contract.
+ */
+export const SOCIAL_PLATFORMS = ['instagram', 'linkedin'] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
 export function isSocialPlatform(value: unknown): value is SocialPlatform {

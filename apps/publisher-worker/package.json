@@ -19,6 +19,7 @@
   "dependencies": {
     "@renderflow/common": "workspace:*",
     "@renderflow/db": "workspace:*",
+    "@renderflow/email": "workspace:*",
     "@renderflow/jobs": "workspace:*",
     "@renderflow/observability": "workspace:*",
     "@renderflow/queue": "workspace:*",
