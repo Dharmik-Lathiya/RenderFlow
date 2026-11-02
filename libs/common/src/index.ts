@@ -6,6 +6,7 @@
  * Has no runtime dependency on any other workspace package.
  */
 
+export * from './domain/festival';
 export * from './domain/statuses';
 export * from './errors/app-error';
 export * from './errors/error-codes';

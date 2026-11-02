@@ -98,6 +98,14 @@ export const GENERATION_KINDS = [
   'REEL',
   'REGENERATE_SCENE',
   'TRANSLATION',
+  /**
+   * Festival marketing (Phase 11). Two kinds rather than one because the reel
+   * is a genuinely larger, separately priced output: FESTIVAL_IMAGE is the
+   * poster + caption, FESTIVAL_REEL is the same plus a 15s video. Both reuse the
+   * existing PLAN/SCRIPT/IMAGE/RENDER stages, so no new worker or queue exists.
+   */
+  'FESTIVAL_IMAGE',
+  'FESTIVAL_REEL',
 ] as const;
 export type GenerationKind = (typeof GENERATION_KINDS)[number];
 

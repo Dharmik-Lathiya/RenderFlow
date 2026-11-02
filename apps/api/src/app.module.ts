@@ -14,6 +14,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { OpenApiModule } from './common/openapi';
 import { CreditsModule } from './credits/credits.module';
+import { FestivalModule } from './festival/festival.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { MetricsModule } from './metrics/metrics.module';
@@ -49,6 +50,7 @@ import { UsersModule } from './users/users.module';
     CreditsModule,
     HealthModule,
     JobsModule,
+    FestivalModule,
     PublishingModule,
     AdminModule,
     AnalyticsModule,

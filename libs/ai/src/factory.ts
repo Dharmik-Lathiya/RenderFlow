@@ -174,6 +174,16 @@ function buildText(env: ProviderEnv, options: ProviderFactoryOptions): TextProvi
           timeoutMs: 45_000,
         })
       ).value,
+    festivalCopy: async (input) =>
+      (
+        await withFallback({
+          providers: providers.map((provider) => ({
+            name: provider.name,
+            call: async () => provider.build().festivalCopy(input),
+          })),
+          timeoutMs: 45_000,
+        })
+      ).value,
   };
 }
 

@@ -35,6 +35,10 @@ describe('queueForGenerationKind', () => {
     expect(queueForGenerationKind('CAROUSEL')).toBe(QUEUE_NAMES.MEDIA);
     expect(queueForGenerationKind('REEL')).toBe(QUEUE_NAMES.MEDIA);
     expect(queueForGenerationKind('REGENERATE_SCENE')).toBe(QUEUE_NAMES.MEDIA);
+    // Festival jobs start on content because PLAN/SCRIPT come first; the stage
+    // hand-off routes IMAGE/RENDER to media.
+    expect(queueForGenerationKind('FESTIVAL_IMAGE')).toBe(QUEUE_NAMES.CONTENT);
+    expect(queueForGenerationKind('FESTIVAL_REEL')).toBe(QUEUE_NAMES.CONTENT);
   });
 
   it('routes publish work to the publish queue', () => {

@@ -23,6 +23,12 @@ export const DEFAULT_PRICES: Readonly<Record<GenerationKind, number>> = {
   REEL: 30,
   REGENERATE_SCENE: 8,
   TRANSLATION: 1,
+  // Festival marketing (Phase 11). The reel price is BUNDLED: it includes the
+  // poster and caption, because a reel without either is not the product the
+  // user asked for. The estimate endpoint shows the reel as a 30-credit add-on
+  // (36 - 6) so the breakdown still reads "poster + reel".
+  FESTIVAL_IMAGE: 6,
+  FESTIVAL_REEL: 36,
 };
 
 export interface PriceQuote {

@@ -73,6 +73,8 @@ describe('job stages', () => {
 describe('enum guards', () => {
   it('guards generation kinds', () => {
     expect(isGenerationKind('REEL')).toBe(true);
+    expect(isGenerationKind('FESTIVAL_IMAGE')).toBe(true);
+    expect(isGenerationKind('FESTIVAL_REEL')).toBe(true);
     expect(isGenerationKind('reel')).toBe(false);
     expect(isGenerationKind(undefined)).toBe(false);
   });

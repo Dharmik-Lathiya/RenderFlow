@@ -64,7 +64,14 @@ export function CampaignHeader({ campaignId }: { campaignId: string }) {
             <Icon name="chevronLeft" size={15} />
             Back to brand
           </Link>
-          <Link href="/calendar" className={`${styles.button} ${styles.primary}`}>
+          <Link
+            href={`/campaigns/${campaignId}/festival`}
+            className={`${styles.button} ${styles.primary}`}
+          >
+            <Icon name="sparkles" size={15} />
+            Festival campaign
+          </Link>
+          <Link href="/calendar" className={styles.button}>
             <Icon name="calendar" size={15} />
             Open calendar
           </Link>

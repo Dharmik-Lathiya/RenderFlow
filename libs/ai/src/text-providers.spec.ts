@@ -8,6 +8,7 @@ import {
   type FetchLike,
 } from './text-providers';
 import { ProviderError } from './providers';
+import { FESTIVAL_TEMPLATE_SEEDS } from '@renderflow/common';
 
 /**
  * The real text providers, driven through a stub transport.
@@ -230,6 +231,46 @@ describe('OpenAiTextProvider', () => {
     await expect(provider.caption({ angle: 'a', brand })).rejects.toMatchObject({
       classification: 'TRANSIENT',
     });
+  });
+
+  it('validates festival slots against the template and repairs overlong copy', async () => {
+    const template = FESTIVAL_TEMPLATE_SEEDS[0];
+    if (template === undefined) {
+      throw new Error('no seeded template');
+    }
+
+    const tooLong = 'x'.repeat((template.slots[0]?.maxChars ?? 30) + 1);
+    const { fetchImpl, calls } = stubFetch([
+      completion(
+        JSON.stringify({
+          slots: { headline: tooLong, offer: '20% off', cta: 'Order now' },
+          caption: 'Celebrate with us',
+          hashtags: ['#diwali'],
+        }),
+      ),
+      completion(
+        JSON.stringify({
+          slots: { headline: 'Diwali at Northwind', offer: '20% off', cta: 'Order now' },
+          caption: 'Celebrate with us',
+          hashtags: ['#diwali'],
+        }),
+      ),
+    ]);
+
+    const provider = new OpenAiTextProvider({ ...base, fetchImpl });
+    const result = await provider.festivalCopy({
+      occasionId: 'DIWALI',
+      occasionName: 'Diwali',
+      template,
+      offerText: '20% off',
+      ctaText: 'Order now',
+      language: 'english',
+      brand,
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(result.slots.headline).toBe('Diwali at Northwind');
+    expect(result.caption).toBe('Celebrate with us');
   });
 });
 

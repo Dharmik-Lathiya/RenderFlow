@@ -51,6 +51,14 @@ export const STAGES_BY_KIND: Readonly<Record<GenerationKind, readonly JobStage[]
   REGENERATE_SCENE: ['IMAGE'],
   CAROUSEL: ['IMAGE'],
   REEL: ['PLAN', 'SCRIPT', 'IMAGE', 'VOICE', 'RENDER'],
+  // Festival jobs reuse the existing stages rather than adding new enum values.
+  //
+  // Inserting TEMPLATE_SELECT/COPY_FILL into `JOB_STAGES` would change the
+  // global sequence every existing kind is routed by, and `nextJobStage` would
+  // then send a REEL from SCRIPT to TEMPLATE_SELECT. The stages are a
+  // vocabulary, not a per-kind schedule; this table is the schedule.
+  FESTIVAL_IMAGE: ['PLAN', 'SCRIPT', 'IMAGE'],
+  FESTIVAL_REEL: ['PLAN', 'SCRIPT', 'IMAGE', 'RENDER'],
 };
 
 /**

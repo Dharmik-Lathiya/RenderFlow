@@ -16,6 +16,7 @@ export interface FakeStorage extends StorageLike {
   /** Raw bytes the server wrote, so a test can assert on what was produced. */
   bodies: Map<string, Uint8Array>;
   putObject(input: { key: string; body: Uint8Array; contentType: string }): Promise<unknown>;
+  getObject(key: string): Promise<Uint8Array>;
   /** Makes the next `deleteObject` throw, to exercise the failure path. */
   setDeleteFailure(value: boolean): void;
 }
@@ -54,6 +55,14 @@ export function fakeStorage(): FakeStorage {
     createPresignedDownload: async (key) => `https://storage.test/${key}?download=1`,
 
     headObject: async (key) => objects.get(key) ?? null,
+
+    getObject: async (key) => {
+      const body = bodies.get(key);
+      if (body === undefined) {
+        throw new Error(`object not found: ${key}`);
+      }
+      return body;
+    },
 
     getObjectPrefix: async (key, maxBytes) =>
       (bodies.get(key) ?? new Uint8Array()).slice(0, maxBytes),

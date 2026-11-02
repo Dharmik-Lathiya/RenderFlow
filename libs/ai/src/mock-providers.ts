@@ -5,6 +5,10 @@ import {
   type BrandContext,
   type CaptionResult,
   type ContentPlan,
+  type FestivalCopyInput,
+  type FestivalCopyResult,
+  type FestivalPosterInput,
+  type FestivalReelInput,
   type ImageResult,
   type RenderResult,
   type RendererProvider,
@@ -114,6 +118,37 @@ export class MockTextProvider implements TextProvider {
     };
   }
 
+  async festivalCopy(input: FestivalCopyInput): Promise<FestivalCopyResult> {
+    await providerDelay(this.options.latencyMs ?? 0);
+    if (this.options.failStage === 'COPY_FILL' || shouldFail(this.options)) {
+      throw new ProviderError('mock failure at COPY_FILL', 'TRANSIENT');
+    }
+
+    const slots: Record<string, string> = {};
+    for (const slot of input.template.slots) {
+      if (slot.type !== 'text') {
+        continue;
+      }
+      const candidate =
+        slot.id === 'offer'
+          ? input.offerText
+          : slot.id === 'cta'
+            ? input.ctaText
+            : `${input.brand.name} ${input.occasionName}`;
+      slots[slot.id] = candidate.slice(0, slot.maxChars ?? 80);
+    }
+
+    return {
+      slots,
+      caption:
+        `${input.offerText} ${input.ctaText}`.trim() ||
+        `${input.occasionName} with ${input.brand.name}`,
+      hashtags: this.hashtags(input.brand).concat(
+        `#${input.occasionId.replace(/[^A-Za-z0-9]+/g, '').toLowerCase()}`,
+      ),
+    };
+  }
+
   private brandNotes(brand: BrandContext): string {
     const parts = [brand.name];
     if (brand.tone !== null && brand.tone !== undefined && brand.tone !== '') {
@@ -220,5 +255,32 @@ export class MockRendererProvider implements RendererProvider {
       // A deterministic function of the input, not a timer.
       durationMs: input.scenes.length * 3_000,
     };
+  }
+
+  async renderFestivalPoster(input: FestivalPosterInput): Promise<RenderResult> {
+    await providerDelay(this.options.latencyMs ?? 0);
+    this.maybeFail('IMAGE');
+    return {
+      storageKey: `generated/festival/${input.jobId}/poster-${input.width}x${input.height}.png`,
+      durationMs: 0,
+    };
+  }
+
+  async renderFestivalReel(input: FestivalReelInput): Promise<RenderResult> {
+    await providerDelay(this.options.latencyMs ?? 0);
+    this.maybeFail('RENDER');
+    return {
+      storageKey: `generated/festival/${input.jobId}/reel-${input.width}x${input.height}.mp4`,
+      durationMs: input.durationMs,
+    };
+  }
+
+  private maybeFail(stage: string): void {
+    if (this.options.failStage === stage) {
+      throw new ProviderError(`mock failure at ${stage}`, 'TRANSIENT');
+    }
+    if (shouldFail(this.options)) {
+      throw new ProviderError(`mock failure at ${stage}`, 'TRANSIENT');
+    }
   }
 }

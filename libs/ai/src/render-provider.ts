@@ -4,7 +4,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { ProviderError, type RenderResult, type RendererProvider } from './providers';
+import {
+  ProviderError,
+  type FestivalPosterInput,
+  type FestivalReelInput,
+  type RenderResult,
+  type RendererProvider,
+} from './providers';
 
 const run = promisify(execFile);
 
@@ -165,6 +171,52 @@ export function escapeFilterText(text: string): string {
     .replace(/,/g, '\\,');
 }
 
+/** `#rrggbb`/`#rrggbbaa` to ffmpeg's `0xrrggbb[@alpha]` form. */
+export function ffmpegColor(value: string): string {
+  const trimmed = value.trim().replace(/^#/, '');
+  if (!/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(trimmed)) {
+    // A malformed colour from a template descriptor must not reach the filter
+    // graph, where it would either fail the render or be parsed as something else.
+    throw new ProviderError(`invalid festival colour: ${value}`, 'PERMANENT');
+  }
+
+  if (trimmed.length === 8) {
+    return `0x${trimmed.slice(0, 6)}@${(Number.parseInt(trimmed.slice(6), 16) / 255).toFixed(3)}`;
+  }
+
+  return `0x${trimmed}`;
+}
+
+/**
+ * Splits a poster line into at most three lines that fit the poster width.
+ *
+ * `drawtext` has no wrapping of its own. Without this, a 60-character offer at
+ * 48px runs off both edges of a 1080px poster - which still renders "successfully"
+ * and is only noticed by the user after the credits are captured.
+ */
+export function wrapPosterText(text: string, fontSize: number, width: number): string[] {
+  const budget = Math.max(8, Math.floor((width * 0.86) / (fontSize * 0.56)));
+  const words = text
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '');
+  const lines: string[] = [];
+
+  for (const word of words) {
+    const previous = lines[lines.length - 1];
+    if (previous !== undefined && previous.length + 1 + word.length <= budget) {
+      lines[lines.length - 1] = `${previous} ${word}`;
+    } else {
+      lines.push(word);
+    }
+  }
+
+  // Longer copy is clipped, not shrunk: the LLM schema already caps the slot at
+  // maxChars, and silently changing the font size would make the hierarchy
+  // depend on how talkative the model was.
+  return lines.slice(0, 3);
+}
+
 export class FfmpegRendererProvider implements RendererProvider {
   readonly name = 'ffmpeg';
 
@@ -184,6 +236,205 @@ export class FfmpegRendererProvider implements RendererProvider {
     void watermarkApplied;
     void softSubtitles;
     return result;
+  }
+
+  async renderFestivalPoster(input: FestivalPosterInput): Promise<RenderResult> {
+    const dir = await mkdtemp(join(tmpdir(), 'renderflow-festival-'));
+    const outputPath = join(dir, 'poster.png');
+
+    try {
+      await this.renderFestivalPosterFile(input, outputPath, dir);
+
+      const key = `generated/festival/${input.jobId}/poster-${input.width}x${input.height}.png`;
+      await this.options.storage.putObject({
+        key,
+        body: new Uint8Array(await readFile(outputPath)),
+        contentType: 'image/png',
+        metadata: { width: String(input.width), height: String(input.height) },
+      });
+
+      return { storageKey: key, durationMs: 0 };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  async renderFestivalReel(input: FestivalReelInput): Promise<RenderResult> {
+    const dir = await mkdtemp(join(tmpdir(), 'renderflow-festival-reel-'));
+    const posterPath = join(dir, 'poster.png');
+    const durationSeconds = Math.max(1, input.durationMs / 1_000);
+
+    try {
+      if (input.posterKey !== undefined && input.posterKey !== null && input.posterKey !== '') {
+        await writeFile(posterPath, await this.options.storage.getObject(input.posterKey));
+      } else {
+        await this.renderFestivalPosterFile(input, posterPath, dir);
+      }
+
+      const font = await findFont(this.options.fontPath);
+      const args: string[] = [
+        '-y',
+        '-loop',
+        '1',
+        '-framerate',
+        '30',
+        '-t',
+        durationSeconds.toFixed(3),
+        '-i',
+        posterPath,
+      ];
+
+      let audioPath: string | null = null;
+      if (input.audioKey !== undefined && input.audioKey !== null && input.audioKey !== '') {
+        audioPath = join(dir, 'audio.mp3');
+        await writeFile(audioPath, await this.options.storage.getObject(input.audioKey));
+        args.push('-i', audioPath);
+      }
+
+      const filters: string[] = [
+        `[0:v]scale=${input.width}:${input.height}:force_original_aspect_ratio=decrease,` +
+          `pad=${input.width}:${input.height}:(ow-iw)/2:(oh-ih)/2:color=${ffmpegColor(input.background)},` +
+          `setsar=1,zoompan=z='min(zoom+0.0004,1.06)':d=1:` +
+          `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${input.width}x${input.height}:fps=30`,
+        `fade=t=in:st=0:d=0.4,fade=t=out:st=${Math.max(0, durationSeconds - 0.4).toFixed(3)}:d=0.4`,
+      ];
+
+      if (font !== null && input.brandName.trim() !== '') {
+        filters.push(
+          `drawtext=fontfile=${escapeFilterText(font)}:` +
+            `text=${escapeFilterText(input.brandName)}:` +
+            `fontcolor=white:fontsize=${Math.max(18, Math.round(input.width / 32))}:` +
+            `x=${Math.round(input.width * 0.06)}:y=h-th-${Math.round(input.height * 0.06)}:` +
+            `box=1:boxcolor=black@0.35:boxborderw=12:` +
+            `alpha='if(lt(t,0.6),0,min(1,(t-0.6)/0.6))'`,
+        );
+      }
+
+      args.push(
+        '-vf',
+        filters.join(','),
+        '-c:v',
+        'libx264',
+        '-pix_fmt',
+        'yuv420p',
+        '-preset',
+        'veryfast',
+      );
+
+      if (audioPath !== null) {
+        args.push(
+          '-filter_complex',
+          `[1:a]apad,atrim=0:${durationSeconds.toFixed(3)}[aout]`,
+          '-map',
+          '0:v',
+          '-map',
+          '[aout]',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '128k',
+        );
+      }
+
+      args.push('-t', durationSeconds.toFixed(3), '-movflags', '+faststart', join(dir, 'reel.mp4'));
+      await this.invoke(args);
+
+      const key = `generated/festival/${input.jobId}/reel-${input.width}x${input.height}.mp4`;
+      await this.options.storage.putObject({
+        key,
+        body: new Uint8Array(await readFile(join(dir, 'reel.mp4'))),
+        contentType: 'video/mp4',
+        metadata: {
+          width: String(input.width),
+          height: String(input.height),
+          durationMs: String(input.durationMs),
+        },
+      });
+
+      return { storageKey: key, durationMs: input.durationMs };
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Draws one poster to `outputPath`.
+   *
+   * Split out of `renderFestivalPoster` so the reel can reuse it without a round
+   * trip through object storage when no poster was rendered beforehand.
+   */
+  private async renderFestivalPosterFile(
+    input: FestivalPosterInput,
+    outputPath: string,
+    dir: string,
+  ): Promise<void> {
+    const font = await findFont(this.options.fontPath);
+    if (input.lines.length > 0 && font === null) {
+      // A poster with no copy is not the product the user paid for. Failing here
+      // refunds instead of capturing credits for a blank background.
+      throw new ProviderError(
+        'no font available for festival poster text; install fonts-dejavu-core or set FESTIVAL_FONT_PATH',
+        'PERMANENT',
+      );
+    }
+
+    const args: string[] = [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      `color=c=${ffmpegColor(input.background)}:s=${input.width}x${input.height}:d=1`,
+    ];
+
+    let logoPath: string | null = null;
+    if (input.logoKey !== undefined && input.logoKey !== null && input.logoKey !== '') {
+      logoPath = join(dir, 'logo.bin');
+      await writeFile(logoPath, await this.options.storage.getObject(input.logoKey));
+      args.push('-i', logoPath);
+    }
+
+    const filters: string[] = [];
+
+    for (const line of input.lines) {
+      if (font === null) {
+        continue;
+      }
+
+      const chunks = wrapPosterText(line.text, line.fontSize, input.width);
+      const lineHeight = Math.round(line.fontSize * 1.18);
+      const blockHeight = chunks.length * lineHeight;
+      const baseY =
+        line.position === 'top-center'
+          ? Math.round(input.height * 0.12)
+          : line.position === 'bottom-center'
+            ? Math.round(input.height * 0.88) - blockHeight
+            : Math.round((input.height - blockHeight) / 2);
+
+      for (const [index, chunk] of chunks.entries()) {
+        filters.push(
+          `drawtext=fontfile=${escapeFilterText(font)}:` +
+            `text=${escapeFilterText(chunk)}:` +
+            `fontcolor=${ffmpegColor(line.color ?? '#ffffff')}:fontsize=${line.fontSize}:` +
+            `x=(w-text_w)/2:y=${baseY + index * lineHeight}:` +
+            'shadowcolor=black@0.45:shadowx=2:shadowy=2',
+        );
+      }
+    }
+
+    // A thin accent rule anchors the template's palette even when the copy is
+    // short; it is also the only visible element if a template has no text slots.
+    filters.push(`drawbox=x=0:y=h-14:w=iw:h=14:color=${ffmpegColor(input.accent)}:t=fill`);
+
+    if (logoPath !== null) {
+      const logoSize = Math.round(input.width * 0.14);
+      filters.push(`[1:v]scale=${logoSize}:-1[logo]`, `[0:v][logo]overlay=x=w-ow-32:y=32[vout]`);
+      args.push('-filter_complex', filters.join(';'), '-map', '[vout]');
+    } else {
+      args.push('-vf', filters.join(','));
+    }
+
+    args.push('-frames:v', '1', outputPath);
+    await this.invoke(args);
   }
 
   /**

@@ -12,6 +12,7 @@ import {
   type TtsProvider,
 } from './index';
 import { STAGE_FOR_KIND } from './providers';
+import { FESTIVAL_TEMPLATE_SEEDS } from '@renderflow/common';
 
 /**
  * Determinism of the mock providers.
@@ -79,6 +80,35 @@ describe('MockTextProvider', () => {
   it('reports a name, so logs can say which provider ran', () => {
     expect(provider().name).toBe('mock-text');
   });
+
+  it('fills every text slot of a festival template deterministically', async () => {
+    const template = FESTIVAL_TEMPLATE_SEEDS[0];
+    if (template === undefined) {
+      throw new Error('no seeded template');
+    }
+
+    const input = {
+      occasionId: 'DIWALI',
+      occasionName: 'Diwali',
+      template,
+      offerText: '20% off',
+      ctaText: 'Order now',
+      language: 'both' as const,
+      brand: BRAND,
+    };
+
+    const first = await provider().festivalCopy(input);
+    const second = await provider().festivalCopy(input);
+
+    expect(first).toEqual(second);
+    for (const slot of template.slots.filter((row) => row.type === 'text')) {
+      expect(first.slots[slot.id]).toBeDefined();
+      expect(first.slots[slot.id]?.length ?? Infinity).toBeLessThanOrEqual(slot.maxChars ?? 80);
+    }
+    expect(first.slots.offer).toBe('20% off');
+    expect(first.slots.cta).toBe('Order now');
+    expect(first.hashtags).toContain('#diwali');
+  });
 });
 
 describe('MockImageProvider', () => {
@@ -135,6 +165,33 @@ describe('MockRendererProvider', () => {
 
     expect(result.durationMs).toBe(6_000);
     expect(result.storageKey).toContain('1080x1920');
+  });
+
+  it('renders festival posters and reels to job-scoped keys', async () => {
+    const input = {
+      jobId: 'job-1',
+      width: 1080,
+      height: 1080,
+      background: '#101828',
+      primary: '#6366f1',
+      accent: '#f59e0b',
+      lines: [{ text: 'Diwali', fontSize: 64, position: 'top-center' as const }],
+    };
+
+    const poster = await provider.renderFestivalPoster(input);
+    expect(poster.storageKey).toBe('generated/festival/job-1/poster-1080x1080.png');
+
+    const reel = await provider.renderFestivalReel({
+      ...input,
+      posterKey: poster.storageKey,
+      audioKey: null,
+      durationMs: 15_000,
+      brandName: 'Northwind',
+    });
+    expect(reel).toMatchObject({
+      storageKey: 'generated/festival/job-1/reel-1080x1080.mp4',
+      durationMs: 15_000,
+    });
   });
 });
 
@@ -225,6 +282,8 @@ describe('STAGE_FOR_KIND', () => {
       'REEL',
       'REGENERATE_SCENE',
       'TRANSLATION',
+      'FESTIVAL_IMAGE',
+      'FESTIVAL_REEL',
     ] as const) {
       expect(STAGE_FOR_KIND[kind]).toBeDefined();
     }

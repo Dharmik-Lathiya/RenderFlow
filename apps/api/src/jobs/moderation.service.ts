@@ -32,8 +32,12 @@ import { getDb, posts, type Database } from '@renderflow/db';
  */
 
 export const moderationInputSchema = z.object({
-  /** The post being generated for. Its caption is part of what is checked. */
-  postId: z.string().uuid(),
+  /**
+   * The post being generated for, when there is one. Festival jobs moderate the
+   * offer/CTA before the post exists, so this is optional; the caller's workspace
+   * membership is still checked by the owning service.
+   */
+  postId: z.string().uuid().optional(),
   /** Anything else the caller supplied that will shape the output. */
   prompt: z.string().trim().max(4_000).default(''),
   kind: z.string().trim().max(40).default('GENERATION'),
@@ -81,7 +85,7 @@ export class ModerationService implements OnModuleInit {
    */
   async assertAllowed(input: ModerationInput): Promise<ModerationOutcome> {
     const parsed = moderationInputSchema.parse(input);
-    const caption = await this.captionOf(parsed.postId);
+    const caption = parsed.postId === undefined ? '' : await this.captionOf(parsed.postId);
 
     const text = [parsed.prompt, caption].filter((part) => part !== '').join('\n');
 

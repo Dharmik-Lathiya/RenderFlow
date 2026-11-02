@@ -1,5 +1,12 @@
-import { eq } from 'drizzle-orm';
-import { nextJobStage, type GenerationKind, type JobStage } from '@renderflow/common';
+import { and, eq, sql } from 'drizzle-orm';
+import {
+  festivalJobPayloadSchema,
+  festivalScriptSchema,
+  isFestivalKind,
+  type FestivalJobPayload,
+  type GenerationKind,
+  type JobStage,
+} from '@renderflow/common';
 import {
   ProviderError,
   type BrandContext,
@@ -10,9 +17,12 @@ import {
 } from '@renderflow/ai';
 import { capture, refund } from '@renderflow/credits';
 import {
+  assets,
+  brands,
   generationJobs,
   jobCheckpoints,
   outboxEvents,
+  posts,
   type Database,
   type DbTransaction,
 } from '@renderflow/db';
@@ -58,6 +68,16 @@ export interface RunnerProviders {
  */
 export interface RunnerStorage {
   putObject(input: { key: string; body: Uint8Array; contentType: string }): Promise<unknown>;
+  /**
+   * Reads an artefact back. Festival IMAGE/RENDER need the copy the previous
+   * stage wrote, and a checkpoint key is useless if nobody can dereference it.
+   */
+  getObject(key: string): Promise<Uint8Array>;
+  /**
+   * Optional because several test doubles predate it. When present, the runner
+   * no longer overwrites a provider's real bytes with its placeholder.
+   */
+  headObject?(key: string): Promise<{ sizeBytes?: number } | null>;
 }
 
 export interface JobRunDeps {
@@ -124,7 +144,7 @@ export async function runJob(deps: JobRunDeps, jobId: string): Promise<JobRunRes
 
   if (isPipelineComplete(kind, [...completed])) {
     // Every stage is already checkpointed: finish the job without redoing work.
-    await settleSuccess(deps.db, jobId);
+    await settleSuccess(deps, jobId);
     return { jobId, outcome: 'COMPLETED', stagesRun: [] };
   }
 
@@ -187,7 +207,7 @@ export async function runJob(deps: JobRunDeps, jobId: string): Promise<JobRunRes
       // in one transaction. An event pointing at a checkpoint that does not exist
       // would hand the next worker a job it cannot resume; a checkpoint with no
       // event would strand the job with nobody left to run it.
-      await recordStage(deps.db, { jobId, stage, outputRef });
+      await recordStage(deps.db, { jobId, stage, kind, outputRef });
       stagesRun.push(stage);
     }
 
@@ -197,7 +217,7 @@ export async function runJob(deps: JobRunDeps, jobId: string): Promise<JobRunRes
     const finished = await checkpointStages(deps.db, jobId);
 
     if (isPipelineComplete(kind, [...finished])) {
-      await settleSuccess(deps.db, jobId);
+      await settleSuccess(deps, jobId);
       return { jobId, outcome: 'COMPLETED', stagesRun };
     }
 
@@ -232,13 +252,32 @@ export async function failJob(
   jobId: string,
   reason: string,
 ): Promise<{ refunded: boolean; amount: number }> {
+  const rows = await db
+    .select({ postId: generationJobs.postId, kind: generationJobs.kind })
+    .from(generationJobs)
+    .where(eq(generationJobs.id, jobId))
+    .limit(1);
+
   const result = await db.transaction((tx) => refund(tx, jobId, reason));
 
   if (result.refunded) {
-    await db
-      .update(generationJobs)
-      .set({ status: 'FAILED', error: reason, finishedAt: new Date() })
-      .where(eq(generationJobs.id, jobId));
+    await db.transaction(async (tx: DbTransaction) => {
+      await tx
+        .update(generationJobs)
+        .set({ status: 'FAILED', error: reason, finishedAt: new Date() })
+        .where(eq(generationJobs.id, jobId));
+
+      const job = rows[0];
+      if (job !== undefined && job.postId !== null && isFestivalKind(job.kind)) {
+        // The post was created GENERATING so the campaign dashboard can show the
+        // attempt. Refunding without closing it would leave a post that spins
+        // forever, so a failed festival generation moves it to FAILED.
+        await tx
+          .update(posts)
+          .set({ status: 'FAILED', updatedAt: new Date() })
+          .where(and(eq(posts.id, job.postId), eq(posts.status, 'GENERATING')));
+      }
+    });
   }
 
   return result;
@@ -290,6 +329,16 @@ async function runStage(deps: JobRunDeps, ctx: StageContext): Promise<string> {
 
   switch (ctx.stage) {
     case 'PLAN': {
+      if (isFestivalKind(ctx.kind)) {
+        const festival = parseFestivalPayload(payload);
+        const plan = await providers.text.plan({
+          goal: `${festival.occasionName}: ${festival.offerText}`,
+          days: 1,
+          brand: festivalBrand(deps, festival),
+        });
+        return writeText(deps, `generated/festival/${ctx.jobId}/plan.json`, JSON.stringify(plan));
+      }
+
       const goal = typeof payload.goal === 'string' ? payload.goal : 'Grow the brand';
       const days = typeof payload.days === 'number' ? payload.days : 7;
       const plan = await providers.text.plan({ goal, days, brand: brandContext });
@@ -297,6 +346,25 @@ async function runStage(deps: JobRunDeps, ctx: StageContext): Promise<string> {
     }
 
     case 'SCRIPT': {
+      if (isFestivalKind(ctx.kind)) {
+        const festival = parseFestivalPayload(payload);
+        const copy = await providers.text.festivalCopy({
+          occasionId: festival.occasionId,
+          occasionName: festival.occasionName,
+          template: festival.template,
+          offerText: festival.offerText,
+          ctaText: festival.ctaText,
+          language: festival.language,
+          brand: festivalBrand(deps, festival),
+        });
+
+        return writeText(
+          deps,
+          `generated/festival/${ctx.jobId}/script.json`,
+          JSON.stringify(festivalScriptSchema.parse(copy)),
+        );
+      }
+
       const caption = await providers.text.caption({
         angle: typeof payload.angle === 'string' ? payload.angle : 'Today at the brand',
         brand: brandContext,
@@ -316,6 +384,26 @@ async function runStage(deps: JobRunDeps, ctx: StageContext): Promise<string> {
     }
 
     case 'IMAGE': {
+      if (isFestivalKind(ctx.kind)) {
+        const festival = parseFestivalPayload(payload);
+        const copy = await readFestivalScript(deps, ctx.jobId);
+        const lines = posterLines(festival, copy);
+        const { width, height } = festival.template.dimensions;
+
+        const poster = await providers.renderer.renderFestivalPoster({
+          jobId: ctx.jobId,
+          width,
+          height,
+          background: festival.template.colorScheme.background,
+          primary: festival.template.colorScheme.primary,
+          accent: festival.template.colorScheme.accent,
+          lines,
+        });
+
+        await writeBytesIfMissing(deps, poster.storageKey, 'image/png', width, height);
+        return poster.storageKey;
+      }
+
       const count = typeof payload.images === 'number' ? payload.images : 1;
       const width = typeof payload.width === 'number' ? payload.width : 1080;
       const height = typeof payload.height === 'number' ? payload.height : 1080;
@@ -345,6 +433,39 @@ async function runStage(deps: JobRunDeps, ctx: StageContext): Promise<string> {
     }
 
     case 'RENDER': {
+      if (ctx.kind === 'FESTIVAL_REEL') {
+        const festival = parseFestivalPayload(payload);
+        const posterKey = await checkpointRef(deps.db, ctx.jobId, 'IMAGE');
+        if (posterKey === null) {
+          throw new ProviderError('festival reel has no poster checkpoint', 'PERMANENT');
+        }
+
+        const { width, height } = festival.template.dimensions;
+        const rendered = await providers.renderer.renderFestivalReel({
+          jobId: ctx.jobId,
+          width,
+          height,
+          background: festival.template.colorScheme.background,
+          primary: festival.template.colorScheme.primary,
+          accent: festival.template.colorScheme.accent,
+          lines: [],
+          posterKey,
+          audioKey: festival.template.audioTrack,
+          durationMs: (festival.template.reelDurationSeconds ?? 15) * 1_000,
+          brandName: festivalBrand(deps, festival).name,
+        });
+
+        await writeBytesIfMissing(
+          deps,
+          rendered.storageKey,
+          'video/mp4',
+          width,
+          height,
+          rendered.durationMs,
+        );
+        return rendered.storageKey;
+      }
+
       const sceneCount = typeof payload.scenes === 'number' ? payload.scenes : 5;
       const scenes = Array.from({ length: sceneCount }, (_, i) => ({
         imageKey: `generated/frame-${i + 1}.png`,
@@ -427,8 +548,12 @@ async function checkpointStages(db: Database, jobId: string): Promise<Set<JobSta
  */
 async function recordStage(
   db: Database,
-  input: { jobId: string; stage: JobStage; outputRef: string },
+  input: { jobId: string; stage: JobStage; kind: GenerationKind; outputRef: string },
 ): Promise<void> {
+  const sequence = stagesFor(input.kind);
+  const index = sequence.indexOf(input.stage);
+  const next = index >= 0 && index + 1 < sequence.length ? sequence[index + 1] : TERMINAL_STAGE;
+
   await db.transaction(async (tx: DbTransaction) => {
     await tx
       .insert(jobCheckpoints)
@@ -440,7 +565,7 @@ async function recordStage(
 
     await tx
       .update(generationJobs)
-      .set({ stage: nextJobStage(input.stage) ?? TERMINAL_STAGE, updatedAt: new Date() })
+      .set({ stage: next, updatedAt: new Date() })
       .where(eq(generationJobs.id, input.jobId));
 
     await tx.insert(outboxEvents).values({
@@ -466,17 +591,173 @@ async function recordStage(
  * The job status and the credit movement are settled together so a crash cannot
  * leave a COMPLETED job whose credits were never charged - which would be a
  * silently free generation.
+ *
+ * Festival artefacts are read and measured BEFORE the transaction opens. Object
+ * storage is a network dependency, and holding a database transaction open while
+ * talking to it is how a slow S3 turns into a pool exhaustion incident
+ * (AGENTS.md section 6).
  */
-async function settleSuccess(db: Database, jobId: string): Promise<void> {
-  await db.transaction(async (tx: DbTransaction) => {
+async function settleSuccess(deps: JobRunDeps, jobId: string): Promise<void> {
+  const festival = await prepareFestivalSettlement(deps, jobId);
+
+  await deps.db.transaction(async (tx: DbTransaction) => {
     const result = await capture(tx, jobId);
-    if (result.captured) {
-      await tx
-        .update(generationJobs)
-        .set({ status: 'COMPLETED', stage: TERMINAL_STAGE, finishedAt: new Date() })
-        .where(eq(generationJobs.id, jobId));
+    if (!result.captured) {
+      return;
+    }
+
+    await tx
+      .update(generationJobs)
+      .set({ status: 'COMPLETED', stage: TERMINAL_STAGE, finishedAt: new Date() })
+      .where(eq(generationJobs.id, jobId));
+
+    if (festival !== null) {
+      await finaliseFestivalPost(tx, festival);
     }
   });
+}
+
+interface FestivalSettlement {
+  jobId: string;
+  postId: string;
+  script: { slots: Record<string, string>; caption: string; hashtags: string[] };
+  template: FestivalJobPayload['template'];
+  occasionId: string;
+  poster: { key: string; sizeBytes: number };
+  reel: { key: string; sizeBytes: number } | null;
+}
+
+/**
+ * Loads the material a festival settlement needs, outside any transaction.
+ *
+ * Returns null for every other kind, which is what keeps the non-festival path
+ * exactly as cheap as it was.
+ */
+async function prepareFestivalSettlement(
+  deps: JobRunDeps,
+  jobId: string,
+): Promise<FestivalSettlement | null> {
+  const rows = await deps.db
+    .select({
+      postId: generationJobs.postId,
+      kind: generationJobs.kind,
+      payload: generationJobs.payload,
+    })
+    .from(generationJobs)
+    .where(eq(generationJobs.id, jobId))
+    .limit(1);
+
+  const job = rows[0];
+  if (job === undefined || job.postId === null || !isFestivalKind(job.kind)) {
+    return null;
+  }
+  const kind = job.kind;
+
+  const festival = parseFestivalPayload(readPayload(job.payload));
+  const script = await readFestivalScript(deps, jobId);
+  const posterKey = await checkpointRef(deps.db, jobId, 'IMAGE');
+  if (posterKey === null) {
+    throw new ProviderError('festival job finished without a poster checkpoint', 'PERMANENT');
+  }
+
+  const poster = await storageSize(deps, posterKey);
+  const reelKey = kind === 'FESTIVAL_REEL' ? await checkpointRef(deps.db, jobId, 'RENDER') : null;
+  const reel =
+    reelKey === null
+      ? null
+      : { key: reelKey, sizeBytes: (await storageSize(deps, reelKey)).sizeBytes };
+
+  return {
+    jobId,
+    postId: job.postId,
+    script,
+    template: festival.template,
+    occasionId: festival.occasionId,
+    poster,
+    reel,
+  };
+}
+
+/**
+ * Turns the finished generation into what the campaign dashboard shows.
+ *
+ * The post already exists (the API created it with the reservation), so this is
+ * the transition from GENERATING to READY plus the two asset rows. It runs in the
+ * capture transaction: a captured job with no visible output would charge the
+ * user for something they cannot find.
+ */
+async function finaliseFestivalPost(
+  tx: DbTransaction,
+  settlement: FestivalSettlement,
+): Promise<void> {
+  const rows = await tx
+    .select({ workspaceId: brands.workspaceId, version: posts.version })
+    .from(posts)
+    .innerJoin(brands, eq(brands.id, posts.brandId))
+    .where(eq(posts.id, settlement.postId))
+    .limit(1);
+
+  const post = rows[0];
+  if (post === undefined) {
+    // The post was deleted while its generation ran. The credits are still
+    // captured (the work was done), but there is nothing left to attach it to.
+    return;
+  }
+
+  await tx
+    .update(posts)
+    .set({
+      caption: settlement.script.caption,
+      hashtags: settlement.script.hashtags.join(' '),
+      status: 'READY',
+      version: sql`${posts.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(posts.id, settlement.postId));
+
+  const { width, height } = settlement.template.dimensions;
+  await tx
+    .insert(assets)
+    .values({
+      postId: settlement.postId,
+      workspaceId: post.workspaceId,
+      type: 'IMAGE',
+      storageKey: settlement.poster.key,
+      mime: 'image/png',
+      sizeBytes: settlement.poster.sizeBytes,
+      width,
+      height,
+      meta: {
+        source: 'festival',
+        jobId: settlement.jobId,
+        occasionId: settlement.occasionId,
+        templateId: settlement.template.id,
+      },
+    })
+    .onConflictDoNothing({ target: assets.storageKey });
+
+  if (settlement.reel !== null) {
+    await tx
+      .insert(assets)
+      .values({
+        postId: settlement.postId,
+        workspaceId: post.workspaceId,
+        type: 'VIDEO',
+        storageKey: settlement.reel.key,
+        mime: 'video/mp4',
+        sizeBytes: settlement.reel.sizeBytes,
+        width,
+        height,
+        durationMs: (settlement.template.reelDurationSeconds ?? 15) * 1_000,
+        meta: {
+          source: 'festival',
+          jobId: settlement.jobId,
+          occasionId: settlement.occasionId,
+          templateId: settlement.template.id,
+        },
+      })
+      .onConflictDoNothing({ target: assets.storageKey });
+  }
 }
 
 // --- helpers ---------------------------------------------------------------
@@ -492,6 +773,106 @@ function readPayload(payload: Record<string, unknown> | null): Record<string, un
   return payload ?? {};
 }
 
+function parseFestivalPayload(payload: Record<string, unknown>): FestivalJobPayload {
+  const parsed = festivalJobPayloadSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new ProviderError(
+      `invalid festival payload: ${parsed.error.issues
+        .slice(0, 3)
+        .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+        .join('; ')}`,
+      'PERMANENT',
+    );
+  }
+  return parsed.data;
+}
+
+function festivalBrand(deps: JobRunDeps, festival: FestivalJobPayload): BrandContext {
+  const snapshot = festival.brand;
+  if (snapshot === undefined) {
+    return deps.brand ?? DEFAULT_BRAND;
+  }
+
+  return {
+    name: snapshot.name,
+    industry: snapshot.industry ?? null,
+    tone: snapshot.tone ?? null,
+    audience: snapshot.audience ?? null,
+    colors: snapshot.colors,
+    languages: snapshot.languages,
+  };
+}
+
+function posterLines(
+  festival: FestivalJobPayload,
+  script: { slots: Record<string, string> },
+): Array<{
+  text: string;
+  fontSize: number;
+  position: 'top-center' | 'center' | 'bottom-center';
+  color: string;
+}> {
+  return festival.template.slots
+    .filter((slot) => slot.type === 'text')
+    .map((slot) => ({
+      text: (script.slots[slot.id] ?? '').trim(),
+      fontSize: slot.fontSize ?? 48,
+      position: slot.position,
+      color:
+        slot.id === 'cta'
+          ? festival.template.colorScheme.accent
+          : slot.id === 'headline'
+            ? festival.template.colorScheme.primary
+            : '#ffffff',
+    }))
+    .filter((line) => line.text !== '');
+}
+
+async function checkpointRef(
+  db: Database | DbTransaction,
+  jobId: string,
+  stage: JobStage,
+): Promise<string | null> {
+  const rows = await db
+    .select({ outputRef: jobCheckpoints.outputRef })
+    .from(jobCheckpoints)
+    .where(and(eq(jobCheckpoints.jobId, jobId), eq(jobCheckpoints.stage, stage)))
+    .limit(1);
+  return rows[0]?.outputRef ?? null;
+}
+
+async function readFestivalScript(
+  deps: JobRunDeps,
+  jobId: string,
+): Promise<{ slots: Record<string, string>; caption: string; hashtags: string[] }> {
+  const key = await checkpointRef(deps.db, jobId, 'SCRIPT');
+  if (key === null) {
+    throw new ProviderError('festival job has no SCRIPT checkpoint', 'PERMANENT');
+  }
+
+  const bytes = await deps.storage.getObject(key);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new ProviderError('festival SCRIPT checkpoint is not valid JSON', 'PERMANENT');
+  }
+
+  const script = festivalScriptSchema.safeParse(parsed);
+  if (!script.success) {
+    throw new ProviderError('festival SCRIPT checkpoint has the wrong shape', 'PERMANENT');
+  }
+  return script.data;
+}
+
+async function storageSize(
+  deps: JobRunDeps,
+  key: string,
+): Promise<{ key: string; sizeBytes: number }> {
+  const head = await deps.storage.headObject?.(key);
+  return { key, sizeBytes: head?.sizeBytes ?? 0 };
+}
+
 async function writeBytes(
   deps: JobRunDeps,
   key: string,
@@ -500,8 +881,32 @@ async function writeBytes(
   height: number,
   durationMs = 0,
 ): Promise<void> {
-  // A deterministic placeholder, so `headObject` has something real to find and
-  // an asset row can be confirmed.
+  await writeBytesIfMissing(deps, key, contentType, width, height, durationMs);
+}
+
+/**
+ * Writes the deterministic placeholder only when the provider did not already
+ * write a real object.
+ *
+ * The mock providers return a key without bytes; the real providers put the
+ * actual file there. Unconditionally overwriting was a bug that replaced a real
+ * rendered reel with 100 bytes of JSON.
+ */
+async function writeBytesIfMissing(
+  deps: JobRunDeps,
+  key: string,
+  contentType: string,
+  width: number,
+  height: number,
+  durationMs = 0,
+): Promise<void> {
+  if (deps.storage.headObject !== undefined) {
+    const existing = await deps.storage.headObject(key);
+    if (existing !== null) {
+      return;
+    }
+  }
+
   const body = new TextEncoder().encode(
     JSON.stringify({ key, contentType, width, height, durationMs, bytes: 'mock' }),
   );

@@ -72,6 +72,16 @@ describe('stagesFor', () => {
   it('runs every stage for a reel', () => {
     expect(stagesFor('REEL')).toEqual(['PLAN', 'SCRIPT', 'IMAGE', 'VOICE', 'RENDER']);
   });
+
+  it('runs the poster stages for a festival image, with no voice', () => {
+    expect(stagesFor('FESTIVAL_IMAGE')).toEqual(['PLAN', 'SCRIPT', 'IMAGE']);
+  });
+
+  it('adds only RENDER for a festival reel', () => {
+    // No VOICE: the reel is the poster animated over optional template music,
+    // not a narration-driven video.
+    expect(stagesFor('FESTIVAL_REEL')).toEqual(['PLAN', 'SCRIPT', 'IMAGE', 'RENDER']);
+  });
 });
 
 describe('fullStageSequence', () => {

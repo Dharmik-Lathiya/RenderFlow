@@ -1,4 +1,11 @@
-import { JOB_STAGES, type GenerationKind, type JobStage } from '@renderflow/common';
+import {
+  JOB_STAGES,
+  type FestivalLanguage,
+  type FestivalSlotPosition,
+  type FestivalTemplateDescriptor,
+  type GenerationKind,
+  type JobStage,
+} from '@renderflow/common';
 
 /**
  * AI provider interfaces (AGENTS.md section 8).
@@ -81,6 +88,53 @@ export interface RenderResult {
   durationMs: number;
 }
 
+/** One line of copy placed on a festival poster. */
+export interface FestivalPosterLine {
+  text: string;
+  fontSize: number;
+  position: FestivalSlotPosition;
+  color?: string;
+}
+
+/** Everything the renderer needs to draw a festival poster. */
+export interface FestivalPosterInput {
+  jobId: string;
+  width: number;
+  height: number;
+  background: string;
+  primary: string;
+  accent: string;
+  lines: FestivalPosterLine[];
+  /** Storage key of the brand logo, if one was uploaded. */
+  logoKey?: string | null;
+}
+
+/** A festival reel is the poster animated for the template's duration. */
+export interface FestivalReelInput extends FestivalPosterInput {
+  posterKey?: string | null;
+  audioKey?: string | null;
+  durationMs: number;
+  brandName: string;
+}
+
+/** What the LLM fills for one template. */
+export interface FestivalCopyInput {
+  occasionId: string;
+  occasionName: string;
+  template: FestivalTemplateDescriptor;
+  offerText: string;
+  ctaText: string;
+  language: FestivalLanguage;
+  brand: BrandContext;
+}
+
+export interface FestivalCopyResult {
+  /** Slot id -> text. Every text slot in the template must be present. */
+  slots: Record<string, string>;
+  caption: string;
+  hashtags: string[];
+}
+
 /**
  * Text generation: plans, captions, scripts.
  *
@@ -93,6 +147,15 @@ export interface TextProvider {
   plan(input: { goal: string; days: number; brand: BrandContext }): Promise<ContentPlan>;
   caption(input: { angle: string; brand: BrandContext }): Promise<CaptionResult>;
   script(input: { caption: string; scenes: number }): Promise<ScriptResult>;
+  /**
+   * Fills a festival template's text slots and writes the matching caption.
+   *
+   * The template comes from the server, never from the client. The provider knows
+   * each slot's `maxChars`, so the structured-output schema can reject overlong
+   * copy and trigger the normal one-repair path instead of shipping a poster with
+   * clipped text.
+   */
+  festivalCopy(input: FestivalCopyInput): Promise<FestivalCopyResult>;
 }
 
 export interface ImageProvider {
@@ -120,6 +183,10 @@ export interface RendererProvider {
     width: number;
     height: number;
   }): Promise<RenderResult>;
+  /** Draws a festival template: background, brand colours, logo and text slots. */
+  renderFestivalPoster(input: FestivalPosterInput): Promise<RenderResult>;
+  /** Animates the poster, overlays the optional music and writes a short reel. */
+  renderFestivalReel(input: FestivalReelInput): Promise<RenderResult>;
 }
 
 /**
@@ -159,6 +226,8 @@ export const STAGE_FOR_KIND: Readonly<Record<GenerationKind, JobStage>> = {
   REEL: 'VOICE',
   REGENERATE_SCENE: 'IMAGE',
   TRANSLATION: 'SCRIPT',
+  FESTIVAL_IMAGE: 'PLAN',
+  FESTIVAL_REEL: 'PLAN',
 };
 
 export const ALL_STAGES: readonly JobStage[] = JOB_STAGES;

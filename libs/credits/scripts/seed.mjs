@@ -13,12 +13,19 @@
  * Idempotent by construction: `ON CONFLICT DO UPDATE` on the action. Re-running
  * after changing a price in code updates the row rather than failing.
  *
- * It deliberately seeds *nothing else*. Users, wallets and workspaces are created
- * by the application; a seed that inserted a fake account with a balance is a
- * balance nobody's tests can reason about.
+ * It also publishes the festival catalogue (`festival_occasions` and
+ * `festival_templates`). Those rows are reference data, like prices: the API and
+ * the renderer both read them, and an empty table means the festival flow has
+ * nothing to offer. The descriptors come from `@renderflow/common` so the seed,
+ * the API and the worker cannot disagree about what a template contains.
+ *
+ * It deliberately seeds no users, wallets or workspaces. Those are created by the
+ * application; a seed that inserted a fake account with a balance is a balance
+ * nobody's tests can reason about.
  */
 
 import { sql } from 'drizzle-orm';
+import { FESTIVAL_OCCASIONS, FESTIVAL_TEMPLATE_SEEDS } from '@renderflow/common';
 
 // Resolved from libs/credits' own node_modules, which already links
 // @renderflow/db. The script lives here rather than in libs/db precisely because
@@ -41,6 +48,43 @@ try {
     `);
   }
 
+  for (const occasion of FESTIVAL_OCCASIONS) {
+    await db.execute(sql`
+      INSERT INTO festival_occasions (id, display_name, active)
+      VALUES (${occasion.id}, ${occasion.displayName}, true)
+      ON CONFLICT (id) DO UPDATE
+        SET display_name = EXCLUDED.display_name,
+            active = true
+    `);
+  }
+
+  for (const template of FESTIVAL_TEMPLATE_SEEDS) {
+    await db.execute(sql`
+      INSERT INTO festival_templates
+        (id, occasion_id, name, preview_url, slots, color_scheme, audio_track,
+         dimensions, reel_duration_seconds, active)
+      VALUES (
+        ${template.id}, ${template.occasionId}, ${template.name}, ${template.previewUrl},
+        ${JSON.stringify(template.slots)}::jsonb,
+        ${JSON.stringify(template.colorScheme)}::jsonb,
+        ${template.audioTrack},
+        ${JSON.stringify(template.dimensions)}::jsonb,
+        ${template.reelDurationSeconds},
+        true
+      )
+      ON CONFLICT (id) DO UPDATE
+        SET occasion_id = EXCLUDED.occasion_id,
+            name = EXCLUDED.name,
+            preview_url = EXCLUDED.preview_url,
+            slots = EXCLUDED.slots,
+            color_scheme = EXCLUDED.color_scheme,
+            audio_track = EXCLUDED.audio_track,
+            dimensions = EXCLUDED.dimensions,
+            reel_duration_seconds = EXCLUDED.reel_duration_seconds,
+            active = true
+    `);
+  }
+
   const rows = await db.execute(
     sql`SELECT action, credits FROM pricing_rules WHERE active = 1 ORDER BY action`,
   );
@@ -49,6 +93,10 @@ try {
   for (const row of rows.rows) {
     console.log(`  ${String(row.action).padEnd(20)} ${String(row.credits).padStart(4)} credits`);
   }
+  console.log(
+    `seeded ${FESTIVAL_OCCASIONS.length} festival occasions and ` +
+      `${FESTIVAL_TEMPLATE_SEEDS.length} templates`,
+  );
 } catch (error) {
   console.error('seed failed:', error instanceof Error ? error.message : error);
   process.exitCode = 1;

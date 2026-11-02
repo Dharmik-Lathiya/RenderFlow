@@ -34,6 +34,10 @@ export const GENERATION_QUEUE_BY_KIND: Readonly<Record<string, QueueName>> = {
   CAROUSEL: QUEUE_NAMES.MEDIA,
   REEL: QUEUE_NAMES.MEDIA,
   REGENERATE_SCENE: QUEUE_NAMES.MEDIA,
+  // A festival job starts on content because PLAN comes first; the stage
+  // hand-off moves it to media for IMAGE/RENDER.
+  FESTIVAL_IMAGE: QUEUE_NAMES.CONTENT,
+  FESTIVAL_REEL: QUEUE_NAMES.CONTENT,
 };
 
 export function queueForGenerationKind(kind: string): QueueName | null {

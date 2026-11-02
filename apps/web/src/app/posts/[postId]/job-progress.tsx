@@ -32,6 +32,23 @@ import styles from '../../../components/ui.module.css';
 /** Pipeline stages in the order a job runs them. */
 const STAGES = ['PLAN', 'SCRIPT', 'IMAGE', 'VOICE', 'RENDER'] as const;
 
+/**
+ * The stages a job will actually run, by kind.
+ *
+ * Hard-coding the reel pipeline here made a festival job display a VOICE step
+ * that never runs, so the bar could never reach 100% and the UI implied a stage
+ * had been skipped. The server owns the real sequence; this mirrors only the
+ * kinds whose sequence differs from the default.
+ */
+const STAGES_BY_KIND: Readonly<Record<string, readonly string[]>> = {
+  FESTIVAL_IMAGE: ['PLAN', 'SCRIPT', 'IMAGE'],
+  FESTIVAL_REEL: ['PLAN', 'SCRIPT', 'IMAGE', 'RENDER'],
+};
+
+function stagesForJob(job: Job | null): readonly string[] {
+  return job === null ? STAGES : (STAGES_BY_KIND[job.kind] ?? STAGES);
+}
+
 export interface JobProgress {
   job: Job | null;
   stage: string | null;
@@ -171,6 +188,7 @@ export function JobProgressView({
 
   const terminal = job.status === 'COMPLETED' || job.status === 'FAILED';
   const done = completed.length;
+  const stages = stagesForJob(job);
 
   return (
     <div>
@@ -190,19 +208,19 @@ export function JobProgressView({
           className={styles.progress}
           role="progressbar"
           aria-valuemin={0}
-          aria-valuemax={STAGES.length}
+          aria-valuemax={stages.length}
           aria-valuenow={done}
           aria-label="Generation progress"
         >
           <div
             className={styles.progressFill}
-            style={{ width: `${Math.round((done / STAGES.length) * 100)}%` }}
+            style={{ width: `${Math.round((done / stages.length) * 100)}%` }}
           />
         </div>
       )}
 
       <ol className={styles.list}>
-        {STAGES.map((stage) => {
+        {stages.map((stage) => {
           const reached = completed.includes(stage);
           const current = !terminal && job.stage === stage;
 
@@ -229,7 +247,7 @@ export function JobProgressView({
             ? job.status === 'COMPLETED'
               ? 'Generation complete'
               : `Generation failed: ${job.error ?? 'unknown reason'}`
-            : `${job.stage ?? 'starting'} running, ${done} of ${STAGES.length} stages complete`
+            : `${job.stage ?? 'starting'} running, ${done} of ${stages.length} stages complete`
         }
       />
     </div>

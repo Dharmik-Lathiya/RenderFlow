@@ -3,9 +3,11 @@ import {
   FfmpegRendererProvider,
   buildSrt,
   escapeFilterText,
+  ffmpegColor,
   findFont,
   scenesToCues,
   srtTimestamp,
+  wrapPosterText,
 } from './render-provider';
 
 describe('srtTimestamp', () => {
@@ -78,6 +80,34 @@ describe('findFont', () => {
   it('returns null rather than throwing when nothing is installed', async () => {
     // The watermark degrades; it must never be the reason a reel fails.
     await expect(findFont('/nonexistent/font.ttf')).resolves.not.toThrow();
+  });
+});
+
+describe('festival poster helpers', () => {
+  it('wraps copy to the poster width instead of letting it run off the edge', () => {
+    const lines = wrapPosterText(
+      'Celebrate Diwali with twenty percent off every box of mithai in the shop',
+      48,
+      1080,
+    );
+
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.length).toBeLessThanOrEqual(3);
+    for (const line of lines) {
+      expect(line.length).toBeLessThanOrEqual(34);
+    }
+  });
+
+  it('clips rather than shrinking indefinitely', () => {
+    const lines = wrapPosterText('word '.repeat(200), 64, 1080);
+    expect(lines).toHaveLength(3);
+  });
+
+  it('accepts only a complete hex colour', () => {
+    expect(ffmpegColor('#FF9933')).toBe('0xFF9933');
+    expect(ffmpegColor('#11223380')).toBe('0x112233@0.502');
+    expect(() => ffmpegColor('red')).toThrow(ProviderError);
+    expect(() => ffmpegColor('#12345')).toThrow(ProviderError);
   });
 });
 

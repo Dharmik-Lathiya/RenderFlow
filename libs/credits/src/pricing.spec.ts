@@ -20,6 +20,8 @@ describe('DEFAULT_PRICES', () => {
       REEL: 30,
       REGENERATE_SCENE: 8,
       TRANSLATION: 1,
+      FESTIVAL_IMAGE: 6,
+      FESTIVAL_REEL: 36,
     });
   });
 
