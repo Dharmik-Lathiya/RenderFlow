@@ -247,7 +247,7 @@ jobs:
         run: pnpm build
 
       - name: build api image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/node-app.Dockerfile
@@ -257,7 +257,7 @@ jobs:
           push: false
 
       - name: build web image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/web.Dockerfile
