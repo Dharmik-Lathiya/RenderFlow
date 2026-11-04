@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@renderflow/observability": "workspace:*",
-    "nodemailer": "^7.0.9"
+    "nodemailer": "^10.3.1"
   },
   "devDependencies": {
     "@types/nodemailer": "^7.0.4"
