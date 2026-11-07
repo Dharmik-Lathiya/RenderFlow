@@ -11,8 +11,9 @@
  *    itself to its container rather than to the viewport, which is what stops
  *    the mobile layout being the desktop one with the sidebar hidden.
  *
- * The app is dark-first. The public marketing surface is a separate warm-paper
- * theme scoped in `landing.module.css`; both palettes are contrast-tested.
+ * The app is light-first (white screen) unless the user picks dark; the public
+ * marketing surface is a separate warm-paper theme scoped in
+ * `landing.module.css`; both palettes are contrast-tested.
  */
 
 :root {

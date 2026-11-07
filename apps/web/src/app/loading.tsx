@@ -1,16 +1,15 @@
+import { Skeleton } from '../components/ui';
+
 /**
  * Segment loading state.
  *
- * The pages that need one are server-rendered and hit the API (the pricing page
- * and the dashboard); without this, navigation shows a frozen previous screen with
- * no indication that anything is happening.
+ * The pages that need one are server-rendered and hit the API (the pricing
+ * page and the dashboard); without this, navigation shows a frozen previous
+ * screen with no indication that anything is happening.
  *
- * `aria-live` announces it once, without stealing focus.
+ * Renders a skeleton rather than visible "Loading…" text; the announcement is
+ * kept for assistive technology inside the skeleton's live region.
  */
 export default function Loading() {
-  return (
-    <p role="status" aria-live="polite">
-      Loading…
-    </p>
-  );
+  return <Skeleton />;
 }

@@ -16,7 +16,7 @@ export type { ResolvedTheme, ThemePreference } from './theme-config';
 export { THEME_STORAGE_KEY } from './theme-config';
 
 interface ThemeContextValue {
-  /** What the user chose. `system` follows the OS and is the default. */
+  /** What the user chose. Defaults to `light` (white screen). */
   theme: ThemePreference;
   /** What is actually painted right now. */
   resolvedTheme: ResolvedTheme;
@@ -36,11 +36,11 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
  * live OS changes while the preference is `system`).
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemePreference>('system');
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>('dark');
+  const [theme, setThemeState] = useState<ThemePreference>('light');
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>('light');
   // The pre-paint script already painted a theme. Waiting for this flag keeps
-  // the provider from briefly overwriting a stored light preference with its
-  // SSR default (dark) during the first effects pass.
+  // the provider from briefly overwriting a stored preference with its SSR
+  // default (light) during the first effects pass.
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -113,16 +113,16 @@ export function useTheme(): ThemeContextValue {
 
 function readStoredTheme(): ThemePreference {
   if (typeof window === 'undefined') {
-    return 'system';
+    return 'light';
   }
 
   try {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'light';
   } catch {
     // Storage can be unavailable (private mode, blocked cookies). The theme
     // still works for this tab; it just cannot outlive it.
-    return 'system';
+    return 'light';
   }
 }
 
@@ -136,7 +136,7 @@ function writeStoredTheme(theme: ThemePreference): void {
 
 function getSystemTheme(): ResolvedTheme {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'dark';
+    return 'light';
   }
 
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

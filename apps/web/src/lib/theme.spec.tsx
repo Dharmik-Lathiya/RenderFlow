@@ -11,9 +11,10 @@ function Probe() {
 
 /**
  * The theme is a preference, not a stylesheet detail: it must survive a reload,
- * follow the OS until the user decides, and keep an explicit choice even when
- * the OS changes. These tests exercise the provider through the same controls
- * the shell uses.
+ * default to the white screen, and keep an explicit choice even when the OS
+ * changes. The choice made on one page (for example the landing page) is read
+ * back from local storage on every other page (for example the login page).
+ * These tests exercise the provider through the same controls the shell uses.
  */
 describe('theme', () => {
   beforeEach(() => {
@@ -23,7 +24,7 @@ describe('theme', () => {
     installSystemTheme(false);
   });
 
-  it('follows the operating system by default', async () => {
+  it('defaults to the white screen even when the OS is dark', async () => {
     installSystemTheme(true);
 
     render(
@@ -33,9 +34,9 @@ describe('theme', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('theme-state')).toHaveTextContent('system:dark');
+      expect(screen.getByTestId('theme-state')).toHaveTextContent('light:light');
     });
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('light');
   });
 
   it('applies a stored preference instead of the OS', async () => {
@@ -73,6 +74,9 @@ describe('theme', () => {
   });
 
   it('tracks OS changes while the preference is system', async () => {
+    // OS-following only happens when the user explicitly chose it: the default
+    // is the white screen, so `system` has to be stored first.
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'system');
     const system = installSystemTheme(false);
 
     render(

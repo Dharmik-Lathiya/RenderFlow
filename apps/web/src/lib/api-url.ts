@@ -9,18 +9,35 @@
  */
 
 /**
- * Read at MODULE LOAD, not per request.
+ * The default is a SAME-ORIGIN relative path, not a hardcoded host.
  *
- * `process.env.NEXT_PUBLIC_*` is inlined by Next at build time, so a value read
- * inside a function can still be inlined - but reading it per call would make it
- * look like the value could change at runtime, which it cannot.
+ * This used to default to `http://localhost:4000/api/v1`, which meant the
+ * production deployment on Vercel called the visitor's own computer. Same-origin
+ * `/api/v1` is proxied to the configured backend by `next.config.ts`
+ * `rewrites()` (`API_INTERNAL_URL`, or `NEXT_PUBLIC_API_URL` when set), so the
+ * browser never needs a public API origin - and auth cookies keep working
+ * without a CORS exception.
+ *
+ * Read at MODULE LOAD, not per request: `process.env.NEXT_PUBLIC_*` is inlined
+ * by Next at build time, so a value read inside a function can still be inlined,
+ * but reading it per call would make it look like the value could change at
+ * runtime, which it cannot.
  */
-const RAW_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const RAW_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
 
 export const API_BASE_URL: string = RAW_BASE_URL.replace(/\/+$/, '');
 
+function isRelativeUrl(value: string): boolean {
+  return value.startsWith('/');
+}
+
 /** True when the API is on another origin, which needs credentialed CORS. */
 export const API_IS_CROSS_ORIGIN: boolean = (() => {
+  if (isRelativeUrl(API_BASE_URL)) {
+    // Same origin by construction: the rewrite in next.config.ts forwards it.
+    return false;
+  }
+
   if (typeof window === 'undefined') {
     // During SSR there is no origin to compare against. Requests do not happen
     // in a server component anyway - they are all client components - so the
@@ -37,6 +54,11 @@ export const API_IS_CROSS_ORIGIN: boolean = (() => {
 
 /** The origin the browser should connect SSE to. */
 export function eventStreamUrl(path: string): string {
+  if (isRelativeUrl(API_BASE_URL)) {
+    // A relative base resolves against the page origin; the rewrite forwards it.
+    return `${API_BASE_URL}${path}`;
+  }
+
   const base = new URL(API_BASE_URL);
 
   // Same-origin `/api/v1` proxying means the browser resolves it against the

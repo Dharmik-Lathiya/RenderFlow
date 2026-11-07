@@ -266,7 +266,26 @@ export function Spinner({ label }: { label: string }) {
   return (
     <p className={styles.loading} role="status">
       <span className={styles.spinner} aria-hidden="true" />
-      {label}
+      <span className="sr-only">{label}</span>
     </p>
+  );
+}
+
+/**
+ * A loading placeholder with no visible text.
+ *
+ * The label is kept for assistive technology (announced via the live region's
+ * screen-reader-only copy); sighted users see skeleton blocks instead of
+ * "Loading…" words.
+ */
+export function Skeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className={styles.skeleton} role="status" aria-live="polite">
+      <span className="sr-only">Loading</span>
+      <span className={styles.skeletonBlock} aria-hidden="true" />
+      {Array.from({ length: lines }).map((_, index) => (
+        <span key={index} className={styles.skeletonLine} aria-hidden="true" />
+      ))}
+    </div>
   );
 }

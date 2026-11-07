@@ -21,11 +21,13 @@ development environment, not a production deployment.
 | AI / social / email / billing | Mock or disabled. No real provider has been connected.             |
 | Production database           | Not provisioned by this repository.                                |
 
-Because `NEXT_PUBLIC_API_URL` is unset, the deployed web app falls back to
-`http://localhost:4000/api/v1`. The public marketing pages render, but sign-in and
-the product screens cannot work against that production deployment. Do not
-publish an API URL until the API host, CORS origin, cookie policy and secrets are
-ready.
+The browser calls the same-origin relative path `/api/v1`, which `next.config.ts`
+rewrites to `API_INTERNAL_URL` (or `NEXT_PUBLIC_API_URL` when set). The client
+never falls back to `localhost`, so setting one runtime environment variable
+repoints the deployed app at the backend - no rebuild required. The public
+marketing pages render either way, but sign-in and the product screens cannot
+work until the API host and rewrite target are ready. Do not publish an API URL
+until the API host, CORS origin, cookie policy and secrets are ready.
 
 ## 2. Topology
 
@@ -336,8 +338,9 @@ it, Vercel builds the repository root, finds no Next.js app, and deploys an outp
 with no routes that answers 404 even though the build succeeds.
 
 The current production project has only `NEXT_PUBLIC_SITE_URL` configured. It is
-a marketing deployment. Setting an API URL without a deployed API would make the
-auth screens target `localhost` and fail; deploy the API first.
+a marketing deployment. Set `API_INTERNAL_URL` (runtime, read by the rewrite in
+`next.config.ts`) to the deployed API's public origin once the API is live;
+auth then works without baking any URL into the bundle.
 
 ## 7. Rollback
 

@@ -29,16 +29,14 @@ export const metadata: Metadata = {
 const THEME_BOOT_SCRIPT = `(function () {
   try {
     var stored = window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
-    var theme = stored === 'light' || stored === 'dark'
+    var theme = stored === 'light' || stored === 'dark' || stored === 'system'
       ? stored
-      : window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
+      : 'light';
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.style.colorScheme = theme;
   } catch (error) {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    document.documentElement.style.colorScheme = 'dark';
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.style.colorScheme = 'light';
   }
 })();`;
 
