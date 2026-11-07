@@ -56,7 +56,7 @@ threshold breach that looks like a performance problem.
 
 ## Measured result
 
-Local run on 2026-10-29 against a locally started API and PostgreSQL, with mock
+Local run on 2026-11-04 against a locally started API and PostgreSQL, with mock
 providers:
 
 | Property    | Result                    |
@@ -65,8 +65,8 @@ providers:
 | Duration    | 30s                       |
 | Requests    | 6,003                     |
 | Failures    | 0                         |
-| Pricing p95 | 8.69 ms                   |
-| Live p95    | 4.70 ms                   |
+| Pricing p95 | 1.26 ms                   |
+| Live p95    | 0.63 ms                   |
 | Thresholds  | all passed                |
 
 This is a single-process, single-database measurement on a development machine.

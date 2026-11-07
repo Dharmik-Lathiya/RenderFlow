@@ -417,17 +417,17 @@ function Preview() {
               <div className={styles.slot}>
                 <span className={styles.slotDay}>Tue</span>
                 <strong>09:00</strong>
-                <span className={styles.dotBlue} />
+                <span className={styles.dotInfo} />
               </div>
               <div className={styles.slot}>
                 <span className={styles.slotDay}>Wed</span>
                 <strong>12:30</strong>
-                <span className={styles.dotBlue} />
+                <span className={styles.dotInfo} />
               </div>
               <div className={styles.slot}>
                 <span className={styles.slotDay}>Thu</span>
                 <strong>18:00</strong>
-                <span className={styles.dotOrange} />
+                <span className={styles.dotScheduled} />
               </div>
             </div>
 

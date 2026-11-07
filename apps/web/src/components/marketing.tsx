@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import styles from '../app/landing.module.css';
+import { BrandLogo } from './brand-logo';
 
 /**
  * The public surface: one header, one footer, one wrapper.
@@ -19,9 +20,8 @@ export function MarketingHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <Link href="/" className={styles.brand}>
-          <LogoMark />
-          <span>RenderFlow</span>
+        <Link href="/" className={styles.brand} aria-label="RenderFlow home">
+          <BrandLogo />
         </Link>
 
         <nav className={styles.headerNav} aria-label="Primary">
@@ -33,6 +33,9 @@ export function MarketingHeader() {
           </Link>
           <Link className={styles.navLink} href="/#how-it-works">
             How it works
+          </Link>
+          <Link className={styles.navLink} href="/#faq">
+            FAQ
           </Link>
           <Link className={styles.navLink} href="/about">
             About
@@ -62,9 +65,8 @@ export function MarketingFooter() {
     <footer className={styles.footer}>
       <div className={styles.footerInner}>
         <div>
-          <Link href="/" className={styles.brand}>
-            <LogoMark />
-            <span>RenderFlow</span>
+          <Link href="/" className={styles.brand} aria-label="RenderFlow home">
+            <BrandLogo />
           </Link>
           <p className={styles.footerCopy}>
             An AI marketing studio and social scheduler for teams that would rather ship the
@@ -157,16 +159,6 @@ function FooterGroup({ title, children }: { title: string; children: ReactNode }
       <p className={styles.footerGroupTitle}>{title}</p>
       {children}
     </div>
-  );
-}
-
-export function LogoMark() {
-  return (
-    <svg className={styles.brandMark} viewBox="0 0 28 28" width="26" height="26" aria-hidden="true">
-      <rect x="3" y="4" width="14" height="5" rx="2.5" fill="#2563eb" />
-      <rect x="9" y="11.5" width="16" height="5" rx="2.5" fill="#60a5fa" />
-      <rect x="5" y="19" width="12" height="5" rx="2.5" fill="#ea580c" />
-    </svg>
   );
 }
 

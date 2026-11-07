@@ -38,33 +38,8 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
   color: var(--fg);
   text-decoration: none;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  font-size: 1.08rem;
-}
-
-.brandMark {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex: none;
-  border-radius: 10px;
-  background: var(--gradient-accent);
-  color: var(--accent-fg);
-  box-shadow: 0 6px 18px rgb(90 80 220 / 28%);
-}
-
-.brandMark svg {
-  width: 1.15rem;
-  height: 1.15rem;
-}
-
-.brandWord {
-  white-space: nowrap;
 }
 
 .workspaceCard {
@@ -397,11 +372,7 @@
 .mobileBrand {
   display: none;
   align-items: center;
-  gap: 0.5rem;
   color: var(--fg);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
   text-decoration: none;
 }
 

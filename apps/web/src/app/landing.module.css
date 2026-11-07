@@ -10,26 +10,46 @@
  */
 
 .landing {
-  --lp-bg: #f8fafc;
+  /* Ember & Ink — light (marketing) palette from `DESIGN.md` section 2.1. */
+  --lp-bg: #faf7f2;
   --lp-surface: #ffffff;
-  --lp-surface-2: #f1f5f9;
-  --lp-ink: #0f172a;
-  --lp-muted: #475569;
-  --lp-border: #e2e8f0;
-  --lp-blue: #2563eb;
-  --lp-blue-ink: #1d4ed8;
-  --lp-orange: #ea580c;
-  --lp-orange-ink: #241003;
-  --lp-navy: #0f172a;
-  --lp-green: #15803d;
+  --lp-surface-2: #f1ece3;
+  --lp-ink: #1a1714;
+  --lp-muted: #6b645b;
+  --lp-border: #e4ddd0;
+  --lp-border-strong: #cfc5b5;
+  --lp-accent: #c93c12;
+  --lp-accent-strong: #a9320e;
+  --lp-accent-ink: #ffffff;
+  --lp-accent-soft: rgb(201 60 18 / 8%);
+  --lp-secondary: #2f3f9e;
+  --lp-secondary-soft: rgb(47 63 158 / 9%);
+  --lp-ink-panel: #0e0f13;
+  --lp-on-ink: #f2f3f5;
+  --lp-muted-on-ink: #9aa0ac;
+  --lp-teal: #0f766e;
+  --lp-teal-soft: rgb(15 118 110 / 9%);
+  --lp-warning: #8a5b00;
+  --lp-warning-soft: rgb(138 91 0 / 10%);
+  --lp-success: #16794f;
+  --lp-bright: #ff6b3d;
+  --lp-bright-ink: #14110f;
+
+  /* Header/footer wordmark, matched to the warm-paper palette. */
+  --logo-ink: var(--lp-ink);
+  --logo-flow: var(--lp-accent);
+  --logo-swoosh-start: var(--lp-bright);
+  --logo-swoosh-mid: var(--lp-secondary);
+  --logo-swoosh-end: color-mix(in srgb, var(--lp-secondary) 42%, white);
 
   color-scheme: light;
   min-height: 100dvh;
   background:
-    radial-gradient(1100px 520px at 84% -8%, rgba(37, 99, 235, 0.1), transparent 62%), var(--lp-bg);
+    radial-gradient(1100px 520px at 84% -8%, rgb(201 60 18 / 9%), transparent 62%),
+    radial-gradient(720px 420px at 4% 8%, rgb(245 165 36 / 7%), transparent 70%), var(--lp-bg);
   color: var(--lp-ink);
   font-family:
-    var(--font-landing-body, ui-sans-serif),
+    var(--font-geist-sans, 'Geist'),
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -48,8 +68,8 @@
 }
 
 .landing :global(:focus-visible) {
-  outline: 3px solid var(--lp-blue);
-  outline-offset: 3px;
+  outline: 2px solid var(--lp-accent);
+  outline-offset: 2px;
   border-radius: 4px;
 }
 
@@ -79,18 +99,9 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: var(--lp-ink);
-  font-size: 1.0625rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  text-decoration: none;
-}
-
-.brandMark {
   flex: none;
-  width: 26px;
-  height: 26px;
+  color: var(--lp-ink);
+  text-decoration: none;
 }
 
 .headerNav {
@@ -132,7 +143,7 @@
 }
 
 .signIn:hover {
-  color: var(--lp-blue-ink);
+  color: var(--lp-accent-strong);
 }
 
 .primaryCta {
@@ -144,13 +155,13 @@
   padding: 0 22px;
   border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--lp-orange);
-  color: var(--lp-orange-ink);
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
   font-size: 0.9375rem;
   font-weight: 700;
   line-height: 1;
   text-decoration: none;
-  box-shadow: 0 6px 18px rgba(234, 88, 12, 0.18);
+  box-shadow: 0 6px 18px rgb(201 60 18 / 18%);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -159,8 +170,8 @@
 }
 
 .primaryCta:hover {
-  background: #f97316;
-  box-shadow: 0 10px 26px rgba(234, 88, 12, 0.24);
+  background: var(--lp-accent-strong);
+  box-shadow: 0 10px 26px rgb(201 60 18 / 24%);
   transform: translateY(-1px);
 }
 
@@ -206,7 +217,7 @@
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: var(--lp-blue);
+  background: var(--lp-accent);
 }
 
 .heroTitle {
@@ -215,11 +226,12 @@
      with noticeably less weight on the page. */
   max-width: 15ch;
   margin: 0 0 20px;
-  font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.6rem, 5.2vw, 4.25rem);
-  font-weight: 400;
-  letter-spacing: -0.03em;
-  line-height: 1.02;
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
+  font-size: clamp(2.5rem, 4.6vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.07;
   /* Deliberately NOT `text-wrap: balance`. Balance equalises the two blocks and
      breaks the first sentence as "A month" / "of marketing.", which orphans the
      article. Greedy wrapping gives the intended "A month of" / "marketing." */
@@ -227,7 +239,7 @@
 
 .heroTitleAccent {
   display: block;
-  color: var(--lp-blue-ink);
+  color: var(--lp-accent-strong);
 }
 
 .heroLede {
@@ -254,7 +266,7 @@
   font-size: 0.9375rem;
   font-weight: 600;
   text-decoration: underline;
-  text-decoration-color: #94a3b8;
+  text-decoration-color: var(--lp-border-strong);
   text-decoration-thickness: 1px;
   text-underline-offset: 5px;
   transition:
@@ -263,8 +275,8 @@
 }
 
 .secondaryCta:hover {
-  color: var(--lp-blue-ink);
-  text-decoration-color: var(--lp-blue-ink);
+  color: var(--lp-accent-strong);
+  text-decoration-color: var(--lp-accent-strong);
 }
 
 .proofRow {
@@ -286,7 +298,7 @@
 
 .check {
   flex: none;
-  color: var(--lp-green);
+  color: var(--lp-teal);
 }
 
 /* --- Product preview ---------------------------------------------------- */
@@ -304,7 +316,7 @@
   z-index: -1;
   inset: -10% -8% -12% -8%;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(37, 99, 235, 0.16), transparent 72%);
+  background: radial-gradient(closest-side, rgb(201 60 18 / 14%), transparent 72%);
   content: '';
   pointer-events: none;
 }
@@ -342,7 +354,7 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #cbd5e1;
+  background: var(--lp-border-strong);
 }
 
 .previewTitle {
@@ -386,9 +398,10 @@
 
 .previewCampaign strong {
   display: block;
-  font-family: var(--font-landing-display, Georgia), Georgia, serif;
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
   font-size: 1.25rem;
-  font-weight: 400;
+  font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;
 }
@@ -406,12 +419,14 @@
 .statusChip {
   flex: none;
   padding: 2px 9px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--lp-border-strong);
   border-radius: 999px;
-  background: #eff6ff;
-  color: var(--lp-blue-ink);
+  background: transparent;
+  color: var(--lp-muted);
   font-size: 0.75rem;
-  font-weight: 650;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .captionCard {
@@ -423,7 +438,7 @@
 
 .captionCard p {
   margin: 0 0 10px;
-  color: #334155;
+  color: var(--lp-ink);
   font-size: 0.9375rem;
   line-height: 1.55;
 }
@@ -437,8 +452,8 @@
 .hashtags span {
   padding: 2px 7px;
   border-radius: 999px;
-  background: #eff6ff;
-  color: var(--lp-blue-ink);
+  background: var(--lp-surface-2);
+  color: var(--lp-muted);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -464,16 +479,20 @@
 
 .assetPoster {
   background:
-    radial-gradient(circle at 72% 28%, rgba(255, 255, 255, 0.6), transparent 42%),
-    linear-gradient(140deg, #fde68a 0%, #fdba74 48%, #fecaca 100%);
-  color: #3f1d0b;
+    radial-gradient(circle at 72% 28%, rgb(255 255 255 / 32%), transparent 42%),
+    linear-gradient(140deg, var(--lp-accent) 0%, var(--lp-accent-strong) 100%);
+  color: var(--lp-accent-ink);
 }
 
 .assetReel {
   background:
-    radial-gradient(circle at 74% 24%, rgba(96, 165, 250, 0.32), transparent 45%),
-    linear-gradient(150deg, #1e293b, #334155);
-  color: #f8fafc;
+    radial-gradient(circle at 74% 24%, rgb(255 107 61 / 24%), transparent 45%),
+    linear-gradient(
+      150deg,
+      var(--lp-ink-panel),
+      color-mix(in srgb, var(--lp-ink-panel) 78%, var(--lp-accent))
+    );
+  color: var(--lp-on-ink);
 }
 
 .assetMeta {
@@ -498,7 +517,7 @@
   margin-left: 2px;
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
-  border-left: 6px solid #f8fafc;
+  border-left: 6px solid var(--lp-on-ink);
 }
 
 .previewSide {
@@ -529,20 +548,20 @@
   color: var(--lp-muted);
 }
 
-.dotBlue,
-.dotOrange {
+.dotInfo,
+.dotScheduled {
   width: 7px;
   height: 7px;
   margin-left: auto;
   border-radius: 999px;
 }
 
-.dotBlue {
-  background: var(--lp-blue);
+.dotInfo {
+  background: var(--lp-secondary);
 }
 
-.dotOrange {
-  background: var(--lp-orange);
+.dotScheduled {
+  background: var(--lp-warning);
 }
 
 .ledgerRow {
@@ -564,16 +583,17 @@
   text-transform: uppercase;
 }
 
+/* Credit states: reserved = warning, captured = muted, refunded = teal. */
 .ledgerState {
-  color: var(--lp-muted);
+  color: var(--lp-warning);
 }
 
 .ledgerGood {
-  color: var(--lp-green);
+  color: var(--lp-muted);
 }
 
 .ledgerWarm {
-  color: #b45309;
+  color: var(--lp-teal);
 }
 
 .previewCaption {
@@ -612,10 +632,10 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--lp-border);
   border-radius: 12px;
-  background: #eff6ff;
-  color: var(--lp-blue);
+  background: var(--lp-surface-2);
+  color: var(--lp-ink);
 }
 
 .trustItem strong {
@@ -646,11 +666,12 @@
 
 .sectionTitle {
   margin: 0 0 14px;
-  font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
-  font-size: clamp(2rem, 4.2vw, 3.2rem);
-  font-weight: 400;
-  letter-spacing: -0.025em;
-  line-height: 1.05;
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
+  font-size: clamp(2rem, 3.6vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   text-wrap: balance;
 }
 
@@ -686,8 +707,8 @@
 }
 
 .feature:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 16px 32px -24px rgba(15, 23, 42, 0.28);
+  border-color: var(--lp-border-strong);
+  box-shadow: 0 16px 32px -24px rgb(26 23 20 / 22%);
 }
 
 .featureWide {
@@ -700,8 +721,8 @@
   height: 42px;
   place-items: center;
   border-radius: 11px;
-  background: #eff6ff;
-  color: var(--lp-blue);
+  background: var(--lp-secondary-soft);
+  color: var(--lp-secondary);
 }
 
 .feature h3 {
@@ -741,7 +762,7 @@
   border: 1px solid var(--lp-border);
   border-radius: 999px;
   background: var(--lp-surface-2);
-  color: #334155;
+  color: var(--lp-ink);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -758,14 +779,14 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--lp-blue);
+  background: var(--lp-accent);
 }
 
 .planBar,
 .planBarShort {
   height: 3px;
   border-radius: 999px;
-  background: #bfdbfe;
+  background: color-mix(in srgb, var(--lp-secondary) 28%, var(--lp-border));
 }
 
 .planBar {
@@ -793,9 +814,9 @@
 }
 
 .dayActive {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: var(--lp-blue-ink);
+  border-color: color-mix(in srgb, var(--lp-secondary) 32%, var(--lp-border));
+  background: var(--lp-secondary-soft);
+  color: var(--lp-secondary);
 }
 
 .miniLedger {
@@ -811,7 +832,7 @@
 }
 
 .ledgerArrow {
-  color: #94a3b8;
+  color: var(--lp-muted);
 }
 
 .miniLedger .ledgerGood,
@@ -832,21 +853,21 @@
   border: 1px solid var(--lp-border);
   border-radius: 6px;
   background: var(--lp-surface-2);
-  color: #334155;
+  color: var(--lp-ink);
   font-size: 0.6875rem;
   font-weight: 600;
 }
 
 .flowStepGood {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #166534;
+  border-color: color-mix(in srgb, var(--lp-success) 32%, var(--lp-border));
+  background: color-mix(in srgb, var(--lp-success) 8%, var(--lp-surface));
+  color: var(--lp-success);
 }
 
 .flowArrow {
   width: 14px;
   height: 14px;
-  color: #94a3b8;
+  color: var(--lp-muted);
 }
 
 .bars {
@@ -861,11 +882,11 @@
 .bar {
   flex: 1;
   border-radius: 3px 3px 0 0;
-  background: #dbeafe;
+  background: color-mix(in srgb, var(--lp-secondary) 20%, var(--lp-surface));
 }
 
 .barHot {
-  background: var(--lp-blue);
+  background: var(--lp-accent);
 }
 
 .suggestion {
@@ -874,10 +895,10 @@
   gap: 6px;
   margin: 10px 0 0;
   padding: 6px 9px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid color-mix(in srgb, var(--lp-accent) 22%, var(--lp-border));
   border-radius: 8px;
-  background: #eff6ff;
-  color: var(--lp-blue-ink);
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent-strong);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -907,9 +928,11 @@
 .stepNumber {
   display: block;
   margin-bottom: 14px;
-  color: var(--lp-blue);
-  font-family: var(--font-landing-display, Georgia), Georgia, serif;
+  color: var(--lp-accent);
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
   font-size: 2rem;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -930,8 +953,10 @@
 /* --- Quote band ---------------------------------------------------------- */
 
 .quoteBand {
-  background: var(--lp-navy);
-  color: #f8fafc;
+  background:
+    radial-gradient(48rem 20rem at 82% 8%, rgb(255 107 61 / 12%), transparent 68%),
+    var(--lp-ink-panel);
+  color: var(--lp-on-ink);
 }
 
 .quoteInner {
@@ -944,25 +969,27 @@
   display: block;
   height: 2.6rem;
   margin-bottom: 8px;
-  color: #60a5fa;
-  font-family: var(--font-landing-display, Georgia), Georgia, serif;
+  color: var(--lp-bright);
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
   font-size: 4rem;
   line-height: 1;
 }
 
 .quoteText {
   margin: 0 0 24px;
-  font-family: var(--font-landing-display, Georgia), Georgia, serif;
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
+  font-size: clamp(1.8rem, 3.6vw, 2.5rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.16;
   text-wrap: balance;
 }
 
 .quoteAttribution {
   margin: 0;
-  color: #94a3b8;
+  color: var(--lp-muted-on-ink);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.09em;
@@ -1004,7 +1031,7 @@
 }
 
 .faqItem[open] summary {
-  color: var(--lp-blue-ink);
+  color: var(--lp-accent-strong);
 }
 
 .faqIcon {
@@ -1027,9 +1054,9 @@
 }
 
 .faqItem[open] .faqIcon {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: var(--lp-blue-ink);
+  border-color: color-mix(in srgb, var(--lp-accent) 24%, var(--lp-border));
+  background: var(--lp-accent-soft);
+  color: var(--lp-accent-strong);
   transform: rotate(45deg);
 }
 
@@ -1059,18 +1086,23 @@
   overflow: hidden;
   padding: clamp(36px, 6vw, 64px);
   border-radius: 24px;
-  /* Deep navy, matching the quote band. A saturated #2563eb panel next to an
-     orange button was the loudest colour moment on the page and the least
-     legible: navy keeps the orange CTA as the only accent. */
-  background: linear-gradient(135deg, #0b1220 0%, #14224a 58%, #1e3a8a 100%);
-  color: #ffffff;
-  box-shadow: 0 30px 60px -40px rgba(15, 23, 42, 0.6);
+  /* Ink panel with an ember wash, so the bright CTA stays the only loud thing. */
+  background:
+    radial-gradient(32rem 18rem at 82% 0%, rgb(255 107 61 / 20%), transparent 66%),
+    linear-gradient(
+      135deg,
+      var(--lp-ink-panel) 0%,
+      color-mix(in srgb, var(--lp-ink-panel) 88%, var(--lp-accent)) 62%,
+      color-mix(in srgb, var(--lp-ink-panel) 74%, var(--lp-accent)) 100%
+    );
+  color: var(--lp-on-ink);
+  box-shadow: 0 30px 60px -40px rgb(14 15 19 / 60%);
 }
 
 .finalPanel::before,
 .finalPanel::after {
   position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgb(255 107 61 / 24%);
   border-radius: 999px;
   content: '';
   pointer-events: none;
@@ -1097,24 +1129,34 @@
 
 .finalTitle {
   margin: 0 0 10px;
-  font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
-  font-size: clamp(1.9rem, 3.6vw, 2.8rem);
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
+  font-size: clamp(1.9rem, 3.2vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
   text-wrap: balance;
 }
 
 .finalCopy {
   max-width: 32rem;
   margin: 0;
-  color: #c7d2fe;
+  color: var(--lp-muted-on-ink);
   font-size: 1rem;
   line-height: 1.6;
 }
 
+/* The dark panel takes the dark-theme accent, whose ink label is intentional. */
 .finalPanel .primaryCta {
   flex: none;
+  background: var(--lp-bright);
+  color: var(--lp-bright-ink);
+  box-shadow: 0 8px 24px rgb(255 107 61 / 24%);
+}
+
+.finalPanel .primaryCta:hover {
+  background: color-mix(in srgb, var(--lp-bright) 88%, white);
+  box-shadow: 0 12px 30px rgb(255 107 61 / 32%);
 }
 
 /* --- Footer -------------------------------------------------------------- */

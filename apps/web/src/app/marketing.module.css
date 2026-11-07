@@ -28,11 +28,12 @@
 
 .title {
   margin: 0 0 18px;
-  font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
-  font-size: clamp(2.2rem, 5vw, 3.4rem);
-  font-weight: 400;
-  letter-spacing: -0.03em;
-  line-height: 1.02;
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
+  font-size: clamp(2.2rem, 4.4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
   text-wrap: balance;
 }
 
@@ -49,10 +50,11 @@
 
 .prose h2 {
   margin: 44px 0 12px;
-  font-family: var(--font-landing-display, Georgia), Georgia, 'Times New Roman', serif;
-  font-size: 1.6rem;
-  font-weight: 400;
-  letter-spacing: -0.015em;
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .prose h3 {
@@ -77,7 +79,7 @@
 }
 
 .prose a {
-  color: var(--lp-blue-ink);
+  color: var(--lp-accent-strong);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -86,7 +88,7 @@
   margin: 0 0 32px;
   padding: 14px 16px;
   border: 1px solid var(--lp-border);
-  border-left: 3px solid var(--lp-orange);
+  border-left: 3px solid var(--lp-accent);
   border-radius: 8px;
   background: var(--lp-surface);
   color: var(--lp-ink);
@@ -139,7 +141,7 @@
 }
 
 .free {
-  color: var(--lp-green);
+  color: var(--lp-success);
 }
 
 .actions {
@@ -153,25 +155,43 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  border-radius: 999px;
-  background: var(--lp-blue);
-  color: #ffffff;
-  font-weight: 600;
+  min-height: 48px;
+  padding: 0 22px;
+  border-radius: 10px;
+  background: var(--lp-accent);
+  color: var(--lp-accent-ink);
+  font-weight: 700;
   text-decoration: none;
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.primary:hover {
+  background: var(--lp-accent-strong);
+  transform: translateY(-1px);
 }
 
 .secondary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  border: 1px solid var(--lp-border);
-  border-radius: 999px;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid var(--lp-border-strong);
+  border-radius: 10px;
   background: var(--lp-surface);
   color: var(--lp-ink);
   font-weight: 600;
   text-decoration: none;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.secondary:hover {
+  border-color: var(--lp-ink);
+  background: var(--lp-surface-2);
 }
 
 .unavailable {

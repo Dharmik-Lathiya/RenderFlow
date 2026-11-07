@@ -38,9 +38,13 @@ test.describe('the full journey', () => {
 
     await signUp(page, email);
 
-    // The signup bonus is the product's first promise.
-    await expect(page.getByRole('heading', { name: 'Credits' })).toBeVisible();
-    await expect(page.getByText('50 credits', { exact: true })).toBeVisible();
+    // The signup bonus is the product's first promise. The sidebar carries the
+    // balance on desktop, but it is deliberately hidden on a phone - the
+    // dashboard stat is the surface both viewports share.
+    const creditsCard = page.locator('section', {
+      has: page.getByRole('heading', { name: 'Credits', exact: true }),
+    });
+    await expect(creditsCard.getByText('50', { exact: true })).toBeVisible();
 
     // Onboarding.
     await page.getByRole('link', { name: /create your first brand/i }).click();
@@ -89,7 +93,21 @@ test.describe('the full journey', () => {
   test('a signed-in user can sign out', async ({ page }) => {
     await signUp(page, uniqueEmail());
 
-    await page.getByRole('button', { name: 'Sign out' }).click();
+    // Wide screens expose sign-out in the sidebar; a phone hides that column,
+    // so the same action lives in the account menu. Wait for the session to
+    // resolve into one of the two paths before choosing it.
+    const signOut = page.getByRole('button', { name: 'Sign out', exact: true });
+    const accountMenu = page.getByRole('button', { name: 'Account menu' });
+
+    await expect
+      .poll(async () => (await signOut.count()) + (await accountMenu.count()))
+      .toBeGreaterThan(0);
+
+    if ((await signOut.count()) === 0) {
+      await accountMenu.click();
+    }
+
+    await signOut.click();
 
     // Back at the door, not on a page that silently 401s every request.
     await expect(page.getByLabel('Email')).toBeVisible();
@@ -143,9 +161,10 @@ test.describe('responsive', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await signUp(page, uniqueEmail());
 
-    // A hidden nav on mobile is a keyboard trap; it stacks instead.
+    // A hidden nav on mobile is a keyboard trap; it stacks instead. `exact`
+    // keeps the brand link ("RenderFlow dashboard") out of the match.
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible();
   });
 
   test('nothing overflows the viewport horizontally', async ({ page }) => {

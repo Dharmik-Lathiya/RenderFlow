@@ -104,9 +104,13 @@ describe('landing page', () => {
 
     expect(contrast(token('--lp-ink'), token('--lp-bg'))).toBeGreaterThanOrEqual(7);
     expect(contrast(token('--lp-muted'), token('--lp-bg'))).toBeGreaterThanOrEqual(4.5);
-    expect(contrast('#ffffff', token('--lp-blue'))).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(token('--lp-orange-ink'), token('--lp-orange'))).toBeGreaterThanOrEqual(4.5);
-    expect(contrast('#ffffff', token('--lp-navy'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--lp-accent-ink'), token('--lp-accent'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--lp-secondary'), token('--lp-bg'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--lp-warning'), token('--lp-surface'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--lp-teal'), token('--lp-surface'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--lp-success'), token('--lp-surface'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--lp-bright-ink'), token('--lp-bright'))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token('--lp-on-ink'), token('--lp-ink-panel'))).toBeGreaterThanOrEqual(7);
   });
 });
 

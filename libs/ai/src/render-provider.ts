@@ -425,12 +425,23 @@ export class FfmpegRendererProvider implements RendererProvider {
     // short; it is also the only visible element if a template has no text slots.
     filters.push(`drawbox=x=0:y=h-14:w=iw:h=14:color=${ffmpegColor(input.accent)}:t=fill`);
 
+    const videoChain = filters.join(',');
+
     if (logoPath !== null) {
       const logoSize = Math.round(input.width * 0.14);
-      filters.push(`[1:v]scale=${logoSize}:-1[logo]`, `[0:v][logo]overlay=x=w-ow-32:y=32[vout]`);
-      args.push('-filter_complex', filters.join(';'), '-map', '[vout]');
+      // A logo needs a complex graph because it is a second input. The first
+      // chain therefore needs an explicit `[0:v]` label: `-vf` supplies that
+      // implicitly, but `-filter_complex` does not, and an unlabeled drawtext
+      // pad fails with "Cannot find an unused video input stream".
+      args.push(
+        '-filter_complex',
+        `[0:v]${videoChain}[base];[1:v]scale=${logoSize}:-1[logo];` +
+          `[base][logo]overlay=x=W-w-32:y=32[vout]`,
+        '-map',
+        '[vout]',
+      );
     } else {
-      args.push('-vf', filters.join(','));
+      args.push('-vf', videoChain);
     }
 
     args.push('-frames:v', '1', outputPath);

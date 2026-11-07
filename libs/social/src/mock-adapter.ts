@@ -55,10 +55,7 @@ export class MockSocialAdapter implements SocialAdapter {
     // Assigned rather than initialised inline: the field initialiser would run
     // before `platform` is set, and `this.platform === 'linkedin'` would read
     // undefined and quietly pick the Instagram policy for both.
-    this.mediaPolicy =
-      options.platform === 'linkedin'
-        ? { acceptsTextOnly: true, acceptsVideo: true, acceptsImage: true, maxImageCount: 9 }
-        : { acceptsTextOnly: false, acceptsVideo: true, acceptsImage: true, maxImageCount: 10 };
+    this.mediaPolicy = mediaPolicyFor(options.platform);
   }
 
   publish(input: PublishRequest): Promise<PublishResult> {
@@ -144,6 +141,27 @@ export class MockSocialAdapter implements SocialAdapter {
     if (this.options.calls !== undefined) {
       this.options.calls[which] += 1;
     }
+  }
+}
+
+/**
+ * What each platform will carry.
+ *
+ * Kept next to the mock because that is where the publisher reads it today;
+ * a real WhatsApp adapter still has no public-post semantics, so it sends a
+ * message with optional media rather than a post. Only Instagram refuses
+ * text-only content.
+ */
+export function mediaPolicyFor(platform: SocialPlatform): SocialAdapter['mediaPolicy'] {
+  switch (platform) {
+    case 'linkedin':
+      return { acceptsTextOnly: true, acceptsVideo: true, acceptsImage: true, maxImageCount: 9 };
+    case 'facebook':
+      return { acceptsTextOnly: true, acceptsVideo: true, acceptsImage: true, maxImageCount: 10 };
+    case 'whatsapp':
+      return { acceptsTextOnly: true, acceptsVideo: true, acceptsImage: true, maxImageCount: 1 };
+    case 'instagram':
+      return { acceptsTextOnly: false, acceptsVideo: true, acceptsImage: true, maxImageCount: 10 };
   }
 }
 

@@ -7,7 +7,7 @@ import './globals.css';
 import { Providers } from '../lib/providers';
 import { Shell } from '../components/shell';
 import { THEME_STORAGE_KEY } from '../lib/theme-config';
-import { body as bodyFont } from './fonts';
+import { appFontClassName } from './fonts';
 
 /**
  * Root layout.
@@ -68,7 +68,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     // The boot script adds `data-theme` before hydration; React must not treat
     // that deliberate attribute as a mismatch.
-    <html lang="en" suppressHydrationWarning className={bodyFont.variable}>
+    <html lang="en" suppressHydrationWarning className={appFontClassName}>
       <body>
         {/*
           A native blocking script, deliberately not `next/script`: the

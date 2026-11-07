@@ -213,12 +213,19 @@ export function LiveRegion({ message }: { message: string }) {
 
 export function Badge({
   tone = 'neutral',
+  pulse = false,
   children,
 }: {
-  tone?: 'neutral' | 'good' | 'bad' | 'warn';
+  tone?: 'neutral' | 'good' | 'bad' | 'warn' | 'info' | 'teal';
+  /** Pulse is reserved for in-flight states: GENERATING and PUBLISHING. */
+  pulse?: boolean;
   children: ReactNode;
 }) {
-  return <span className={`${styles.badge} ${styles[`badge_${tone}`] ?? ''}`}>{children}</span>;
+  const className = [styles.badge, styles[`badge_${tone}`] ?? '', pulse ? styles.badge_pulse : '']
+    .filter(Boolean)
+    .join(' ');
+
+  return <span className={className}>{children}</span>;
 }
 
 export function EmptyState({

@@ -333,12 +333,15 @@ pnpm test:chaos
 | E2E         | Playwright            | real user journeys against compose             |
 | Load        | k6                    | public read throughput (manual; not in CI)     |
 
-Gates: `libs/credits` and the state machines ≥ 95 %, overall ≥ 80 %. Mocks are used
-for every external API — tests never call a real provider.
+Coverage gates: unit ≥ 80 % overall; integration ≥ 70 % on the database-backed
+files it collects. `PROJECT.md` §13.6 targets 95 % for `libs/credits` and the state
+machines and 80 % overall when the reports are merged. Mocks are used for every
+external API — tests never call a real provider.
 
-Current: **1046 unit tests**, **491 integration tests**, **40 chaos assertions**
-and 14/14 browser journeys passing. Unit coverage is 92.4 % lines / 84.5 %
-branches; integration coverage is 87.4 % lines / 70.9 % branches.
+Current: **1127 unit tests** (88 suites), **530 integration tests** (31 suites),
+**40 chaos assertions** and 14/14 browser journeys passing. Unit coverage is
+87.34 % lines / 80.21 % branches; integration coverage is 88.01 % lines / 72.24 %
+branches.
 
 ---
 

@@ -1,11 +1,14 @@
 import { eq } from 'drizzle-orm';
 
+import { QUEUE_NAMES } from '@renderflow/common';
 import { generationJobs, outboxEvents } from '@renderflow/db';
 import {
   InMemoryPublisher,
   OutboxRelay,
   countAbandoned,
   countPending,
+  delayForEvent,
+  queueForEvent,
   relayOnce,
 } from '@renderflow/outbox';
 import { reserve } from '@renderflow/credits';
@@ -47,6 +50,44 @@ describe('outbox relay', () => {
   beforeEach(async () => {
     await truncateAll(db);
     await seedPricing(db);
+  });
+
+  describe('event routing', () => {
+    it('sends each event to the queue that owns its work', () => {
+      // A stage hand-off is how a reel crosses from content to media without
+      // either worker knowing the other exists. An unroutable event falls back
+      // to content rather than disappearing with credits still reserved.
+      expect(queueForEvent('job.created')).toBe(QUEUE_NAMES.CONTENT);
+      expect(queueForEvent('job.stage_completed', { stage: 'PLAN' })).toBe(QUEUE_NAMES.CONTENT);
+      expect(queueForEvent('job.stage_completed', { stage: 'SCRIPT' })).toBe(QUEUE_NAMES.CONTENT);
+      expect(queueForEvent('job.stage_completed', { stage: 'IMAGE' })).toBe(QUEUE_NAMES.MEDIA);
+      expect(queueForEvent('job.stage_completed', { stage: 'VOICE' })).toBe(QUEUE_NAMES.MEDIA);
+      expect(queueForEvent('job.stage_completed', { stage: 'RENDER' })).toBe(QUEUE_NAMES.MEDIA);
+      expect(queueForEvent('post.scheduled')).toBe(QUEUE_NAMES.PUBLISH);
+      expect(queueForEvent('publish.retry')).toBe(QUEUE_NAMES.PUBLISH);
+      expect(queueForEvent('post.published')).toBe(QUEUE_NAMES.ANALYTICS);
+      expect(queueForEvent('post.publish_failed')).toBe(QUEUE_NAMES.NOTIFICATIONS);
+
+      expect(queueForEvent('job.stage_completed')).toBe(QUEUE_NAMES.CONTENT);
+      expect(queueForEvent('job.stage_completed', { stage: 42 })).toBe(QUEUE_NAMES.CONTENT);
+      expect(queueForEvent('job.stage_completed', { stage: 'UNKNOWN' })).toBe(QUEUE_NAMES.CONTENT);
+      expect(queueForEvent('unrecognised.event')).toBe(QUEUE_NAMES.CONTENT);
+    });
+
+    it('clamps a schedule delay to zero instead of publishing in the past', () => {
+      const now = Date.parse('2026-01-01T00:00:00.000Z');
+
+      expect(delayForEvent('job.created', {}, now)).toBeUndefined();
+      expect(delayForEvent('post.scheduled', {}, now)).toBeUndefined();
+      expect(delayForEvent('post.scheduled', { scheduledAt: 42 }, now)).toBeUndefined();
+      expect(delayForEvent('post.scheduled', { scheduledAt: 'not-a-date' }, now)).toBeUndefined();
+      expect(
+        delayForEvent('post.scheduled', { scheduledAt: '2026-01-01T00:00:10.000Z' }, now),
+      ).toBe(10_000);
+      expect(
+        delayForEvent('post.scheduled', { scheduledAt: '2025-12-31T23:59:59.000Z' }, now),
+      ).toBe(0);
+    });
   });
 
   const WORKSPACE = '11111111-1111-4111-8111-111111111111';

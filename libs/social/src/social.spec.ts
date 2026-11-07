@@ -110,11 +110,34 @@ describe('canPublish', () => {
 });
 
 describe('isSocialPlatform', () => {
-  it('accepts the two supported platforms', () => {
-    expect(SOCIAL_PLATFORMS).toEqual(['linkedin', 'instagram']);
+  it('accepts the supported platforms', () => {
+    expect(SOCIAL_PLATFORMS).toEqual(['linkedin', 'instagram', 'facebook', 'whatsapp']);
     expect(isSocialPlatform('linkedin')).toBe(true);
+    expect(isSocialPlatform('facebook')).toBe(true);
+    expect(isSocialPlatform('whatsapp')).toBe(true);
     expect(isSocialPlatform('myspace')).toBe(false);
     expect(isSocialPlatform(42)).toBe(false);
+  });
+});
+
+describe('new platforms', () => {
+  it('formats Facebook and WhatsApp with their own limits', () => {
+    expect(formatForPlatform('facebook', 'x'.repeat(4_500)).content.length).toBeLessThanOrEqual(
+      4_000,
+    );
+    expect(formatForPlatform('whatsapp', 'x'.repeat(2_000)).content.length).toBeLessThanOrEqual(
+      1_024,
+    );
+  });
+
+  it('allows text-only Facebook and WhatsApp posts', () => {
+    expect(canPublish('facebook', formatForPlatform('facebook', 'Hello'), false).ok).toBe(true);
+    expect(canPublish('whatsapp', formatForPlatform('whatsapp', 'Hello'), false).ok).toBe(true);
+  });
+
+  it('gives Facebook and WhatsApp their media policies', () => {
+    expect(new MockSocialAdapter({ platform: 'facebook' }).mediaPolicy.acceptsTextOnly).toBe(true);
+    expect(new MockSocialAdapter({ platform: 'whatsapp' }).mediaPolicy.maxImageCount).toBe(1);
   });
 });
 

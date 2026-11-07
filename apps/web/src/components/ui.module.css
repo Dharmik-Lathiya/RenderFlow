@@ -145,7 +145,7 @@
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-fg);
-  box-shadow: 0 6px 18px rgb(89 70 214 / 18%);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .primary:hover:not(:disabled) {
@@ -271,6 +271,27 @@
 .badge_warn {
   background: var(--warning-soft);
   color: var(--warning);
+}
+
+.badge_info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.badge_teal {
+  background: var(--teal-soft);
+  color: var(--teal);
+}
+
+/* Only GENERATING and PUBLISHING pulse (DESIGN.md section 5.4). */
+.badge_pulse {
+  animation: badgePulse 1.6s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .empty {
@@ -1470,7 +1491,7 @@
 .chip {
   padding: 0.32rem 0.4rem;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--neutral);
   border-radius: 6px;
   background: var(--bg-sunken);
   color: var(--fg);
@@ -1481,19 +1502,29 @@
 
 .chip:hover {
   border-color: var(--border-strong);
-  border-left-color: var(--accent);
 }
 
-.chip[data-type='POSTER'] {
+/* Calendar chips are coloured by post status, never by platform (DESIGN 5.7). */
+.chip[data-status='GENERATING'],
+.chip[data-status='PUBLISHING'] {
   border-left-color: var(--info);
 }
 
-.chip[data-type='CAROUSEL'] {
+.chip[data-status='READY'] {
+  border-left-color: var(--teal);
+}
+
+.chip[data-status='APPROVED'],
+.chip[data-status='PUBLISHED'] {
+  border-left-color: var(--success);
+}
+
+.chip[data-status='SCHEDULED'] {
   border-left-color: var(--warning);
 }
 
-.chip[data-type='REEL'] {
-  border-left-color: var(--success);
+.chip[data-status='FAILED'] {
+  border-left-color: var(--danger);
 }
 
 .chipDragging {
@@ -1616,19 +1647,7 @@
   height: 0.5rem;
   flex: none;
   border-radius: 2px;
-  background: var(--accent);
-}
-
-.legendDot[data-type='POSTER'] {
-  background: var(--info);
-}
-
-.legendDot[data-type='CAROUSEL'] {
-  background: var(--warning);
-}
-
-.legendDot[data-type='REEL'] {
-  background: var(--success);
+  background: var(--neutral);
 }
 
 /* --- notifications ------------------------------------------------------- */

@@ -274,9 +274,11 @@ export function Calendar() {
                             ]
                               .filter(Boolean)
                               .join(' ')}
-                            data-type={post.type}
+                            data-status={post.status}
                           >
-                            <span className={styles.chipType}>{post.type}</span>
+                            <span className={styles.chipType}>
+                              {post.type} · {post.status}
+                            </span>
                             <span className={styles.chipTime}>
                               {post.scheduledAt !== null &&
                                 new Date(post.scheduledAt).toLocaleTimeString(undefined, {

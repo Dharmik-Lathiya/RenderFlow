@@ -59,6 +59,10 @@ const WORKER_ID = workerIdForProcess();
 const PLATFORM_LIMITS: Partial<Record<SocialPlatform, { perWindow: number; windowMs: number }>> = {
   linkedin: { perWindow: 30, windowMs: 60_000 },
   instagram: { perWindow: 25, windowMs: 60_000 },
+  facebook: { perWindow: 25, windowMs: 60_000 },
+  // WhatsApp Business Platform messaging templates have their own per-number
+  // hourly rates; the limiter is a floor, not the platform's quota.
+  whatsapp: { perWindow: 20, windowMs: 60_000 },
 };
 
 function positiveInt(raw: string | undefined, name: string, fallback: number): number {

@@ -227,7 +227,7 @@ export function JobProgressView({
           return (
             <li key={stage} className={styles.listItem}>
               <span>{stage.toLowerCase()}</span>
-              <Badge tone={reached ? 'good' : current ? 'warn' : 'neutral'}>
+              <Badge tone={reached ? 'good' : current ? 'info' : 'neutral'}>
                 {reached ? 'done' : current ? 'running' : 'waiting'}
               </Badge>
             </li>

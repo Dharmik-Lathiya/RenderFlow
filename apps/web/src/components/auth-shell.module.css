@@ -18,6 +18,12 @@
 /* --- brand panel --------------------------------------------------------- */
 
 .aside {
+  --logo-ink: var(--on-ink);
+  --logo-flow: var(--accent-on-ink);
+  --logo-swoosh-start: var(--accent-on-ink);
+  --logo-swoosh-mid: var(--secondary-on-ink);
+  --logo-swoosh-end: color-mix(in srgb, var(--secondary-on-ink) 45%, white);
+
   position: sticky;
   top: 0;
   display: flex;
@@ -26,10 +32,15 @@
   padding: clamp(1.6rem, 4vw, 3.2rem);
   overflow: hidden;
   background:
-    radial-gradient(circle at 14% 6%, rgb(169 155 255 / 26%), transparent 32%),
-    radial-gradient(circle at 88% 82%, rgb(123 188 255 / 16%), transparent 36%),
-    linear-gradient(158deg, #0d0f19 0%, #111424 48%, #090a11 100%);
-  color: #f4f5fa;
+    radial-gradient(circle at 14% 6%, rgb(255 107 61 / 22%), transparent 32%),
+    radial-gradient(circle at 88% 82%, rgb(245 165 36 / 10%), transparent 36%),
+    linear-gradient(
+      158deg,
+      var(--ink-panel) 0%,
+      color-mix(in srgb, var(--ink-panel) 86%, var(--secondary-on-ink)) 48%,
+      var(--ink-panel) 100%
+    );
+  color: var(--on-ink);
   isolation: isolate;
 }
 
@@ -53,11 +64,11 @@
   z-index: -1;
   width: 32rem;
   height: 32rem;
-  border: 1px solid rgb(169 155 255 / 16%);
+  border: 1px solid rgb(255 107 61 / 16%);
   border-radius: 50%;
   box-shadow:
-    0 0 0 5rem rgb(169 155 255 / 4%),
-    0 0 0 10rem rgb(169 155 255 / 2.5%);
+    0 0 0 5rem rgb(255 107 61 / 4%),
+    0 0 0 10rem rgb(255 107 61 / 2.5%);
   content: '';
   pointer-events: none;
 }
@@ -65,28 +76,9 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
   width: fit-content;
-  color: #ffffff;
+  color: var(--on-ink);
   text-decoration: none;
-}
-
-.brandMark {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #a99bff 0%, #7bbcff 100%);
-  color: #0b0a14;
-  box-shadow: 0 8px 24px rgb(123 188 255 / 24%);
-}
-
-.brandWord {
-  color: currentColor;
-  font-size: 1.02rem;
-  font-weight: 700;
-  letter-spacing: -0.035em;
 }
 
 .asideCopy {
@@ -98,7 +90,7 @@
 
 .asideEyebrow {
   margin: 0;
-  color: #c4bcff;
+  color: var(--accent-on-ink);
   font-size: 0.67rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -108,17 +100,19 @@
 .asideTitle {
   max-width: 24rem;
   margin: 0.7rem 0 0;
-  color: #f7f7fc;
-  font-size: clamp(2rem, 3.5vw, 3.15rem);
+  color: var(--on-ink);
+  font-family:
+    var(--font-display, 'Bricolage Grotesque'), var(--font-geist-sans, 'Geist'), sans-serif;
+  font-size: clamp(2rem, 3.5vw, 3rem);
   font-weight: 700;
-  letter-spacing: -0.048em;
+  letter-spacing: -0.04em;
   line-height: 1.03;
 }
 
 .asideLede {
   max-width: 29rem;
   margin: 1rem 0 0;
-  color: rgb(228 230 242 / 72%);
+  color: var(--muted-on-ink);
   font-size: 0.93rem;
   line-height: 1.65;
 }
@@ -136,7 +130,7 @@
   display: flex;
   align-items: flex-start;
   gap: 0.7rem;
-  color: rgb(228 230 242 / 64%);
+  color: var(--muted-on-ink);
   font-size: 0.78rem;
   line-height: 1.55;
 }
@@ -147,16 +141,16 @@
   place-items: center;
   width: 1.65rem;
   height: 1.65rem;
-  border: 1px solid rgb(255 255 255 / 12%);
+  border: 1px solid var(--border-on-ink);
   border-radius: 7px;
   background: rgb(255 255 255 / 5%);
-  color: #c9c1ff;
+  color: var(--secondary-on-ink);
 }
 
 .asideItem strong {
   display: block;
   margin-bottom: 0.08rem;
-  color: #f4f5fa;
+  color: var(--on-ink);
   font-size: 0.81rem;
   font-weight: 600;
 }
@@ -168,7 +162,7 @@
   max-width: 27rem;
   margin-top: auto;
   padding: 0.85rem;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid var(--border-on-ink);
   border-radius: 14px;
   background: rgb(255 255 255 / 4%);
   box-shadow: 0 24px 60px rgb(0 0 0 / 32%);
@@ -188,17 +182,17 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: #eef0f8;
+  color: var(--on-ink);
   font-size: 0.72rem;
   font-weight: 600;
 }
 
 .previewLabel svg {
-  color: #c9c1ff;
+  color: var(--accent-on-ink);
 }
 
 .previewCount {
-  color: rgb(228 230 242 / 52%);
+  color: var(--muted-on-ink);
   font-size: 0.65rem;
   font-variant-numeric: tabular-nums;
 }
@@ -224,13 +218,13 @@
 }
 
 .previewDotReady {
-  background: #7ee2b8;
-  box-shadow: 0 0 0 3px rgb(126 226 184 / 12%);
+  background: var(--success-on-ink);
+  box-shadow: 0 0 0 3px rgb(47 182 124 / 12%);
 }
 
 .previewDotDraft {
-  background: #f5c96b;
-  box-shadow: 0 0 0 3px rgb(245 201 107 / 12%);
+  background: var(--warning-on-ink);
+  box-shadow: 0 0 0 3px rgb(245 165 36 / 12%);
 }
 
 .previewCopy {
@@ -243,7 +237,7 @@
 
 .previewTitle {
   overflow: hidden;
-  color: #eef0f8;
+  color: var(--on-ink);
   font-size: 0.72rem;
   font-weight: 550;
   text-overflow: ellipsis;
@@ -251,24 +245,24 @@
 }
 
 .previewMeta {
-  color: rgb(228 230 242 / 46%);
+  color: color-mix(in srgb, var(--muted-on-ink) 72%, transparent);
   font-size: 0.64rem;
 }
 
 .previewStatus {
   flex: none;
   padding: 0.1rem 0.42rem;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid var(--border-on-ink);
   border-radius: 999px;
   background: rgb(255 255 255 / 5%);
-  color: rgb(228 230 242 / 62%);
+  color: var(--muted-on-ink);
   font-size: 0.6rem;
   font-weight: 600;
 }
 
 .asideFootnote {
   margin: clamp(1.4rem, 4vh, 2.6rem) 0 0;
-  color: rgb(228 230 242 / 36%);
+  color: color-mix(in srgb, var(--muted-on-ink) 58%, transparent);
   font-size: 0.66rem;
 }
 

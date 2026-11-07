@@ -1,6 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28" role="img" aria-label="RenderFlow">
-  <rect width="28" height="28" rx="7" fill="#0f172a" />
-  <rect x="5" y="6" width="12" height="4.2" rx="2.1" fill="#2563eb" />
-  <rect x="10" y="12" width="13" height="4.2" rx="2.1" fill="#60a5fa" />
-  <rect x="6.5" y="18" width="10" height="4.2" rx="2.1" fill="#ea580c" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="RenderFlow">
+  <defs>
+    <linearGradient id="blue" x1="4" y1="4" x2="29" y2="22" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00b8f4" />
+      <stop offset="1" stop-color="#0645f5" />
+    </linearGradient>
+    <linearGradient id="orange" x1="4" y1="14" x2="25" y2="29" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff8a00" />
+      <stop offset="1" stop-color="#ff3d00" />
+    </linearGradient>
+  </defs>
+  <path fill="url(#blue)" d="M4 3h15c7 0 11 5 11 11 0 6-4 10-11 12l-4-4c6-1 10-4 10-8 0-3-2-5-6-5H6C5 9 4 7 4 3Z" />
+  <path fill="url(#orange)" d="M4 19c0-5 3-8 8-8 3 0 5 1 8 5l10 11c1 1 0 2-1 2h-7l-8-9c-1-2-2-3-4-3-3 0-4 2-4 5v5H4c-1 0-2-1-2-2v-5c0-1 1-1 2-1Z" />
+  <path fill="url(#blue)" d="M4 20c1-3 3-5 7-5 2 0 4 1 6 3-4-1-7 1-7 5v7H4c-1 0-2-1-2-2v-5c0-1 1-2 2-3Z" />
 </svg>

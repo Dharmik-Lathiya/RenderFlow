@@ -16,9 +16,49 @@
  *    retrying, refreshing the token, and giving up.
  */
 
-export type SocialPlatform = 'linkedin' | 'instagram';
+export type SocialPlatform = 'linkedin' | 'instagram' | 'facebook' | 'whatsapp';
 
-export const SOCIAL_PLATFORMS: readonly SocialPlatform[] = ['linkedin', 'instagram'];
+export const SOCIAL_PLATFORMS: readonly SocialPlatform[] = [
+  'linkedin',
+  'instagram',
+  'facebook',
+  'whatsapp',
+];
+
+/**
+ * What each platform is for, in the language of the connections module.
+ *
+ * `shareKind` matters to the UI copy: Facebook and the two text-friendly
+ * networks take an ordinary post, Instagram needs media to go with the caption,
+ * and WhatsApp is a message rather than a broadcast. The copy in the UI reads
+ * from here through the API - actually, through the platform name only - so
+ * the wording below is the documentation, not a second source of truth.
+ */
+export const SOCIAL_PLATFORM_META = {
+  linkedin: {
+    label: 'LinkedIn',
+    blurb: 'Professional posts and company pages.',
+    shareKind: 'post',
+  },
+  instagram: {
+    label: 'Instagram',
+    blurb: 'Visual posts and reels. A caption needs an image or video.',
+    shareKind: 'post',
+  },
+  facebook: {
+    label: 'Facebook',
+    blurb: 'Page posts and shared media.',
+    shareKind: 'post',
+  },
+  whatsapp: {
+    label: 'WhatsApp',
+    blurb: 'Sends the post as a message to a Business account.',
+    shareKind: 'message',
+  },
+} as const satisfies Record<
+  SocialPlatform,
+  { label: string; blurb: string; shareKind: 'post' | 'message' }
+>;
 
 export function isSocialPlatform(value: unknown): value is SocialPlatform {
   return typeof value === 'string' && (SOCIAL_PLATFORMS as readonly string[]).includes(value);
@@ -120,6 +160,12 @@ const RULES: Record<SocialPlatform, PlatformRule> = {
   linkedin: { maxLength: 3_000 },
   // Instagram's caption limit is 2200.
   instagram: { maxLength: 2_200, linkExpandsTo: 23 },
+  // Facebook's body limit is 63,206 characters. 4,000 is conservative and sits
+  // inside the platforms that share the same content, so formatting at schedule
+  // time can hold one value per platform without surprises.
+  facebook: { maxLength: 4_000 },
+  // WhatsApp Business sends a message body of up to 1,024 characters.
+  whatsapp: { maxLength: 1_024 },
 };
 
 /**
@@ -216,4 +262,6 @@ export function canPublish(
 const RULE_ACCEPTS_TEXT_ONLY: Record<SocialPlatform, boolean> = {
   linkedin: true,
   instagram: false,
+  facebook: true,
+  whatsapp: true,
 };

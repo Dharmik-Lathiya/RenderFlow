@@ -91,7 +91,12 @@ export function CampaignPosts({ campaignId }: { campaignId: string }) {
                     </Link>
                   </span>
                   <span className={styles.row}>
-                    <Badge tone={toneFor(post.status)}>{post.status}</Badge>
+                    <Badge
+                      tone={toneFor(post.status)}
+                      pulse={post.status === 'GENERATING' || post.status === 'PUBLISHING'}
+                    >
+                      {post.status}
+                    </Badge>
                     <Link
                       href={`/posts/${post.id}`}
                       className={styles.minorLink}
@@ -205,15 +210,24 @@ export function CampaignPosts({ campaignId }: { campaignId: string }) {
   );
 }
 
-function toneFor(status: string): 'neutral' | 'good' | 'bad' | 'warn' {
+type BadgeTone = 'neutral' | 'good' | 'bad' | 'warn' | 'info' | 'teal';
+
+/** Post states mapped per `DESIGN.md` section 2.3. */
+function toneFor(status: string): BadgeTone {
+  if (status === 'READY') {
+    return 'teal';
+  }
   if (status === 'PUBLISHED' || status === 'APPROVED') {
     return 'good';
   }
   if (status === 'FAILED') {
     return 'bad';
   }
-  if (status === 'PUBLISHING' || status === 'GENERATING' || status === 'SCHEDULED') {
+  if (status === 'SCHEDULED') {
     return 'warn';
+  }
+  if (status === 'PUBLISHING' || status === 'GENERATING') {
+    return 'info';
   }
   return 'neutral';
 }

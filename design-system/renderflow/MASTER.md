@@ -1,8 +1,12 @@
 # Design System Master File
 
+> **SUPERSEDED:** RenderFlow now uses **Ember & Ink**, defined in
+> [`DESIGN.md`](../../DESIGN.md). The palette, fonts and examples below are the
+> historical generated system and must not be copied into new work. Page-specific
+> notes live in `design-system/renderflow/pages/`.
+>
 > **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
 > If that file exists, its rules **override** this Master file.
-> If not, strictly follow the rules below.
 
 ---
 
@@ -13,10 +17,10 @@
 
 > **RenderFlow adaptation:** the product application supports explicit light and
 > dark themes, defaulting to the OS preference (see `apps/web/src/lib/theme.tsx`
-> and `apps/web/src/app/globals.css`); this light palette is the public marketing
-> surface. The landing page overrides colour and typography details in
-> `design-system/renderflow/pages/landing.md`. Do not copy the marketing palette
-> into app screens without re-checking their contrast and focus states.
+> and `apps/web/src/app/globals.css`). The canonical tokens, typography and
+> status mappings are in `DESIGN.md`; the landing page notes are in
+> `design-system/renderflow/pages/landing.md`. Do not copy the historical
+> palette below into app screens.
 
 ---
 

@@ -46,7 +46,8 @@ describe('Calendar', () => {
 
     renderWithProviders(<Calendar />, client);
 
-    expect(await screen.findByText('REEL')).toBeInTheDocument();
+    // The chip carries type and status so colour is never the only status cue.
+    expect(await screen.findByText('REEL · APPROVED')).toBeInTheDocument();
     expect(screen.getByText('Acme')).toBeInTheDocument();
     expect(screen.getByText(/10:30/)).toBeInTheDocument();
   });

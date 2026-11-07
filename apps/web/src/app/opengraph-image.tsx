@@ -24,24 +24,27 @@ export default function OpenGraphImage() {
         width: '100%',
         height: '100%',
         padding: '80px',
-        background: '#0f172a',
-        color: '#f8fafc',
+        background: '#0e0f13',
+        color: '#f2f3f5',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 40 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ width: 56, height: 16, borderRadius: 8, background: '#2563eb' }} />
-          <div style={{ width: 72, height: 16, borderRadius: 8, background: '#60a5fa' }} />
-          <div style={{ width: 48, height: 16, borderRadius: 8, background: '#ea580c' }} />
+          <div style={{ width: 56, height: 16, borderRadius: 8, background: '#ff6b3d' }} />
+          <div style={{ width: 72, height: 16, borderRadius: 8, background: '#7c8cff' }} />
+          <div style={{ width: 48, height: 16, borderRadius: 8, background: '#ff9a5c' }} />
         </div>
-        <div style={{ fontSize: 40, fontWeight: 600 }}>RenderFlow</div>
+        <div style={{ display: 'flex', fontSize: 40, fontWeight: 600 }}>
+          <span>Render</span>
+          <span style={{ color: '#ff6b3d' }}>Flow.</span>
+        </div>
       </div>
 
       <div style={{ fontSize: 76, lineHeight: 1.05, letterSpacing: -2, maxWidth: 900 }}>
         A month of marketing. Made in an afternoon.
       </div>
 
-      <div style={{ marginTop: 32, fontSize: 30, color: '#94a3b8', maxWidth: 900 }}>
+      <div style={{ marginTop: 32, fontSize: 30, color: '#9aa0ac', maxWidth: 900 }}>
         AI marketing studio and social scheduler. Pay per asset, refunded when generation fails.
       </div>
     </div>,

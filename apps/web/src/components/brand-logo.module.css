@@ -1,0 +1,50 @@
+/* Wordmark: Render (ink) + Flow. (accent) with the ember-to-blue swoosh. */
+
+.logo {
+  --logo-size: 1.28rem;
+
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.16rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.large {
+  --logo-size: 1.7rem;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  color: var(--logo-ink, var(--fg));
+  font-family:
+    var(--font-geist-sans, 'Geist'),
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: var(--logo-size);
+  font-weight: 800;
+  letter-spacing: -0.055em;
+  line-height: 0.92;
+}
+
+.render {
+  color: var(--logo-ink, var(--fg));
+}
+
+.flow,
+.dot {
+  color: var(--logo-flow, var(--accent));
+}
+
+.swoosh {
+  width: 100%;
+  height: calc(var(--logo-size) * 0.3);
+  min-height: 4px;
+  overflow: visible;
+}

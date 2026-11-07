@@ -460,7 +460,12 @@ export type NewBrandMemory = typeof brandMemory.$inferInsert;
 // social accounts and publishing (Phase 7)
 // ---------------------------------------------------------------------------
 
-export const socialPlatformEnum = pgEnum('social_platform', ['linkedin', 'instagram']);
+export const socialPlatformEnum = pgEnum('social_platform', [
+  'linkedin',
+  'instagram',
+  'facebook',
+  'whatsapp',
+]);
 
 export const publishStatusEnum = pgEnum('publish_status', [
   'PENDING',
@@ -1198,6 +1203,18 @@ export const festivalOccasions = pgTable('festival_occasions', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull(),
   iconUrl: text('icon_url'),
+  /**
+   * Which market this occasion belongs to, as an id from `FESTIVAL_COUNTRIES`
+   * (`IN`, `US`, `GLOBAL`). Text, not an enum: adding a country is a seed change,
+   * not a migration.
+   */
+  country: text('country').notNull().default('GLOBAL'),
+  /**
+   * The next known date of the occasion as an ISO calendar date (`YYYY-MM-DD`),
+   * not a `timestamptz`: festivals are date-shaped, and a timezone would invent
+   * a time nobody asked for. Null for occasions that have no fixed day.
+   */
+  featuredDate: date('featured_date', { mode: 'string' }),
   active: boolean('active').default(true),
 });
 

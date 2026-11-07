@@ -3,10 +3,9 @@
 > **Project:** RenderFlow
 > **Route:** `/` (public, no application shell)
 > **Owner:** `apps/web`
-> **Design source:** UI UX Pro Max design-system generation (`Hero + Features + CTA`,
-> trust blue + warm CTA, Calistoga/Inter), adapted to the product's real
+> **Design source:** **Ember & Ink** (`DESIGN.md`), adapted to the product's real
 > capabilities and the repository's honesty rules.
-> **Master:** `design-system/renderflow/MASTER.md`
+> **Master:** `DESIGN.md` (the generated `MASTER.md` is historical).
 
 ---
 
@@ -62,12 +61,13 @@ but no time to produce a month of content by hand.
    that survives retries; analytics with a suggested next post.
 5. **How it works** (`#how-it-works`) — three numbered steps: brief → generate
    and approve → schedule and publish.
-6. **Quote band** (dark navy) — the reliability thesis from the project brief:
-   “A crash at any point must never lose a job, double charge, or double post.”
+6. **Quote band** (ink panel with an ember wash) — the reliability thesis from
+   the project brief: “A crash at any point must never lose a job, double charge,
+   or double post.”
 7. **FAQ** (`#faq`) — native `<details>` items: card requirement, failed
    generations, channels, brand assets, pricing model.
-8. **Final CTA** — blue panel, “Your next campaign is one brief away.”, primary
-   orange `Start free`.
+8. **Final CTA** — ink panel with ember glow, “Your next campaign is one brief
+   away.”, bright ember `Start free`.
 9. **Footer** — wordmark, one-line description, real links only, year.
 
 ## 4. Layout and responsive rules
@@ -85,41 +85,53 @@ but no time to produce a month of content by hand.
 
 The application is dark-first; the marketing page is a **light editorial
 surface** so it reads as a public site, not a logged-in screen. Tokens are scoped
-to `.landing` and do not leak into the app.
+to `.landing` and do not leak into the app. They are the light-theme values from
+`DESIGN.md` section 2.1; components reference tokens, never raw hex.
 
-| Token             | Value     | Use                            |
-| ----------------- | --------- | ------------------------------ |
-| `--lp-bg`         | `#f8fafc` | page background                |
-| `--lp-surface`    | `#ffffff` | cards, header                  |
-| `--lp-surface-2`  | `#f1f5f9` | inset panels, chips            |
-| `--lp-ink`        | `#0f172a` | headings and body              |
-| `--lp-muted`      | `#475569` | secondary copy                 |
-| `--lp-border`     | `#e2e8f0` | hairlines                      |
-| `--lp-blue`       | `#2563eb` | links, focus ring, final panel |
-| `--lp-blue-ink`   | `#1d4ed8` | link hover                     |
-| `--lp-orange`     | `#ea580c` | primary CTA fill               |
-| `--lp-orange-ink` | `#241003` | text on orange                 |
-| `--lp-navy`       | `#0f172a` | quote band                     |
-| `--lp-green`      | `#15803d` | positive checks (icons only)   |
+| Token                | Value     | Use                                |
+| -------------------- | --------- | ---------------------------------- |
+| `--lp-bg`            | `#faf7f2` | warm paper page background         |
+| `--lp-surface`       | `#ffffff` | cards, header                      |
+| `--lp-surface-2`     | `#f1ece3` | inset panels, chips                |
+| `--lp-ink`           | `#1a1714` | headings and body                  |
+| `--lp-muted`         | `#6b645b` | secondary copy                     |
+| `--lp-border`        | `#e4ddd0` | hairlines                          |
+| `--lp-border-strong` | `#cfc5b5` | hover borders                      |
+| `--lp-accent`        | `#c93c12` | links, focus ring, primary CTA     |
+| `--lp-accent-strong` | `#a9320e` | accent text on the warm background |
+| `--lp-accent-ink`    | `#ffffff` | text on accent                     |
+| `--lp-secondary`     | `#2f3f9e` | secondary links and info states    |
+| `--lp-ink-panel`     | `#0e0f13` | quote band, final CTA              |
+| `--lp-on-ink`        | `#f2f3f5` | text on ink panels                 |
+| `--lp-muted-on-ink`  | `#9aa0ac` | secondary text on ink panels       |
+| `--lp-warning`       | `#8a5b00` | scheduled / reserved credit states |
+| `--lp-teal`          | `#0f766e` | READY state, refunds               |
+| `--lp-success`       | `#16794f` | approved / published states        |
+| `--lp-bright`        | `#ff6b3d` | bright ember CTA on dark panels    |
+| `--lp-bright-ink`    | `#14110f` | text on the bright ember CTA       |
 
 Contrast (verified with WCAG relative luminance):
 
-- ink on background: **17.06:1**
-- muted on background: **7.24:1**
-- white on blue: **5.17:1**
-- orange-ink on orange: **5.13:1**
-- white on navy: **17.85:1**
-- orange icons on light background: **3.40:1** (non-text UI, passes 3:1)
+- ink on background: **16.70:1**
+- muted on background: **5.46:1**
+- accent on background: **4.75:1**
+- white on accent: **5.07:1**
+- secondary on background: **8.45:1**
+- warning on surface: **5.87:1**
+- teal on surface: **5.47:1**
+- success on surface: **5.41:1**
+- bright-ink on bright: **6.65:1**
+- on-ink on ink panel: **17.25:1**
 
 ### Typography
 
-- Display: **Calistoga** (Google Fonts, self-hosted through `next/font`).
-- Body/UI: **Inter** (Google Fonts, self-hosted through `next/font`).
-- H1: `clamp(2.75rem, 7vw, 5rem)`, line-height `0.98`, tracking `-0.03em`.
-- H2: `clamp(2rem, 4vw, 3rem)`, line-height `1.05`.
+- Display: **Bricolage Grotesque**, weight `600–700` (self-hosted via `next/font`).
+- Body/UI: **Geist**; numbers and IDs: **Geist Mono**.
+- H1: `clamp(2.5rem, 4.6vw, 3.5rem)`, line-height `1.07`, tracking `-0.035em`.
+- H2: `clamp(2rem, 3.6vw, 2.5rem)`, line-height `1.1`, weight `700`.
 - Body: `1.0625rem`/`1.65`; small: `0.875rem`; eyebrow: `0.75rem` uppercase.
 - Fonts are loaded on the server component with `display: 'swap'`; the fallback
-  stack is Georgia/system sans so first paint is never invisible.
+  stack is system sans so first paint is never invisible.
 
 ## 6. Interaction and motion
 
@@ -139,7 +151,7 @@ Contrast (verified with WCAG relative luminance):
 - The product preview is a single `role="img"` with a descriptive
   `aria-label`; every decorative layer inside is `aria-hidden`.
 - Icons are inline SVG with `aria-hidden="true"`; no emoji as icons.
-- Focus ring: `3px solid var(--lp-blue)` with `2px` offset; never removed.
+- Focus ring: `2px solid var(--lp-accent)` with `2px` offset; never removed.
 - Link text is descriptive; no “click here”.
 - Text reflows at `375px` and at `200%` zoom; no fixed heights on copy blocks.
 - FAQ summaries are keyboard-operable by default.

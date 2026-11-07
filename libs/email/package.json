@@ -17,10 +17,7 @@
   },
   "dependencies": {
     "@renderflow/observability": "workspace:*",
-    "nodemailer": "^7.0.9"
-  },
-  "devDependencies": {
-    "@types/nodemailer": "^7.0.4"
+    "nodemailer": "^10.0.6"
   },
   "engines": {
     "node": ">=22.18.0"

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { BrandLogo } from './brand-logo';
 import { Icon } from './icons';
 import { ThemeToggle } from './theme-toggle';
 import styles from './auth-shell.module.css';
@@ -37,10 +38,7 @@ export function AuthShell({
     <div className={styles.shell}>
       <aside className={styles.aside}>
         <Link href="/" className={styles.brand} aria-label="RenderFlow home">
-          <span className={styles.brandMark}>
-            <Icon name="sparkles" size={17} />
-          </span>
-          <span className={styles.brandWord}>RenderFlow</span>
+          <BrandLogo size="large" />
         </Link>
 
         <div className={styles.asideCopy}>
@@ -124,10 +122,7 @@ export function AuthShell({
       <main id="main" className={styles.main}>
         <div className={styles.topline}>
           <Link href="/" className={styles.mobileBrand} aria-label="RenderFlow home">
-            <span className={styles.brandMark}>
-              <Icon name="sparkles" size={16} />
-            </span>
-            <span className={styles.brandWord}>RenderFlow</span>
+            <BrandLogo />
           </Link>
           <div className={styles.themeSlot}>
             <ThemeToggle />

@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { FfmpegRendererProvider, type RendererStorage } from '@renderflow/ai';
+import {
+  FfmpegRendererProvider,
+  type FestivalPosterInput,
+  type RendererStorage,
+} from '@renderflow/ai';
 
 const run = promisify(execFile);
 
@@ -117,6 +121,23 @@ async function probe(file: string): Promise<{
   };
 }
 
+/** A poster request sized for a fast test render. */
+function festivalPoster(
+  jobId: string,
+  overrides: Partial<FestivalPosterInput> = {},
+): FestivalPosterInput {
+  return {
+    jobId,
+    width: 360,
+    height: 480,
+    background: '#112233',
+    primary: '#E67E22',
+    accent: '#FF9933',
+    lines: [{ text: 'Diwali Mela', fontSize: 36, position: 'top-center' }],
+    ...overrides,
+  };
+}
+
 describeFfmpeg('FfmpegRendererProvider, against the real ffmpeg', () => {
   let dir: string;
 
@@ -206,6 +227,120 @@ describeFfmpeg('FfmpegRendererProvider, against the real ffmpeg', () => {
     expect(media).toMatchObject({ width: 180, height: 320 });
   });
 
+  it('uses narration length when a scene omits its duration', async () => {
+    await solidPng(join(dir, 'a.png'), 'teal');
+    await toneWav(join(dir, 'voice.wav'), 1);
+
+    const storage = fileStorage(dir);
+    const provider = new FfmpegRendererProvider({ storage });
+
+    // A script scene without an explicit duration must follow the narration,
+    // not fall back to a three-second still that cuts the voice off.
+    const result = await provider.renderJob({
+      jobId: 'reel-narration-duration',
+      scenes: [{ imageKey: 'a.png', audioKey: 'voice.wav', narration: 'One second' }],
+      width: 320,
+      height: 240,
+    });
+
+    expect(result.durationMs).toBe(1_000);
+    const media = await probe(join(dir, result.storageKey));
+    expect(media.duration).toBeGreaterThan(0.5);
+  });
+
+  it('refuses a reel with no scenes before writing anything', async () => {
+    const storage = fileStorage(dir);
+    const provider = new FfmpegRendererProvider({ storage });
+
+    await expect(
+      provider.renderJob({ jobId: 'reel-empty', scenes: [], width: 320, height: 240 }),
+    ).rejects.toMatchObject({ classification: 'PERMANENT' });
+  });
+
+  it('renders a festival poster with wrapped copy, a logo and alpha colours', async () => {
+    await solidPng(join(dir, 'logo.png'), 'black', 64);
+
+    const storage = fileStorage(dir);
+    const provider = new FfmpegRendererProvider({ storage });
+
+    const result = await provider.renderFestivalPoster(
+      festivalPoster('festival-poster', {
+        background: '#112233ff',
+        logoKey: 'logo.png',
+        lines: [
+          { text: 'Diwali Mela', fontSize: 36, position: 'top-center', color: '#FF993380' },
+          {
+            text: 'Twenty percent off every box of mithai in the shop this week',
+            fontSize: 24,
+            position: 'center',
+          },
+          { text: 'Order before Friday', fontSize: 20, position: 'bottom-center' },
+        ],
+      }),
+    );
+
+    expect(result.storageKey).toBe('generated/festival/festival-poster/poster-360x480.png');
+    const media = await probe(join(dir, result.storageKey));
+    expect(media).toMatchObject({ width: 360, height: 480 });
+  });
+
+  it('renders a silent festival reel from generated artwork', async () => {
+    const storage = fileStorage(dir);
+    const provider = new FfmpegRendererProvider({ storage });
+
+    // No poster, no narration and no brand name: the reel still has to render
+    // from the template rather than expecting an earlier stage to supply files.
+    const result = await provider.renderFestivalReel({
+      ...festivalPoster('festival-reel-silent', {
+        width: 320,
+        height: 240,
+        lines: [{ text: 'Diwali Mela', fontSize: 30, position: 'center' }],
+      }),
+      durationMs: 1_000,
+      brandName: '',
+      posterKey: null,
+      audioKey: null,
+    });
+
+    const media = await probe(join(dir, result.storageKey));
+    expect(media).toMatchObject({ width: 320, height: 240, hasAudio: false });
+    expect(result.durationMs).toBe(1_000);
+  });
+
+  it('animates an existing poster and mixes narration in', async () => {
+    await solidPng(join(dir, 'a.png'), 'orange');
+    await toneWav(join(dir, 'voice.wav'), 1);
+
+    const storage = fileStorage(dir);
+    const provider = new FfmpegRendererProvider({ storage });
+
+    const poster = await provider.renderFestivalPoster(
+      festivalPoster('festival-poster-source', { width: 320, height: 240 }),
+    );
+
+    const result = await provider.renderFestivalReel({
+      ...festivalPoster('festival-reel-narrated', { width: 320, height: 240 }),
+      posterKey: poster.storageKey,
+      audioKey: 'voice.wav',
+      durationMs: 1_000,
+      brandName: "Denny's: Bakery",
+    });
+
+    const media = await probe(join(dir, result.storageKey));
+    expect(media).toMatchObject({ width: 320, height: 240, hasAudio: true });
+  });
+
+  it('refuses an invalid festival colour before ffmpeg runs', async () => {
+    const storage = fileStorage(dir);
+    const provider = new FfmpegRendererProvider({ storage });
+
+    await expect(
+      provider.renderFestivalPoster(
+        festivalPoster('festival-bad-colour', { background: 'red', lines: [] }),
+      ),
+    ).rejects.toMatchObject({ classification: 'PERMANENT' });
+  });
+
   it('applies the watermark when a font is available', async () => {
     await solidPng(join(dir, 'a.png'), 'white');
     await toneWav(join(dir, 'voice.wav'), 1);
@@ -268,7 +403,9 @@ describeFfmpeg('FfmpegRendererProvider, against the real ffmpeg', () => {
     await expect(
       provider.renderJob({
         jobId: 'reel-broken-audio',
-        scenes: [{ imageKey: 'a.png', audioKey: 'broken.mp3', durationMs: 1_000 }],
+        // No explicit duration: unreadable audio yields 0 from ffprobe, so the
+        // renderer must fall back to `defaultSceneMs` before ffmpeg rejects it.
+        scenes: [{ imageKey: 'a.png', audioKey: 'broken.mp3' }],
         width: 320,
         height: 240,
       }),

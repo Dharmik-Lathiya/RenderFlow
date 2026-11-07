@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { useApi } from '../lib/providers';
 import { AccountMenu } from './account-menu';
+import { BrandLogo } from './brand-logo';
 import { CommandMenu } from './command-menu';
 import { Icon } from './icons';
 import { NAV_ITEMS, NAV_SECTIONS, currentNavItem } from './navigation';
@@ -91,11 +92,8 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className={styles.appShell}>
       <aside className={styles.sidebar} aria-label="Sidebar">
         <div className={styles.sidebarTop}>
-          <Link href="/dashboard" className={styles.brand}>
-            <span className={styles.brandMark}>
-              <Icon name="sparkles" />
-            </span>
-            <span className={styles.brandWord}>RenderFlow</span>
+          <Link href="/dashboard" className={styles.brand} aria-label="RenderFlow dashboard">
+            <BrandLogo />
           </Link>
         </div>
 
@@ -206,11 +204,12 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className={styles.appMain}>
         <header className={styles.topbar}>
           <div className={styles.topbarLeft}>
-            <Link href="/dashboard" className={styles.mobileBrand}>
-              <span className={styles.brandMark}>
-                <Icon name="sparkles" size={16} />
-              </span>
-              RenderFlow
+            <Link
+              href="/dashboard"
+              className={styles.mobileBrand}
+              aria-label="RenderFlow dashboard"
+            >
+              <BrandLogo />
             </Link>
             <nav className={styles.breadcrumb} aria-label="Breadcrumb">
               <Link href="/dashboard" className={styles.breadcrumbLink}>

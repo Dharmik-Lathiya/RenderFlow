@@ -14,19 +14,71 @@
 
 import { z } from 'zod';
 
+/**
+ * Countries the catalogue is organised by.
+ *
+ * The ids are intentionally tiny and stable ('IN', 'US', 'GLOBAL'): they are
+ * what `festival_occasions.country` stores and what the API echoes back, so a
+ * rename would touch the database. `GLOBAL` is there for occasions that are not
+ * tied to one market - "Custom" is the workspace's own celebration.
+ *
+ * Order matters for the UI: India first, because that is where most users
+ * launch campaigns from, then the rest alphabetically.
+ */
+export const FESTIVAL_COUNTRIES = [
+  { id: 'IN', name: 'India' },
+  { id: 'US', name: 'United States' },
+  { id: 'GLOBAL', name: 'Global' },
+] as const;
+
+export type FestivalCountryId = (typeof FESTIVAL_COUNTRIES)[number]['id'];
+
+/** Resolves a country's display name; an unknown id falls back to the raw id. */
+export function festivalCountryName(countryId: string): string {
+  return FESTIVAL_COUNTRIES.find((country) => country.id === countryId)?.name ?? countryId;
+}
+
+export function isFestivalCountryId(value: unknown): value is FestivalCountryId {
+  return typeof value === 'string' && FESTIVAL_COUNTRIES.some((country) => country.id === value);
+}
+
 /** Launch occasions. The database id is the stable key; the label is display only. */
 export const FESTIVAL_OCCASIONS = [
-  { id: 'DIWALI', displayName: 'Diwali' },
-  { id: 'CHRISTMAS', displayName: 'Christmas' },
-  { id: 'NEW_YEAR', displayName: 'New Year' },
-  { id: 'INDEPENDENCE_DAY', displayName: 'Independence Day' },
-  { id: 'EID', displayName: 'Eid' },
-  { id: 'HOLI', displayName: 'Holi' },
-  { id: 'ONAM', displayName: 'Onam' },
-  { id: 'CUSTOM', displayName: 'Custom' },
+  { id: 'DIWALI', displayName: 'Diwali', country: 'IN', featuredDate: '2026-11-08' },
+  { id: 'CHRISTMAS', displayName: 'Christmas', country: 'US', featuredDate: '2026-12-25' },
+  { id: 'NEW_YEAR', displayName: 'New Year', country: 'US', featuredDate: '2027-01-01' },
+  {
+    id: 'INDEPENDENCE_DAY',
+    displayName: 'Independence Day',
+    country: 'IN',
+    featuredDate: '2027-08-15',
+  },
+  { id: 'EID', displayName: 'Eid', country: 'IN', featuredDate: '2027-03-20' },
+  { id: 'HOLI', displayName: 'Holi', country: 'IN', featuredDate: '2027-03-25' },
+  { id: 'ONAM', displayName: 'Onam', country: 'IN', featuredDate: '2027-08-23' },
+  {
+    id: 'THANKSGIVING',
+    displayName: 'Thanksgiving',
+    country: 'US',
+    featuredDate: '2026-11-26',
+  },
+  {
+    id: 'VALENTINES_DAY',
+    displayName: "Valentine's Day",
+    country: 'US',
+    featuredDate: '2027-02-14',
+  },
+  { id: 'CUSTOM', displayName: 'Custom', country: 'GLOBAL', featuredDate: null },
 ] as const;
 
 export type FestivalOccasionId = (typeof FESTIVAL_OCCASIONS)[number]['id'];
+
+/**
+ * The dates above are hand-maintained seed DISPLAY data, not an authoritative
+ * calendar: Diwali drifts against the Gregorian year, Eid follows the moon, and
+ * a stale date is a marketing nuisance rather than a correctness bug.
+ * Re-seeding publishes an update (`pnpm db:seed` upserts occasions).
+ */
 
 export function isFestivalOccasionId(value: unknown): value is FestivalOccasionId {
   return typeof value === 'string' && FESTIVAL_OCCASIONS.some((occasion) => occasion.id === value);
@@ -186,6 +238,28 @@ export const FESTIVAL_TEMPLATE_SEEDS: readonly FestivalTemplateSeed[] = [
     previewUrl: 'templates/brand-celebration-v1/preview.png',
     slots: STANDARD_SLOTS,
     colorScheme: { primary: '#6366F1', accent: '#F59E0B', background: '#101828' },
+    dimensions: { width: 1080, height: 1080 },
+    audioTrack: null,
+    reelDurationSeconds: 15,
+  },
+  {
+    id: 'thanksgiving-feast-v1',
+    occasionId: 'THANKSGIVING',
+    name: 'Thanksgiving Feast',
+    previewUrl: 'templates/thanksgiving-feast-v1/preview.png',
+    slots: STANDARD_SLOTS,
+    colorScheme: { primary: '#D2691E', accent: '#FFEB3B', background: '#3E2723' },
+    dimensions: { width: 1080, height: 1080 },
+    audioTrack: null,
+    reelDurationSeconds: 15,
+  },
+  {
+    id: 'valentines-love-v1',
+    occasionId: 'VALENTINES_DAY',
+    name: 'Valentine’s Love',
+    previewUrl: 'templates/valentines-love-v1/preview.png',
+    slots: STANDARD_SLOTS,
+    colorScheme: { primary: '#E91E63', accent: '#F8BBD0', background: '#4A148C' },
     dimensions: { width: 1080, height: 1080 },
     audioTrack: null,
     reelDurationSeconds: 15,

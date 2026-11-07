@@ -139,7 +139,9 @@ export function PostEditor({ postId }: { postId: string }) {
         description="Write it, generate an asset, then approve and schedule it. Nothing publishes without an APPROVER."
         meta={
           <>
-            <Badge tone={toneFor(current.status)}>{current.status}</Badge>
+            <Badge tone={toneFor(current.status)} pulse={isPulsing(current.status)}>
+              {current.status}
+            </Badge>
             <span className={styles.tag}>Version {current.version}</span>
             <span className={styles.tag}>
               {current.hashtags === '' ? 'No hashtags' : current.hashtags}
@@ -165,7 +167,11 @@ export function PostEditor({ postId }: { postId: string }) {
           <Card
             title="Content"
             description="The caption is the source of truth for every generated asset."
-            actions={<Badge tone={toneFor(current.status)}>{current.status}</Badge>}
+            actions={
+              <Badge tone={toneFor(current.status)} pulse={isPulsing(current.status)}>
+                {current.status}
+              </Badge>
+            }
           >
             <Field label="Caption" id="caption">
               {({ id }) => (
@@ -258,7 +264,7 @@ export function PostEditor({ postId }: { postId: string }) {
                     <span className={styles.miniTitle}>{step.label}</span>
                     <span className={styles.miniMeta}>{step.detail}</span>
                   </span>
-                  <Badge tone={step.done ? 'good' : index === currentStep ? 'warn' : 'neutral'}>
+                  <Badge tone={step.done ? 'good' : index === currentStep ? 'info' : 'neutral'}>
                     {step.done ? 'Done' : index === currentStep ? 'Current' : 'Next'}
                   </Badge>
                 </li>
@@ -416,7 +422,9 @@ function PublishHistory({
               <span>
                 {job.platform} · {new Date(job.scheduledFor).toLocaleString()}
               </span>
-              <Badge tone={toneFor(job.status)}>{job.status}</Badge>
+              <Badge tone={toneFor(job.status)} pulse={isPulsing(job.status)}>
+                {job.status}
+              </Badge>
             </li>
           ))}
         </ul>
@@ -501,17 +509,30 @@ function scheduleKey(postId: string, when: string, accountIds: readonly string[]
   return `schedule:${postId}:${when}:${[...accountIds].sort().join(',')}`;
 }
 
-function toneFor(status: string): 'neutral' | 'good' | 'bad' | 'warn' {
+type BadgeTone = 'neutral' | 'good' | 'bad' | 'warn' | 'info' | 'teal';
+
+/** Post and job states mapped per `DESIGN.md` section 2.3. */
+function toneFor(status: string): BadgeTone {
+  if (status === 'READY') {
+    return 'teal';
+  }
   if (status === 'PUBLISHED' || status === 'COMPLETED' || status === 'APPROVED') {
     return 'good';
   }
   if (status === 'FAILED') {
     return 'bad';
   }
-  if (status === 'PUBLISHING' || status === 'GENERATING' || status === 'SCHEDULED') {
+  if (status === 'SCHEDULED') {
     return 'warn';
   }
+  if (status === 'PUBLISHING' || status === 'GENERATING' || status === 'RUNNING') {
+    return 'info';
+  }
   return 'neutral';
+}
+
+function isPulsing(status: string): boolean {
+  return status === 'GENERATING' || status === 'PUBLISHING';
 }
 
 function labelFor(type: string): string {
