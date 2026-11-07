@@ -19,7 +19,7 @@
     "@renderflow/ai": "workspace:*",
     "@renderflow/common": "workspace:*",
     "@renderflow/db": "workspace:*",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "zod": "^4.6.7"
   },
   "devDependencies": {

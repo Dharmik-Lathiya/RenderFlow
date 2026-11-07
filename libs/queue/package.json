@@ -16,7 +16,7 @@
     "dev": "tsc -p tsconfig.build.json -w --preserveWatchOutput"
   },
   "dependencies": {
-    "bullmq": "^6.3.11",
+    "bullmq": "^6.5.3",
     "ioredis": "^5.8.2",
     "@renderflow/common": "workspace:*"
   },
