@@ -19,6 +19,13 @@ import { PRE_HYDRATION_SCRIPT } from './boot-scripts';
 export const metadata: Metadata = {
   title: 'RenderFlow',
   description: 'AI marketing studio and social scheduler',
+  /**
+   * Site ownership verification. The token is public by design (Search Console
+   * reads it from the published HTML), so it lives in code rather than config.
+   */
+  verification: {
+    google: '6REvFHyIV-wFlDBJzKycrdcxadUeVbVTrnHygmOfScU',
+  },
 };
 
 /**
