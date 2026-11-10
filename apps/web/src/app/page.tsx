@@ -26,6 +26,7 @@ export const metadata: Metadata = {
     title: 'RenderFlow — A month of marketing, made in an afternoon',
     description:
       'An AI marketing studio and social scheduler for small teams. Brief in, campaign out, scheduled with you in control.',
+    url: '/',
     type: 'website',
   },
 };

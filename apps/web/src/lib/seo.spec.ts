@@ -90,8 +90,14 @@ describe('SEO strings and structured data', () => {
     it('names the product attributes a branded search reads as one entity', () => {
       expect(node('Organization')).toMatchObject({
         name: 'RenderFlow',
+        alternateName: 'RenderFlow App',
         url: 'https://renderflowapp.vercel.app',
         logo: 'https://renderflowapp.vercel.app/icon.svg',
+        sameAs: ['https://github.com/Dharmik-Lathiya/RenderFlow'],
+      });
+      expect(node('WebSite')).toMatchObject({
+        name: 'RenderFlow',
+        alternateName: 'RenderFlow App',
       });
     });
 
@@ -120,12 +126,16 @@ describe('SEO strings and structured data', () => {
 
       expect(page).toContain('<JsonLd');
       expect(page).toContain("canonical: '/'");
+      expect(page).toContain("url: '/'");
       expect(page).toContain('SITE_KEYWORDS');
     });
 
-    it('keeps every canonical pointing at a real marketing route', () => {
+    it('keeps every canonical and og:url pointing at a real marketing route', () => {
       for (const route of ['pricing', 'about', 'contact', 'security', 'terms', 'privacy']) {
-        expect(readSrc('app', route, 'page.tsx')).toContain(`canonical: '/${route}'`);
+        const page = readSrc('app', route, 'page.tsx');
+
+        expect(page).toContain(`canonical: '/${route}'`);
+        expect(page).toContain(`url: '/${route}'`);
       }
     });
 

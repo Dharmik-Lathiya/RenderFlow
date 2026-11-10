@@ -85,14 +85,20 @@ export function buildSiteJsonLd(baseUrl: string): Record<string, unknown> {
         '@type': 'Organization',
         '@id': organization,
         name: 'RenderFlow',
+        alternateName: 'RenderFlow App',
         url: baseUrl,
         logo: `${baseUrl}/icon.svg`,
+        // The public repository is the one profile this project can point at
+        // without inventing a social account; it disambiguates the brand name
+        // from unrelated products that share it.
+        sameAs: ['https://github.com/Dharmik-Lathiya/RenderFlow'],
         description: 'AI marketing studio and social media scheduler for small teams.',
       },
       {
         '@type': 'WebSite',
         '@id': `${baseUrl}/#website`,
         name: 'RenderFlow',
+        alternateName: 'RenderFlow App',
         url: baseUrl,
         publisher: { '@id': organization },
         inLanguage: 'en',

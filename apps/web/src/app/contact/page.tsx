@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description:
     'How to reach RenderFlow support about your account, credits or a failed generation.',
   alternates: { canonical: '/contact' },
+  openGraph: { url: '/contact' },
 };
 
 /**

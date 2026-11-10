@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description:
     'How RenderFlow protects accounts, social tokens, uploaded assets and the credit ledger.',
   alternates: { canonical: '/security' },
+  openGraph: { url: '/security' },
 };
 
 /**
