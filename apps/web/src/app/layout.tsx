@@ -6,8 +6,8 @@ import './globals.css';
 
 import { Providers } from '../lib/providers';
 import { Shell } from '../components/shell';
-import { THEME_STORAGE_KEY } from '../lib/theme-config';
 import { appFontClassName } from './fonts';
+import { PRE_HYDRATION_SCRIPT } from './boot-scripts';
 
 /**
  * Root layout.
@@ -20,25 +20,6 @@ export const metadata: Metadata = {
   title: 'RenderFlow',
   description: 'AI marketing studio and social scheduler',
 };
-
-/**
- * Runs before the first paint, so a reload with a stored light preference never
- * flashes the dark default. Kept inline rather than in a client component: a
- * React effect runs after paint, which is exactly one frame too late.
- */
-const THEME_BOOT_SCRIPT = `(function () {
-  try {
-    var stored = window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
-    var theme = stored === 'light' || stored === 'dark' || stored === 'system'
-      ? stored
-      : 'light';
-    document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.style.colorScheme = theme;
-  } catch (error) {
-    document.documentElement.setAttribute('data-theme', 'light');
-    document.documentElement.style.colorScheme = 'light';
-  }
-})();`;
 
 /**
  * `lang` and the skip link are not decoration.
@@ -72,9 +53,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           A native blocking script, deliberately not `next/script`: the
           `beforeInteractive` strategy queues the code for Next's runtime, which
           is late enough to paint the wrong theme for a frame. As the first node
-          in the body it runs before any app markup is parsed.
+          in the body it runs before any app markup is parsed. The composed
+          script (theme boot + extension-attribute scrub) lives in
+          `boot-scripts.ts`, where a spec executes it against a real DOM.
         */}
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: PRE_HYDRATION_SCRIPT }} />
         <a className="skip-link" href="#main">
           Skip to main content
         </a>
