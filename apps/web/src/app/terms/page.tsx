@@ -7,6 +7,7 @@ import styles from '../marketing.module.css';
 export const metadata: Metadata = {
   title: 'Terms of Service — RenderFlow',
   description: 'The terms that apply to a RenderFlow account, credits and generated content.',
+  alternates: { canonical: '/terms' },
 };
 
 /**

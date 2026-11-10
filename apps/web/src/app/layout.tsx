@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 import { Providers } from '../lib/providers';
+import { SITE_DESCRIPTION, siteUrl } from '../lib/seo';
 import { Shell } from '../components/shell';
 import { appFontClassName } from './fonts';
 import { PRE_HYDRATION_SCRIPT } from './boot-scripts';
@@ -17,8 +18,19 @@ import { PRE_HYDRATION_SCRIPT } from './boot-scripts';
  * the tree can stay server components where there is nothing interactive to do.
  */
 export const metadata: Metadata = {
-  title: 'RenderFlow',
-  description: 'AI marketing studio and social scheduler',
+  title: 'RenderFlow — AI marketing studio and social media scheduler',
+  description: SITE_DESCRIPTION,
+  applicationName: 'RenderFlow',
+  /**
+   * Resolves every relative canonical and Open Graph URL against the public
+   * base URL, so sharing previews and canonicals are absolute even on a fresh
+   * deployment that forgot the variable. See `lib/seo.ts`.
+   */
+  metadataBase: new URL(siteUrl()),
+  openGraph: {
+    type: 'website',
+    siteName: 'RenderFlow',
+  },
   /**
    * Site ownership verification. The token is public by design (Search Console
    * reads it from the published HTML), so it lives in code rather than config.

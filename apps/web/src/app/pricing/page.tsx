@@ -24,6 +24,7 @@ export const metadata: Metadata = {
   title: 'Pricing — RenderFlow',
   description:
     'Pay per asset, not per seat. Captions, posters, carousels and reels each have a credit price, scheduling is free, and failed generations are refunded.',
+  alternates: { canonical: '/pricing' },
 };
 
 export default async function PricingPage() {

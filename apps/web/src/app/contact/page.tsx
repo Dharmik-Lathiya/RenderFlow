@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Contact — RenderFlow',
   description:
     'How to reach RenderFlow support about your account, credits or a failed generation.',
+  alternates: { canonical: '/contact' },
 };
 
 /**

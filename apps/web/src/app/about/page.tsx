@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: 'About — RenderFlow',
   description:
     'RenderFlow is an AI marketing studio and social scheduler: a brand brief in, a reviewed campaign out, published on your calendar.',
+  alternates: { canonical: '/about' },
 };
 
 /**

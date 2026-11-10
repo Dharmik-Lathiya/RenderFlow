@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 
+import { siteUrl } from '../lib/seo';
+
 /**
  * The public site map.
  *
@@ -8,7 +10,7 @@ import type { MetadataRoute } from 'next';
  * search console will report as an error.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+  const base = siteUrl();
   const lastModified = new Date();
 
   return [

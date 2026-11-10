@@ -58,8 +58,8 @@ export function Landing({ fontClassName }: { fontClassName?: string }) {
 
           <p className={styles.heroLede}>
             RenderFlow turns one brand brief into captions, posters, carousels and reels, then
-            schedules the approved ones. Pay per asset, not per seat — and failed generations are
-            refunded.
+            schedules the approved ones to Instagram and LinkedIn. Pay per asset, not per seat — and
+            failed generations are refunded.
           </p>
 
           <div className={styles.heroActions}>

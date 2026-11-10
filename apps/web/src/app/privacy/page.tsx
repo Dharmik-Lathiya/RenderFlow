@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Privacy Policy — RenderFlow',
   description:
     'What RenderFlow stores, why, who processes it, how long it is kept, and how to ask for it to be removed.',
+  alternates: { canonical: '/privacy' },
 };
 
 /**
