@@ -372,11 +372,11 @@ S3-compatible storage for the workers).
 
 Set these on the Vercel project:
 
-| Variable               | Why                                                                                                                                           |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_API_URL`  | Build-time browser base URL, including `/api/v1`. Without it the client falls back to `http://localhost:4000`, so only the public pages work. |
-| `API_INTERNAL_URL`     | Server-side base URL used to render `/pricing` from `pricing_rules`. Falls back to `NEXT_PUBLIC_API_URL`.                                     |
-| `NEXT_PUBLIC_SITE_URL` | Canonical origin in the sitemap and `robots.txt`. Falls back to `http://localhost:3000`.                                                      |
+| Variable               | Why                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_API_URL`  | Build-time browser base URL, including `/api/v1`. Without it the client uses the same-origin `/api/v1`, which needs `API_INTERNAL_URL` to point at a deployed API. |
+| `API_INTERNAL_URL`     | Server-side rewrite target for `/api/v1`, used by the browser and by `/pricing`. Defaults to `http://localhost:4000/api/v1` only for local development.            |
+| `NEXT_PUBLIC_SITE_URL` | Canonical origin in the sitemap and `robots.txt`. Falls back to `http://localhost:3000`.                                                                           |
 
 The API's CORS allow-list must contain the Vercel origin. Deploy the API on the
 same registrable site as the web app (for example `app.example.com` and

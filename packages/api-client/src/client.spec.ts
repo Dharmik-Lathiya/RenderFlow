@@ -63,6 +63,15 @@ describe('createRenderFlowClient', () => {
     expect(calls[0]?.url).toBe('http://api.test/api/v1/credits');
   });
 
+  it('accepts a same-origin relative base url', async () => {
+    const { impl, calls } = fakeFetch([jsonResponse({ ok: true })]);
+    const client = createRenderFlowClient({ baseUrl: '/api/v1', fetchImpl: impl });
+
+    await client.get('/credits', { query: { page: 2 } });
+
+    expect(calls[0]?.url).toBe('/api/v1/credits?page=2');
+  });
+
   it('serialises query parameters and skips undefined values', async () => {
     const { impl, calls } = fakeFetch([
       jsonResponse({ items: [], total: 0, page: 1, pageSize: 20 }),

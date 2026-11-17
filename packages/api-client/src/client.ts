@@ -84,14 +84,22 @@ export interface RenderFlowClient {
 function buildUrl(baseUrl: string, path: string, query: RequestOptions['query']): string {
   const base = baseUrl.replace(/\/+$/, '');
   const suffix = path.startsWith('/') ? path : `/${path}`;
-  const url = new URL(`${base}${suffix}`);
+  const combined = `${base}${suffix}`;
+
+  // The web app defaults to a same-origin `/api/v1` base and lets the Next.js
+  // rewrite forward it. `new URL()` needs an absolute base, so parse relative
+  // URLs against a dummy origin and return only the path + query: `fetch()`
+  // accepts a relative string and resolves it against the page origin.
+  const relative = base.startsWith('/');
+  const url = new URL(combined, relative ? 'http://relative.invalid' : undefined);
 
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) {
       url.searchParams.set(key, String(value));
     }
   }
-  return url.toString();
+
+  return relative ? `${url.pathname}${url.search}` : url.toString();
 }
 
 /**

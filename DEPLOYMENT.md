@@ -22,12 +22,14 @@ development environment, not a production deployment.
 | Production database           | Not provisioned by this repository.                                |
 
 The browser calls the same-origin relative path `/api/v1`, which `next.config.ts`
-rewrites to `API_INTERNAL_URL` (or `NEXT_PUBLIC_API_URL` when set). The client
-never falls back to `localhost`, so setting one runtime environment variable
-repoints the deployed app at the backend - no rebuild required. The public
-marketing pages render either way, but sign-in and the product screens cannot
-work until the API host and rewrite target are ready. Do not publish an API URL
-until the API host, CORS origin, cookie policy and secrets are ready.
+rewrites to `API_INTERNAL_URL` (or `NEXT_PUBLIC_API_URL` when set). The browser
+client itself never falls back to `localhost`; the **rewrite** falls back to
+`http://localhost:4000/api/v1` for local development. On Vercel that fallback
+points at the function's own localhost and cannot reach the API, so setting
+`API_INTERNAL_URL` repoints the deployed app at the backend - no rebuild required.
+The public marketing pages render either way, but sign-in and the product screens
+cannot work until the API host and rewrite target are ready. Do not publish an API
+URL until the API host, CORS origin, cookie policy and secrets are ready.
 
 ## 2. Topology
 
