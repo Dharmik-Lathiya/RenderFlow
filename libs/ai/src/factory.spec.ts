@@ -1,3 +1,5 @@
+import { AppError, ERROR_CODES } from '@renderflow/common';
+
 import { createProviders, requireKey, textPreference } from './factory';
 import { aspectFor, hashOf, type MediaSink } from './media-providers';
 import { ProviderError } from './providers';
@@ -66,6 +68,81 @@ describe('requireKey', () => {
   it('is not consulted at all in mock mode', () => {
     // The normal local setup has no keys and must keep working.
     expect(() => createProviders({ env: {}, ...baseOptions })).not.toThrow();
+  });
+});
+
+describe('production provider guard', () => {
+  const realEnv = {
+    AI_PROVIDER: 'anthropic',
+    ANTHROPIC_API_KEY: 'sk-ant-test',
+    OPENAI_API_KEY: 'sk-openai-test',
+    IMAGE_PROVIDER: 'replicate',
+    REPLICATE_API_TOKEN: 'replicate-test',
+    TTS_PROVIDER: 'elevenlabs',
+    ELEVENLABS_API_KEY: 'eleven-test',
+  };
+
+  it('refuses the default mock text provider', () => {
+    expect(() => createProviders({ env: { NODE_ENV: 'production' }, ...baseOptions })).toThrow(
+      /AI_PROVIDER=mock/,
+    );
+  });
+
+  it('refuses a mock in the fallback chain, not just as the primary', () => {
+    expect(() =>
+      createProviders({
+        env: {
+          ...realEnv,
+          NODE_ENV: 'production',
+          TEXT_PROVIDER_FALLBACKS: 'anthropic,mock',
+        },
+        ...baseOptions,
+      }),
+    ).toThrow(/TEXT_PROVIDER_FALLBACKS=mock/);
+  });
+
+  it('refuses the default mock image provider even when text is real', () => {
+    expect(() =>
+      createProviders({
+        env: {
+          NODE_ENV: 'production',
+          AI_PROVIDER: 'anthropic',
+          ANTHROPIC_API_KEY: 'sk-ant-test',
+        },
+        ...baseOptions,
+      }),
+    ).toThrow(/IMAGE_PROVIDER/);
+  });
+
+  it('refuses the default mock TTS provider even when text and image are real', () => {
+    expect(() =>
+      createProviders({
+        env: {
+          NODE_ENV: 'production',
+          AI_PROVIDER: 'anthropic',
+          ANTHROPIC_API_KEY: 'sk-ant-test',
+          IMAGE_PROVIDER: 'replicate',
+          REPLICATE_API_TOKEN: 'replicate-test',
+        },
+        ...baseOptions,
+      }),
+    ).toThrow(/TTS_PROVIDER/);
+  });
+
+  it('carries the shared provider error code', () => {
+    try {
+      createProviders({ env: { NODE_ENV: 'production' }, ...baseOptions });
+      throw new Error('expected the guard to throw');
+    } catch (error) {
+      expect(error).toBeInstanceOf(AppError);
+      expect((error as AppError).code).toBe(ERROR_CODES.PROVIDER_UNAVAILABLE);
+    }
+  });
+
+  it('allows a fully real configuration in production', () => {
+    expect(() =>
+      createProviders({ env: { ...realEnv, NODE_ENV: 'production' }, ...baseOptions }),
+    ).not.toThrow();
   });
 });
 

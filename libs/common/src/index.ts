@@ -6,6 +6,7 @@
  * Has no runtime dependency on any other workspace package.
  */
 
+export * from './config/provider-mode';
 export * from './domain/festival';
 export * from './domain/statuses';
 export * from './errors/app-error';

@@ -1,4 +1,4 @@
-import { QUEUE_NAMES } from '@renderflow/common';
+import { isMockProviderMode, QUEUE_NAMES } from '@renderflow/common';
 import { disconnectDb, getDb } from '@renderflow/db';
 import {
   assertEmailTransportIsSafe,
@@ -7,7 +7,8 @@ import {
 } from '@renderflow/email';
 import { workerIdForProcess } from '@renderflow/jobs';
 import {
-  MockSocialAdapter,
+  adapterFor,
+  assertSocialPublishProviderIsSafe,
   PlatformRateLimiter,
   PublishProcessor,
   keyFromEnv,
@@ -100,6 +101,16 @@ function main(): void {
   // immediately rather than on the first publish of the day.
   keyFromEnv(process.env);
 
+  // A production worker using the mock adapter would mark posts PUBLISHED while
+  // nothing reached a platform. `real` is refused too until real adapters exist,
+  // so neither mode can silently claim a publish it did not perform.
+  const socialProviderMode = process.env.SOCIAL_PROVIDER;
+  const useMockSocial = isMockProviderMode(socialProviderMode);
+  assertSocialPublishProviderIsSafe({
+    nodeEnv: process.env.NODE_ENV ?? 'development',
+    mode: socialProviderMode,
+  });
+
   const queueConfig = loadQueueConfig();
   const preset = queueConfig.presets[QUEUE];
   const db = getDb();
@@ -119,9 +130,9 @@ function main(): void {
     db,
     workerId: WORKER_ID,
     notify: new NotificationsBridge(db),
-    // Mocks in every environment that is not production (AGENTS.md section 8).
-    // Real adapters land behind the same interface; nothing here changes.
-    adapterFor: (platform: SocialPlatform) => new MockSocialAdapter({ platform }),
+    // The mode was validated at boot; the factory throws if `real` is ever
+    // requested before a real adapter exists.
+    adapterFor: (platform: SocialPlatform) => adapterFor(platform, { mock: useMockSocial }),
     limiterFor: (platform: SocialPlatform) => {
       const existing = limiters.get(platform);
 
@@ -229,7 +240,12 @@ function main(): void {
   worker.shutdown.registerDrain('postgres', () => disconnectDb());
 
   worker.logger.info(
-    { app: APP_NAME, pollMs, limits: PLATFORM_LIMITS, providerMode: 'mock' },
+    {
+      app: APP_NAME,
+      pollMs,
+      limits: PLATFORM_LIMITS,
+      providerMode: useMockSocial ? 'mock' : 'real',
+    },
     'worker ready',
   );
 }

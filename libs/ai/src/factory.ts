@@ -1,4 +1,4 @@
-import type { GenerationKind } from '@renderflow/common';
+import { assertNoMockProviderInProduction, type GenerationKind } from '@renderflow/common';
 
 import {
   MockImageProvider,
@@ -33,6 +33,7 @@ import { withFallback } from './runtime';
 export type ProviderName = 'mock' | 'openai' | 'anthropic';
 
 export interface ProviderEnv {
+  NODE_ENV?: string;
   AI_PROVIDER?: string;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
@@ -231,6 +232,34 @@ function buildRenderer(options: ProviderFactoryOptions): RendererProvider {
 export function createProviders(options: ProviderFactoryOptions): Providers {
   const env = options.env;
   const preference = textPreference(env);
+  const nodeEnv = env.NODE_ENV ?? 'development';
+
+  // A mock in production generates placeholder content while still charging
+  // credits. Refuse at boot; local dev and CI keep their deterministic defaults.
+  // A text preference chain is checked as a whole because a mock fallback is just
+  // as unacceptable as a mock primary provider.
+  const hasExplicitFallbacks = (env.TEXT_PROVIDER_FALLBACKS ?? '').trim() !== '';
+  const configuredTextMode = hasExplicitFallbacks ? env.TEXT_PROVIDER_FALLBACKS : env.AI_PROVIDER;
+  assertNoMockProviderInProduction({
+    nodeEnv,
+    variable: hasExplicitFallbacks ? 'TEXT_PROVIDER_FALLBACKS' : 'AI_PROVIDER',
+    mode: preference.includes('mock') ? 'mock' : configuredTextMode,
+    details: {
+      textPreference: [...preference],
+      configuredValue: configuredTextMode ?? null,
+    },
+  });
+  assertNoMockProviderInProduction({
+    nodeEnv,
+    variable: 'IMAGE_PROVIDER',
+    mode: env.IMAGE_PROVIDER,
+  });
+  assertNoMockProviderInProduction({
+    nodeEnv,
+    variable: 'TTS_PROVIDER',
+    mode: env.TTS_PROVIDER,
+  });
+
   const allMock =
     preference.length === 1 &&
     preference[0] === 'mock' &&

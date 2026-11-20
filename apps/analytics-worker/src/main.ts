@@ -1,4 +1,4 @@
-import { QUEUE_NAMES } from '@renderflow/common';
+import { assertNoMockProviderInProduction, QUEUE_NAMES } from '@renderflow/common';
 import { disconnectDb, getDbHandle, tryAcquireAdvisoryLock } from '@renderflow/db';
 import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
@@ -62,6 +62,14 @@ function buildAdapter(platform: SocialPlatform): MetricsAdapter {
 }
 
 async function main(): Promise<void> {
+  // Mock metrics in production would put invented numbers on the dashboard while
+  // still looking healthy. Refuse at boot, before any connection is opened.
+  assertNoMockProviderInProduction({
+    nodeEnv: process.env.NODE_ENV ?? 'development',
+    variable: 'SOCIAL_PROVIDER',
+    mode: process.env.SOCIAL_PROVIDER,
+  });
+
   // Before connecting to anything: an analytics worker that cannot decrypt
   // account tokens would fail every sync for a reason that looks like a platform
   // outage. Refusing to start is the honest failure.

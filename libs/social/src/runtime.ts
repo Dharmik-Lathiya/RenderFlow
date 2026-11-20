@@ -1,6 +1,11 @@
 import { ConcurrencyLimiter } from '@renderflow/ai';
+import {
+  assertNoMockProviderInProduction,
+  isMockProviderMode,
+  providerConfigurationError,
+} from '@renderflow/common';
 
-import { PublishError, type SocialAdapter, type SocialPlatform } from './adapter';
+import { PublishError, SOCIAL_PLATFORMS, type SocialAdapter, type SocialPlatform } from './adapter';
 import { MockSocialAdapter } from './mock-adapter';
 
 /**
@@ -172,8 +177,45 @@ export function adapterFor(
   platform: SocialPlatform,
   options: { mock?: boolean; tokenExpired?: boolean } = {},
 ): SocialAdapter {
-  // Real adapters arrive in a later commit; the factory exists now so the
-  // publisher depends on the interface and not on the mock.
-  void options;
-  return new MockSocialAdapter({ platform });
+  if (options.mock !== false) {
+    return new MockSocialAdapter({
+      platform,
+      ...(options.tokenExpired === undefined ? {} : { tokenExpired: options.tokenExpired }),
+    });
+  }
+
+  // Returning the mock here would make `SOCIAL_PROVIDER=real` a lie: the publisher
+  // would report posts as published while nothing reached the platform. Refuse
+  // explicitly until a real adapter exists.
+  throw providerConfigurationError(
+    `A real ${platform} publish adapter is not implemented. The publisher cannot use SOCIAL_PROVIDER=real yet.`,
+    { platform },
+  );
+}
+
+/**
+ * Boot guard for the publisher's social provider.
+ *
+ * Production must not use mocks, and today `SOCIAL_PROVIDER=real` is also a
+ * configuration error because no real publish adapters exist. Both cases are
+ * rejected here so the worker fails before it claims a job or marks a post
+ * published.
+ */
+export function assertSocialPublishProviderIsSafe(options: {
+  nodeEnv: string;
+  mode: string | undefined;
+}): void {
+  assertNoMockProviderInProduction({
+    nodeEnv: options.nodeEnv,
+    variable: 'SOCIAL_PROVIDER',
+    mode: options.mode,
+  });
+
+  if (!isMockProviderMode(options.mode)) {
+    throw providerConfigurationError(
+      'SOCIAL_PROVIDER=real is selected, but no real social publish adapter is implemented. ' +
+        'The publisher worker cannot start until one is added.',
+      { platforms: [...SOCIAL_PLATFORMS] },
+    );
+  }
 }
