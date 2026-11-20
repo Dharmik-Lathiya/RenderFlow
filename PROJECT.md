@@ -551,7 +551,7 @@ S3_BUCKET=renderflow-assets
 S3_ACCESS_KEY=minio
 S3_SECRET_KEY=minio12345
 
-# AI providers (use mock locally)
+# AI providers (use mock locally; mock is refused when NODE_ENV=production)
 AI_PROVIDER=mock                # mock | anthropic | openai
 IMAGE_PROVIDER=mock             # mock | replicate | fal
 TTS_PROVIDER=mock               # mock | elevenlabs | openai
@@ -560,7 +560,8 @@ OPENAI_API_KEY=
 REPLICATE_API_TOKEN=
 ELEVENLABS_API_KEY=
 
-# Social (use mock locally)
+# Social (use mock locally; mock is refused in production, and real publishing
+# is unavailable until a real publish adapter is implemented)
 SOCIAL_PROVIDER=mock            # mock | real
 INSTAGRAM_APP_ID=
 INSTAGRAM_APP_SECRET=
@@ -832,7 +833,7 @@ yet written by anyone — they land in Phase 5.
 - **DoD:** role permissions enforced; assets upload and download; OpenAPI docs generated.
 
 **Status: shipped.** `workspaces`, `workspace_members`, `brands`, `campaigns`,
-`posts`, `assets` added (migration `0002_phase3_workspaces`). Every new user gets
+`posts`, `assets` added (migration `0003_nappy_gamora.sql`). Every new user gets
 a personal workspace they own, created in the same transaction as the account.
 
 Decisions worth carrying forward:
