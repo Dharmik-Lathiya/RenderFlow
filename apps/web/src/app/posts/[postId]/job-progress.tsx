@@ -218,16 +218,16 @@ export function JobProgressView({
     return connecting ? <p className={styles.cardDescription}>Starting…</p> : null;
   }
 
-  const terminal = job.status === 'COMPLETED' || job.status === 'FAILED';
+  const terminal = TERMINAL_STATUSES.has(job.status);
+  const tone =
+    job.status === 'CANCELLED' || job.status === 'FAILED' ? 'bad' : terminal ? 'good' : 'neutral';
   const done = completed.length;
   const stages = stagesForJob(job);
 
   return (
     <div>
       <div className={styles.row} style={{ justifyContent: 'space-between' }}>
-        <Badge tone={job.status === 'FAILED' ? 'bad' : terminal ? 'good' : 'neutral'}>
-          {job.status}
-        </Badge>
+        <Badge tone={tone}>{job.status}</Badge>
         {onCancel !== undefined && !terminal && (
           <Button variant="ghost" onClick={onCancel}>
             Stop
@@ -278,7 +278,9 @@ export function JobProgressView({
           terminal
             ? job.status === 'COMPLETED'
               ? 'Generation complete'
-              : `Generation failed: ${job.error ?? 'unknown reason'}`
+              : job.status === 'CANCELLED'
+                ? 'Generation cancelled'
+                : `Generation failed: ${job.error ?? 'unknown reason'}`
             : `${job.stage ?? 'starting'} running, ${done} of ${stages.length} stages complete`
         }
       />

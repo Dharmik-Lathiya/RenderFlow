@@ -14,7 +14,12 @@ import { JobProgressView, useJobProgress, type JobProgress } from './job-progres
  * stop at 60% on a finished poster and implied a stage had been skipped.
  */
 
-function progress(kind: string, stage: string, completedStages: string[]): JobProgress {
+function progress(
+  kind: string,
+  stage: string,
+  completedStages: string[],
+  overrides: Partial<Job> = {},
+): JobProgress {
   const job: Job = {
     id: 'j1',
     postId: 'p1',
@@ -28,6 +33,7 @@ function progress(kind: string, stage: string, completedStages: string[]): JobPr
     completedStages,
     createdAt: '2026-11-01T00:00:00.000Z',
     finishedAt: null,
+    ...overrides,
   };
 
   return { job, stage, completed: completedStages, connecting: false };
@@ -122,6 +128,18 @@ describe('JobProgressView', () => {
     expect(screen.getByText('voice')).toBeInTheDocument();
     expect(screen.getByText('render')).toBeInTheDocument();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '5');
+  });
+
+  it('treats CANCELLED as terminal in the view, not just in the hook', () => {
+    const cancelled = progress('CAPTION', 'PLAN', [], { status: 'CANCELLED' });
+
+    render(<JobProgressView progress={cancelled} onCancel={jest.fn()} />);
+
+    expect(screen.getByText('CANCELLED')).toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument();
+    expect(screen.getByText('Generation cancelled')).toBeInTheDocument();
+    expect(screen.queryByText(/running,/)).not.toBeInTheDocument();
   });
 });
 
