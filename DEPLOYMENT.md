@@ -329,7 +329,7 @@ The repository's `vercel.json` is:
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm turbo run build --filter=@renderflow/web...",
   "outputDirectory": ".next"
 }

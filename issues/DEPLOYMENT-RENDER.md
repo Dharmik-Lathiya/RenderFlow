@@ -46,7 +46,28 @@ curl -fsS https://renderflowapp.vercel.app/api/v1/health/live
 curl -fsS https://renderflow-api.onrender.com/health/live
 ```
 
-## 4. Demo-only limitations
+## 4. Required runtime secrets
+
+The API validates JWT secrets at boot. If either value is shorter than 32
+characters, the service exits before it binds a port with:
+
+```text
+AuthConfigError: Invalid auth configuration:
+  - JWT_ACCESS_SECRET: JWT_ACCESS_SECRET must be at least 32 characters
+  - JWT_REFRESH_SECRET: JWT_REFRESH_SECRET must be at least 32 characters
+```
+
+Set both secrets in the Render service (or Blueprint `envVars`) to independent
+random values of at least 32 characters:
+
+```bash
+node -e "const c=require('crypto'); for (const k of ['JWT_ACCESS_SECRET','JWT_REFRESH_SECRET']) console.log(k+'='+c.randomBytes(48).toString('base64url'))"
+```
+
+Do not commit the generated values. After changing them, trigger a manual
+deploy and verify with `curl -fsS https://renderflow-api.onrender.com/health/live`.
+
+## 5. Demo-only limitations
 
 The Blueprint sets `NODE_ENV=development` and mock AI/social providers. This is
 intentional: the production guards refuse mock providers in `production`, and
