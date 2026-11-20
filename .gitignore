@@ -52,3 +52,4 @@ coverage-integration
 # the documented template, so a blanket pattern would stop contributors adding it.
 .env.local
 .env*.local
+.neon

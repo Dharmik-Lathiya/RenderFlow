@@ -18,6 +18,7 @@ import { FestivalModule } from './festival/festival.module';
 import { HealthModule } from './health/health.module';
 import { JobsModule } from './jobs/jobs.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { NeonModule } from './neon/neon.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
 import { PublishingModule } from './publishing/publishing.module';
 import { UsersModule } from './users/users.module';
@@ -55,6 +56,7 @@ import { UsersModule } from './users/users.module';
     AdminModule,
     AnalyticsModule,
     MetricsModule,
+    NeonModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -19,7 +19,24 @@ export const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  /** Direct Neon connection for migrations and advisory locks; optional locally. */
+  DATABASE_URL_UNPOOLED: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
+
+  // --- Neon platform services (pulled by `neon deploy`) ---
+  NEON_BRANCH: z.string().min(1).optional(),
+  NEON_BRANCH_ID: z.string().min(1).optional(),
+  NEON_AUTH_BASE_URL: z.string().url().optional(),
+  NEON_AUTH_JWKS_URL: z.string().url().optional(),
+  NEON_AI_GATEWAY_BASE_URL: z.string().url().optional(),
+  NEON_AI_GATEWAY_TOKEN: z.string().min(1).optional(),
+  NEON_AI_GATEWAY_MODEL: z.string().min(1).default('gpt-5-mini'),
+  NEON_REALTIME_URL: z.string().min(1).optional(),
+  NEON_REALTIME_SECRET: z.string().min(1).optional(),
+  /** Defaults to the database name in DATABASE_URL when omitted. */
+  NEON_REALTIME_DATABASE: z.string().min(1).optional(),
+  NEON_FUNCTION_HOST_SUFFIX: z.string().min(1).optional(),
+  NEON_FUNCTION_API_KEY: z.string().min(1).optional(),
 
   /** Comma separated. Cookies require an explicit origin list, never `*`. */
   CORS_ORIGINS: z.string().default('http://localhost:3000'),

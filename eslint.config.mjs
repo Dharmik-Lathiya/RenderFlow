@@ -14,6 +14,10 @@ export default tseslint.config(
       '**/*.tsbuildinfo',
       // Generated from the API OpenAPI document - never hand-edited, so never linted.
       '**/src/generated/**',
+      // Neon CLI policy + Function source. No TS project covers the repo root,
+      // so type-aware parsing cannot resolve them.
+      'hello.ts',
+      'neon.ts',
       // Build-tool configs. Plain ESM JavaScript that no TS project file covers,
       // so type-aware parsing cannot resolve it. `prettier --check` still runs
       // on them in CI.
