@@ -30,13 +30,17 @@ import { withFallback } from './runtime';
  * impossible.
  */
 
-export type ProviderName = 'mock' | 'openai' | 'anthropic';
+export type ProviderName = 'mock' | 'openai' | 'anthropic' | 'neon';
 
 export interface ProviderEnv {
   NODE_ENV?: string;
   AI_PROVIDER?: string;
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
+  /** Neon AI Gateway credential, branch host and catalog model ID. */
+  NEON_AI_GATEWAY_TOKEN?: string;
+  NEON_AI_GATEWAY_BASE_URL?: string;
+  NEON_AI_GATEWAY_MODEL?: string;
   IMAGE_PROVIDER?: string;
   REPLICATE_API_TOKEN?: string;
   TTS_PROVIDER?: string;
@@ -91,7 +95,7 @@ export function requireKey(env: ProviderEnv, name: keyof ProviderEnv): string {
 
 export function textPreference(env: ProviderEnv): ProviderName[] {
   const isProvider = (name: string): name is ProviderName =>
-    name === 'openai' || name === 'anthropic' || name === 'mock';
+    name === 'openai' || name === 'anthropic' || name === 'neon' || name === 'mock';
 
   const configured = (env.TEXT_PROVIDER_FALLBACKS ?? '')
     .split(',')
@@ -103,7 +107,8 @@ export function textPreference(env: ProviderEnv): ProviderName[] {
   }
 
   const primary = (env.AI_PROVIDER ?? 'mock').trim();
-  const chosen: ProviderName = primary === 'openai' || primary === 'anthropic' ? primary : 'mock';
+  const chosen: ProviderName =
+    primary === 'openai' || primary === 'anthropic' || primary === 'neon' ? primary : 'mock';
 
   if (chosen === 'mock') {
     return ['mock'];
@@ -133,6 +138,15 @@ function buildText(env: ProviderEnv, options: ProviderFactoryOptions): TextProvi
       if (name === 'anthropic') {
         return new AnthropicTextProvider({
           apiKey: requireKey(env, 'ANTHROPIC_API_KEY'),
+          ...transport,
+        });
+      }
+      if (name === 'neon') {
+        const host = requireKey(env, 'NEON_AI_GATEWAY_BASE_URL').replace(/\/+$/, '');
+        return new OpenAiTextProvider({
+          apiKey: requireKey(env, 'NEON_AI_GATEWAY_TOKEN'),
+          baseUrl: `${host}/v1`,
+          model: env.NEON_AI_GATEWAY_MODEL?.trim() || 'gpt-5-mini',
           ...transport,
         });
       }

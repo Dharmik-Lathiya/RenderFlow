@@ -37,6 +37,11 @@ describe('textPreference', () => {
     expect(textPreference({ AI_PROVIDER: 'openai' })).toEqual(['openai', 'anthropic']);
   });
 
+  it('accepts the Neon AI Gateway as a real text provider', () => {
+    expect(textPreference({ AI_PROVIDER: 'neon' })).toEqual(['neon', 'anthropic']);
+    expect(textPreference({ TEXT_PROVIDER_FALLBACKS: 'neon,openai' })).toEqual(['neon', 'openai']);
+  });
+
   it('honours an explicit chain', () => {
     expect(textPreference({ TEXT_PROVIDER_FALLBACKS: 'openai,anthropic' })).toEqual([
       'openai',
@@ -142,6 +147,21 @@ describe('production provider guard', () => {
   it('allows a fully real configuration in production', () => {
     expect(() =>
       createProviders({ env: { ...realEnv, NODE_ENV: 'production' }, ...baseOptions }),
+    ).not.toThrow();
+  });
+
+  it('allows the Neon gateway as the real text provider in production', () => {
+    expect(() =>
+      createProviders({
+        env: {
+          ...realEnv,
+          NODE_ENV: 'production',
+          AI_PROVIDER: 'neon',
+          NEON_AI_GATEWAY_TOKEN: 'nt_live_test',
+          NEON_AI_GATEWAY_BASE_URL: 'https://gateway.example',
+        },
+        ...baseOptions,
+      }),
     ).not.toThrow();
   });
 });
@@ -304,6 +324,44 @@ describe('createProviders with real providers configured', () => {
 
     expect(caption.caption).toBe('Fallback worked.');
     expect(calls).toBe(2);
+  });
+});
+
+describe('Neon AI Gateway provider', () => {
+  it('calls the branch gateway with a bearer token and /v1 chat completions', async () => {
+    const calls: Array<{ url: string; headers: unknown; body: unknown }> = [];
+    const providers = createProviders({
+      env: {
+        AI_PROVIDER: 'neon',
+        NEON_AI_GATEWAY_TOKEN: 'nt_live_test',
+        NEON_AI_GATEWAY_BASE_URL: 'https://gateway.example/',
+        NEON_AI_GATEWAY_MODEL: 'gateway-test-model',
+        TEXT_PROVIDER_FALLBACKS: 'neon',
+      },
+      fetchImpl: async (url, init) => {
+        calls.push({ url, headers: init.headers ?? {}, body: init.body });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            choices: [{ message: { content: '{"caption":"Gateway works.","hashtags":[]}' } }],
+          }),
+          text: async () => '',
+        } as unknown as Response;
+      },
+      ...baseOptions,
+    });
+
+    const caption = await providers.text.caption({
+      angle: 'x',
+      brand: { name: 'B', colors: [], languages: ['en'] },
+    });
+
+    expect(caption.caption).toBe('Gateway works.');
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('https://gateway.example/v1/chat/completions');
+    expect(JSON.stringify(calls[0]?.headers)).toContain('Bearer nt_live_test');
+    expect(calls[0]?.body).toContain('gateway-test-model');
   });
 });
 
