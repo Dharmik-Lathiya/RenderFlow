@@ -208,13 +208,17 @@ Or add a one-time deploy command that runs migrations before starting.
 4. Add environment variables:
 
 ```bash
-NEXT_PUBLIC_API_URL=https://api-production.up.railway.app/api/v1
-API_INTERNAL_URL=https://api-production.up.railway.app/api/v1
-NEXT_PUBLIC_SITE_URL=https://renderflow.vercel.app
+NEXT_PUBLIC_API_URL=/api/v1
+API_INTERNAL_URL=https://renderflow-api.onrender.com/api/v1
+NEXT_PUBLIC_SITE_URL=https://renderflowapp.vercel.app
 ```
 
+The backend is deployed from the repo-root `render.yaml` Blueprint; see
+`issues/DEPLOYMENT-RENDER.md`. Do not deploy `apps/api` as a standalone folder.
+
 5. Deploy → Copy the Vercel URL
-6. Go back to Railway → api service → update `CORS_ORIGINS` to the Vercel URL
+6. The Blueprint already sets the API's `CORS_ORIGINS` to
+   `https://renderflowapp.vercel.app`
 
 ### Step 8 — Create demo account
 
@@ -222,7 +226,7 @@ The demo seeder talks to the public API, so it exercises the same signup,
 workspace, brand, campaign and credit paths a user does:
 
 ```bash
-BASE_URL=https://api-production.up.railway.app \
+BASE_URL=https://renderflow-api.onrender.com \
 DEMO_ACCOUNT_EMAIL=demo@renderflow.dev \
 DEMO_ACCOUNT_PASSWORD='Demo1234!' \
 DEMO_ACCOUNT_CREDITS=100 \

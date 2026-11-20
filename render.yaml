@@ -1,0 +1,226 @@
+# Render Blueprint - RenderFlow demo/staging stack.
+#
+# Deploy from the REPOSITORY ROOT, not from apps/api. The API and every worker are
+# pnpm workspaces that import libs/*, so a folder-only deploy cannot build.
+#
+# This is a DEMO stack: NODE_ENV=development and mock providers are intentional.
+# It makes signup/login and the browser journey usable, but generated content is
+# a placeholder and publishing is unavailable. See FINAL_PRODUCTION_REPORT.md.
+#
+# Services are created with these hostnames (Render derives them from `name`):
+#   API  https://renderflow-api.onrender.com
+# The Vercel web project proxies /api/v1/* there via API_INTERNAL_URL.
+
+envVarGroups:
+  - name: renderflow-app
+    envVars:
+      # DEMO ONLY. The mock-provider boot guards in libs/ai and libs/social
+      # intentionally refuse these modes when NODE_ENV=production.
+      - key: NODE_ENV
+        value: development
+      - key: NODE_VERSION
+        value: '24.21.0'
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUST_PROXY
+        value: '1'
+      - key: CORS_ORIGINS
+        value: https://renderflowapp.vercel.app
+      - key: WEB_BASE_URL
+        value: https://renderflowapp.vercel.app
+      - key: SIGNUP_BONUS_CREDITS
+        value: '50'
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # base64 of 32 bytes, as required by libs/social AES-256-GCM token crypto.
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+      - key: RATE_LIMIT_ENABLED
+        value: 'true'
+      - key: RATE_LIMIT_STORE
+        value: memory
+      - key: EMAIL_PROVIDER
+        value: none
+      - key: BILLING_PROVIDER
+        value: disabled
+      - key: AI_PROVIDER
+        value: mock
+      - key: IMAGE_PROVIDER
+        value: mock
+      - key: TTS_PROVIDER
+        value: mock
+      - key: SOCIAL_PROVIDER
+        value: mock
+      # Placeholder storage lets the API boot. Uploads need a real S3-compatible
+      # bucket before asset generation can work; see KNOWN_LIMITATIONS.md.
+      - key: S3_ENDPOINT
+        value: https://s3.amazonaws.com
+      - key: S3_REGION
+        value: us-east-1
+      - key: S3_BUCKET
+        value: renderflow-demo-assets
+      - key: S3_ACCESS_KEY
+        value: demo-placeholder-access-key
+      - key: S3_SECRET_KEY
+        value: demo-placeholder-secret-key
+      - key: S3_FORCE_PATH_STYLE
+        value: 'false'
+      - key: QUEUE_PREFIX
+        value: renderflow
+      - key: METRICS_ENABLED
+        value: 'false'
+      - key: METRICS_COLLECTOR_ENABLED
+        value: 'false'
+      - key: BULL_BOARD_ENABLED
+        value: 'false'
+
+databases:
+  - name: renderflow-db
+    databaseName: renderflow
+    user: renderflow
+
+services:
+  - type: keyvalue
+    name: renderflow-redis
+    plan: free
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: public internet
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+
+  - type: web
+    name: renderflow-api
+    runtime: node
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    # Runs once after the first successful deploy, before users arrive.
+    initialDeployHook: pnpm db:migrate:deploy && pnpm db:seed
+    startCommand: pnpm --filter @renderflow/api start
+    healthCheckPath: /health/live
+    envVars:
+      - fromGroup: renderflow-app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renderflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: renderflow-redis
+          property: connectionString
+      # Render routes to the port named by PORT; keep the app default in sync.
+      - key: PORT
+        value: '4000'
+      - key: API_PORT
+        value: '4000'
+
+  - type: worker
+    name: renderflow-content-worker
+    runtime: node
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @renderflow/content-worker start
+    envVars:
+      - fromGroup: renderflow-app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renderflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: renderflow-redis
+          property: connectionString
+
+  - type: worker
+    name: renderflow-media-worker
+    runtime: node
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @renderflow/media-worker start
+    envVars:
+      - fromGroup: renderflow-app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renderflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: renderflow-redis
+          property: connectionString
+
+  - type: worker
+    name: renderflow-publisher-worker
+    runtime: node
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @renderflow/publisher-worker start
+    envVars:
+      - fromGroup: renderflow-app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renderflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: renderflow-redis
+          property: connectionString
+
+  - type: worker
+    name: renderflow-analytics-worker
+    runtime: node
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @renderflow/analytics-worker start
+    envVars:
+      - fromGroup: renderflow-app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renderflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: renderflow-redis
+          property: connectionString
+
+  - type: worker
+    name: renderflow-outbox-relay
+    runtime: node
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @renderflow/outbox-relay start
+    envVars:
+      - fromGroup: renderflow-app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renderflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: renderflow-redis
+          property: connectionString
+
+  - type: worker
+    name: renderflow-reaper
+    runtime: node
+    branch: main
+    buildCommand: pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @renderflow/reaper start
+    envVars:
+      - fromGroup: renderflow-app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: renderflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: renderflow-redis
+          property: connectionString
