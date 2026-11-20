@@ -141,18 +141,20 @@ export async function addCredits(
   `);
 }
 
-/** Test/seed helper: the ledger rows for a user, newest first. */
+/** The ledger rows for a user, newest first. */
 export async function listLedger(
   tx: CreditTransaction,
   userId: string,
   limit = 50,
+  offset = 0,
 ): Promise<LedgerEntry[]> {
   const rows = await tx
     .select()
     .from(creditLedger)
     .where(eq(creditLedger.userId, userId))
     .orderBy(sql`${creditLedger.createdAt} DESC`)
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
 
   return rows;
 }

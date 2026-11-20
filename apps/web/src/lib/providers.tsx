@@ -114,7 +114,7 @@ export function Providers({
               // upsell, not an error to retry.
               if (
                 failure instanceof ApiClientError &&
-                (failure.status === 401 || failure.status === 403)
+                (failure.status === 401 || failure.status === 402 || failure.status === 403)
               ) {
                 return false;
               }

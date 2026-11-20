@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import type { Job } from '@renderflow/api-client';
+import { jobSchema, type Job } from '@renderflow/api-client';
 
 import { Badge, Button, LiveRegion } from '../../../components/ui';
 import { API_BASE_URL, eventStreamUrl } from '../../../lib/api-url';
@@ -45,6 +45,9 @@ const STAGES_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   FESTIVAL_REEL: ['PLAN', 'SCRIPT', 'IMAGE', 'RENDER'],
 };
 
+/** Once a job reaches one of these, neither the stream nor the poll can help. */
+const TERMINAL_STATUSES = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
+
 function stagesForJob(job: Job | null): readonly string[] {
   return job === null ? STAGES : (STAGES_BY_KIND[job.kind] ?? STAGES);
 }
@@ -80,6 +83,23 @@ export function useJobProgress(jobId: string | null): JobProgress {
 
     setConnecting(true);
 
+    const closeSource = (): void => {
+      source?.close();
+      source = null;
+    };
+
+    const stopPolling = (): void => {
+      if (poll !== null) {
+        clearInterval(poll);
+        poll = null;
+      }
+    };
+
+    const stopAll = (): void => {
+      closeSource();
+      stopPolling();
+    };
+
     const absorb = (next: Job): void => {
       if (cancelled) {
         return;
@@ -92,6 +112,13 @@ export function useJobProgress(jobId: string | null): JobProgress {
       }
       setJob({ ...next, completedStages: [...seen.current] });
       setConnecting(false);
+
+      // A terminal job cannot emit another checkpoint. Leaving the fallback
+      // poll running here was a request every two seconds for the rest of the
+      // page's life, even after the `done` event closed the stream.
+      if (TERMINAL_STATUSES.has(next.status)) {
+        stopAll();
+      }
     };
 
     /**
@@ -106,10 +133,19 @@ export function useJobProgress(jobId: string | null): JobProgress {
       }
       poll = setInterval(() => {
         void fetch(`${API_BASE_URL}/jobs/${jobId}`, { credentials: 'include' })
-          .then((response) => (response.ok ? response.json() : null))
-          .then((body: unknown) => {
-            if (body !== null && typeof body === 'object') {
-              absorb(body as Job);
+          .then(async (response) => {
+            if (!response.ok) {
+              return null;
+            }
+            // The poll crosses the same HTTP boundary as the API client. Parse
+            // it with the generated schema rather than casting an unchecked
+            // object into `Job`.
+            const parsed = jobSchema.safeParse(await response.json());
+            return parsed.success ? parsed.data : null;
+          })
+          .then((next) => {
+            if (next !== null) {
+              absorb(next);
             }
           })
           .catch(() => {
@@ -132,7 +168,7 @@ export function useJobProgress(jobId: string | null): JobProgress {
 
       source.addEventListener('progress', (event) => {
         try {
-          absorb(JSON.parse((event as MessageEvent<string>).data) as Job);
+          absorb(jobSchema.parse(JSON.parse((event as MessageEvent<string>).data)));
         } catch {
           // A malformed frame is the server's problem, not the user's; the poll
           // will produce a correct one shortly.
@@ -141,25 +177,21 @@ export function useJobProgress(jobId: string | null): JobProgress {
 
       source.addEventListener('error', () => {
         // Fires on drop AND on a refused connection, so polling starts either
-        // way. `source` is left to be closed by the cleanup below.
+        // way. `source` is left to reconnect on its own until a terminal event.
         startPolling();
       });
 
       source.addEventListener('done', () => {
-        // The terminal event ends the stream. Without closing it the browser
-        // keeps a connection open to a job that will never emit again.
-        source?.close();
-        source = null;
+        // The terminal event ends the stream. Closing only the source used to
+        // leave a poll started by an earlier `error` ticking forever.
+        stopAll();
         setConnecting(false);
       });
     }
 
     return () => {
       cancelled = true;
-      source?.close();
-      if (poll !== null) {
-        clearInterval(poll);
-      }
+      stopAll();
     };
   }, [jobId]);
 

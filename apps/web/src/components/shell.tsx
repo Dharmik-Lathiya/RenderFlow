@@ -28,6 +28,23 @@ import styles from './shell.module.css';
  * A client component because all of those need the browser. It renders
  * `children` untouched, so server pages stay server pages.
  */
+/**
+ * Signs out and redirects.
+ *
+ * A failed logout still has to end the local session view, but `.finally()`
+ * alone leaves the rejected promise floating. Handling the rejection here keeps
+ * one policy for both sign-out controls and keeps network failures out of the
+ * browser console.
+ */
+function signOut(api: ReturnType<typeof useApi>): void {
+  void api.auth
+    .logout()
+    .catch(() => undefined)
+    .finally(() => {
+      window.location.href = '/login';
+    });
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const api = useApi();
   const pathname = usePathname();
@@ -184,15 +201,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   <span className={styles.userEmail}>{user.email}</span>
                 </span>
               </div>
-              <button
-                type="button"
-                className={styles.signOutButton}
-                onClick={() => {
-                  void api.auth.logout().finally(() => {
-                    window.location.href = '/login';
-                  });
-                }}
-              >
+              <button type="button" className={styles.signOutButton} onClick={() => signOut(api)}>
                 <Icon name="signOut" size={15} />
                 Sign out
               </button>
@@ -263,11 +272,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 user={user}
                 wallet={wallet}
                 initials={initials}
-                onSignOut={() => {
-                  void api.auth.logout().finally(() => {
-                    window.location.href = '/login';
-                  });
-                }}
+                onSignOut={() => signOut(api)}
               />
             )}
           </div>

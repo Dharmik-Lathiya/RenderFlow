@@ -1,5 +1,6 @@
 import { and, count, eq, inArray, isNull } from 'drizzle-orm';
 
+import { addCredits } from '@renderflow/credits';
 import { creditLedger, refreshSessions, users, workspaces } from '@renderflow/db';
 
 import { TEST_PASSWORD, uniqueEmail, walletOf } from './helpers/auth-fixtures';
@@ -675,6 +676,42 @@ describe('auth (Phase 1 DoD)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.pagination).toMatchObject({ page: 1, pageSize: 5 });
+    });
+
+    it('returns a different ledger row for page 2', async () => {
+      const email = uniqueEmail('pagination');
+      const register = await app
+        .http()
+        .post('/api/v1/auth/register')
+        .send({ email, password: UNIQUE_PASSWORD, name: 'Pages' });
+      const userId = await userIdByEmail(email);
+
+      // A second append-only entry through the credits package, never raw SQL.
+      await db.transaction((tx) =>
+        addCredits(tx, {
+          userId,
+          amount: 1,
+          entryType: 'ADJUSTMENT',
+          referenceType: 'ADMIN',
+          referenceId: `pagination-${userId}`,
+          note: 'second entry',
+        }),
+      );
+
+      const first = await app
+        .http()
+        .get('/api/v1/credits?page=1&pageSize=1')
+        .set(authHeaders(register));
+      const second = await app
+        .http()
+        .get('/api/v1/credits?page=2&pageSize=1')
+        .set(authHeaders(register));
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(second.body.pagination).toMatchObject({ page: 2, pageSize: 1, total: 2 });
+      expect(second.body.ledger).toHaveLength(1);
+      expect(second.body.ledger[0]?.id).not.toBe(first.body.ledger[0]?.id);
     });
 
     it('rejects a non-numeric page rather than crashing', async () => {

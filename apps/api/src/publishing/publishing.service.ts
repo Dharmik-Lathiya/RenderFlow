@@ -131,7 +131,11 @@ export class PublishingService implements OnModuleInit {
     // Only an approved post may be scheduled. Approving and scheduling are two
     // steps on purpose: a post can be reviewed by one person and queued by
     // another, and the queueing must never be the thing that reviews it.
-    if (status !== 'APPROVED') {
+    // SCHEDULED is also accepted: it is the state this endpoint now writes, and
+    // an idempotent replay or a retry after a failed publish must still work.
+    // `postEditDecision` refuses edits from SCHEDULED, so the approved text is
+    // unchanged in both cases.
+    if (status !== 'APPROVED' && status !== 'SCHEDULED') {
       throw new AppError(
         ERROR_CODES.CONFLICT,
         `only an approved post can be scheduled; this one is ${status}`,
@@ -192,10 +196,20 @@ export class PublishingService implements OnModuleInit {
       // The post-level time is what the calendar reads. Written in the SAME
       // transaction as the jobs: a calendar that shows a post as scheduled when
       // its delivery rows failed to insert is worse than no calendar.
-      await tx
+      // The publish jobs snapshot the approved text below. Move the post to
+      // SCHEDULED in the SAME transaction so `postEditDecision` refuses a later
+      // edit that would leave the row and the queued content disagreeing. The
+      // status predicate also closes the race where another request edits the
+      // post after the scope check above read APPROVED.
+      const updatedPost = await tx
         .update(posts)
-        .set({ scheduledAt, updatedAt: new Date() })
-        .where(eq(posts.id, postId));
+        .set({ status: 'SCHEDULED', scheduledAt, updatedAt: new Date() })
+        .where(and(eq(posts.id, postId), inArray(posts.status, ['APPROVED', 'SCHEDULED'])))
+        .returning({ id: posts.id });
+
+      if (updatedPost.length === 0) {
+        throw new AppError(ERROR_CODES.CONFLICT, 'post is no longer approved');
+      }
 
       const inserted = await tx
         .insert(publishJobs)
@@ -433,10 +447,13 @@ export class PublishingService implements OnModuleInit {
         .limit(1);
 
       if (remaining.length === 0) {
+        // Restore the state scheduling took away. A cancelled post is still the
+        // approved content it was before, and leaving it SCHEDULED would strand
+        // it: no edit rule owns that state once its jobs are gone.
         await tx
           .update(posts)
-          .set({ scheduledAt: null, updatedAt: new Date() })
-          .where(eq(posts.id, postId));
+          .set({ status: 'APPROVED', scheduledAt: null, updatedAt: new Date() })
+          .where(and(eq(posts.id, postId), eq(posts.status, 'SCHEDULED')));
       }
 
       return rows;

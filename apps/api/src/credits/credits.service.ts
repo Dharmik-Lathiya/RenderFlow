@@ -110,7 +110,7 @@ export class CreditsService implements OnModuleInit {
   async getCredits(userId: string, page: number, pageSize: number): Promise<CreditsResponse> {
     const [wallet, ledger, totalRows] = await Promise.all([
       getBalance(this.db, userId),
-      listLedger(this.db, userId, pageSize),
+      listLedger(this.db, userId, pageSize, (page - 1) * pageSize),
       this.db.select({ value: count() }).from(creditLedger).where(eq(creditLedger.userId, userId)),
     ]);
 

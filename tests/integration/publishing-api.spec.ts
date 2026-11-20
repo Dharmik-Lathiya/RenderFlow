@@ -224,6 +224,29 @@ describe('publishing API', () => {
     expect(result.jobs[0]).toMatchObject({ platform: 'linkedin', status: 'SCHEDULED' });
   });
 
+  it('marks a scheduled post as SCHEDULED so a committed post cannot be edited', async () => {
+    const ids = await makeWorkspace();
+    const postId = await makePost(ids);
+    const accountId = await connectAccount(ids.workspaceId, ids.ownerId);
+
+    await publishing.schedule(
+      ids.ownerId,
+      postId,
+      { scheduledAt: inAnHour(), accountIds: [accountId] },
+      undefined,
+    );
+
+    const [row] = await db
+      .select({ status: posts.status, scheduledAt: posts.scheduledAt })
+      .from(posts)
+      .where(eq(posts.id, postId));
+
+    // `postEditDecision` refuses edits from SCHEDULED. Leaving the post APPROVED
+    // let an editor rewrite the caption after the publish job snapshotted it.
+    expect(row?.status).toBe('SCHEDULED');
+    expect(row?.scheduledAt).toBeInstanceOf(Date);
+  });
+
   it('stores the platform-formatted text, not the raw caption', async () => {
     const ids = await makeWorkspace();
     const postId = await makePost(ids, 'APPROVED', 'Rain again.');
@@ -608,6 +631,32 @@ describe('publishing API', () => {
   });
 
   // --- cancel --------------------------------------------------------------
+
+  it('returns a fully cancelled post to APPROVED so it can be edited again', async () => {
+    const ids = await makeWorkspace();
+    const postId = await makePost(ids);
+    const accountId = await connectAccount(ids.workspaceId, ids.ownerId);
+
+    await publishing.schedule(
+      ids.ownerId,
+      postId,
+      { scheduledAt: inAnHour(), accountIds: [accountId] },
+      undefined,
+    );
+    expect(
+      (await db.select({ status: posts.status }).from(posts).where(eq(posts.id, postId)))[0]
+        ?.status,
+    ).toBe('SCHEDULED');
+
+    const result = await publishing.cancel(ids.ownerId, postId);
+
+    expect(result.cancelled).toBe(1);
+    const [row] = await db
+      .select({ status: posts.status, scheduledAt: posts.scheduledAt })
+      .from(posts)
+      .where(eq(posts.id, postId));
+    expect(row).toMatchObject({ status: 'APPROVED', scheduledAt: null });
+  });
 
   it('cancels only what has not started', async () => {
     const ids = await makeWorkspace();
