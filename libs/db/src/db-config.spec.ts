@@ -13,11 +13,30 @@ describe('loadDbConfig', () => {
     expect(loadDbConfig({ DATABASE_URL: 'postgres://u:p@h:5432/d' }).url).toContain('postgres://');
   });
 
+  it('falls back to the pooled URL for direct work when no direct URL is set', () => {
+    expect(loadDbConfig({ DATABASE_URL: VALID_URL }).urlUnpooled).toBe(VALID_URL);
+  });
+
+  it('validates and retains a separate direct URL for Neon session-scoped work', () => {
+    const direct = 'postgresql://u:p@ep-example.c-9.us-east-2.aws.neon.tech:5432/neondb';
+    expect(
+      loadDbConfig({ DATABASE_URL: VALID_URL, DATABASE_URL_UNPOOLED: direct }).urlUnpooled,
+    ).toBe(direct);
+    expect(() =>
+      loadDbConfig({ DATABASE_URL: VALID_URL, DATABASE_URL_UNPOOLED: 'mysql://localhost/db' }),
+    ).toThrow(/DATABASE_URL_UNPOOLED must be a postgres URL/);
+  });
+
   it('rejects a non-postgres URL', () => {
     expect(() => loadDbConfig({ DATABASE_URL: 'mysql://localhost:3306/db' })).toThrow(
       /must be a postgres URL/,
     );
     expect(() => loadDbConfig({ DATABASE_URL: 'not a url' })).toThrow(/not a valid URL/);
+  });
+
+  it('strips surrounding quotes copied from a dashboard value', () => {
+    expect(loadDbConfig({ DATABASE_URL: `"${VALID_URL}"` }).url).toBe(VALID_URL);
+    expect(loadDbConfig({ DATABASE_URL: `'${VALID_URL}'` }).url).toBe(VALID_URL);
   });
 
   it('defaults to warn+error logging so queries are not logged by default', () => {

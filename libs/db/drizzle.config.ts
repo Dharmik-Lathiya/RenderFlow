@@ -3,16 +3,20 @@ import { defineConfig } from 'drizzle-kit';
 /**
  * drizzle-kit configuration.
  *
- * `DATABASE_URL` is read from the environment at both generate and migrate time,
- * so migrations are applied to whatever database the process is pointed at - the
- * compose Postgres by default, the integration database under `pnpm test:int`.
+ * Migrations must use a direct (unpooled) Postgres connection. Neon's transaction
+ * pooler cannot keep the session state drizzle-kit needs; `DATABASE_URL_UNPOOLED`
+ * is pulled from Neon alongside the pooled `DATABASE_URL`. Local Compose and
+ * Testcontainers have no direct URL, so they fall back to `DATABASE_URL`.
  */
 export default defineConfig({
   schema: './src/schema.ts',
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'postgresql://renderflow:renderflow@localhost:5432/renderflow',
+    url:
+      process.env.DATABASE_URL_UNPOOLED ??
+      process.env.DATABASE_URL ??
+      'postgresql://renderflow:renderflow@localhost:5432/renderflow',
   },
   strict: true,
   verbose: true,

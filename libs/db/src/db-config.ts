@@ -5,7 +5,14 @@
  */
 
 export interface DbConfig {
+  /** Pooled connection string for ordinary application traffic. */
   url: string;
+  /**
+   * Direct (non-pooler) connection string for session-scoped work: migrations,
+   * advisory locks and long transactions. Falls back to `url` when absent so
+   * local Compose and Testcontainers keep working unchanged.
+   */
+  urlUnpooled?: string;
   /**
    * Retained from the previous data layer so a misconfigured value still fails
    * fast rather than being silently ignored.
@@ -47,6 +54,33 @@ function parseLogLevels(raw: string | undefined): DbConfig['logLevels'] {
   return levels;
 }
 
+function assertPostgresUrl(raw: string | undefined, name: string): string {
+  let url = raw?.trim() ?? '';
+  // Dashboards sometimes paste values wrapped in quotes; strip a matching pair.
+  if ((url.startsWith('"') && url.endsWith('"')) || (url.startsWith("'") && url.endsWith("'"))) {
+    url = url.slice(1, -1).trim();
+  }
+
+  if (url === '') {
+    throw new DbConfigError(`${name} is required`);
+  }
+
+  let protocol: string;
+  try {
+    protocol = new URL(url).protocol;
+  } catch {
+    throw new DbConfigError(
+      `${name} is not a valid URL (check for quotes, whitespace, or an incomplete value in your host dashboard)`,
+    );
+  }
+
+  if (protocol !== 'postgresql:' && protocol !== 'postgres:') {
+    throw new DbConfigError(`${name} must be a postgres URL, received protocol "${protocol}"`);
+  }
+
+  return url;
+}
+
 function parsePositiveInt(raw: string | undefined, name: string, fallback: number): number {
   if (raw === undefined || raw.trim() === '') {
     return fallback;
@@ -59,25 +93,14 @@ function parsePositiveInt(raw: string | undefined, name: string, fallback: numbe
 }
 
 export function loadDbConfig(source: NodeJS.ProcessEnv = process.env): DbConfig {
-  const url = source.DATABASE_URL?.trim() ?? '';
-
-  if (url === '') {
-    throw new DbConfigError('DATABASE_URL is required');
-  }
-
-  let protocol: string;
-  try {
-    protocol = new URL(url).protocol;
-  } catch {
-    throw new DbConfigError('DATABASE_URL is not a valid URL');
-  }
-
-  if (protocol !== 'postgresql:' && protocol !== 'postgres:') {
-    throw new DbConfigError(`DATABASE_URL must be a postgres URL, received protocol "${protocol}"`);
-  }
+  const url = assertPostgresUrl(source.DATABASE_URL, 'DATABASE_URL');
+  const rawUnpooled = source.DATABASE_URL_UNPOOLED?.trim() ?? '';
+  const urlUnpooled =
+    rawUnpooled === '' ? url : assertPostgresUrl(rawUnpooled, 'DATABASE_URL_UNPOOLED');
 
   return {
     url,
+    urlUnpooled,
     logLevels: parseLogLevels(source.DB_LOG_LEVELS),
     statementTimeoutMs: parsePositiveInt(
       source.DB_STATEMENT_TIMEOUT_MS,

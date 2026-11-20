@@ -24,10 +24,21 @@ export interface DbHandle {
 export type DbTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 let instance: DbHandle | null = null;
+/** Separate pool: session-scoped work must not land on Neon's transaction pooler. */
+let directInstance: DbHandle | null = null;
+
+/** `pg-connection-string` warns on `sslmode=require`; verify-full is the same TLS check. */
+function normalizeConnectionString(url: string): string {
+  const parsed = new URL(url);
+  if (parsed.searchParams.get('sslmode') === 'require') {
+    parsed.searchParams.set('sslmode', 'verify-full');
+  }
+  return parsed.toString();
+}
 
 export function createDb(config: DbConfig): DbHandle {
   const pool = new Pool({
-    connectionString: config.url,
+    connectionString: normalizeConnectionString(config.url),
     max: config.poolMax,
     // Never hold a connection open forever behind an idle client; the reaper and
     // the health probe both care.
@@ -50,17 +61,38 @@ export function getDbHandle(config?: DbConfig): DbHandle {
   return instance;
 }
 
-/** Registered as a drain so SIGTERM closes the pool before the process exits. */
+/**
+ * Direct (unpooled) handle for session-scoped Postgres work.
+ *
+ * Neon's transaction pooler does not pin a backend connection, so an advisory
+ * lock acquired there can be released - or read as free - by another client.
+ * Migrations have the same problem with prepared statements. This handle uses
+ * `DATABASE_URL_UNPOOLED`; local setups fall back to `DATABASE_URL`.
+ */
+export function getDirectDbHandle(config?: DbConfig): DbHandle {
+  if (directInstance === null) {
+    const base = config ?? loadDbConfig();
+    directInstance = createDb({ ...base, url: base.urlUnpooled ?? base.url });
+  }
+  return directInstance;
+}
+
+/** Registered as a drain so SIGTERM closes both pools before the process exits. */
 export async function disconnectDb(): Promise<void> {
   if (instance !== null) {
     await instance.pool.end();
     instance = null;
   }
+  if (directInstance !== null) {
+    await directInstance.pool.end();
+    directInstance = null;
+  }
 }
 
-/** Test seam: forget the singleton without closing the pool. */
+/** Test seam: forget both singletons without closing their pools. */
 export function resetDbForTests(): void {
   instance = null;
+  directInstance = null;
 }
 
 /**

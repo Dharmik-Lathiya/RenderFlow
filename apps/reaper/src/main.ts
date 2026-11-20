@@ -1,4 +1,9 @@
-import { disconnectDb, getDbHandle, tryAcquireAdvisoryLock } from '@renderflow/db';
+import {
+  disconnectDb,
+  getDbHandle,
+  getDirectDbHandle,
+  tryAcquireAdvisoryLock,
+} from '@renderflow/db';
 import { DEFAULT_REAPER, Reaper, type ReaperConfig } from '@renderflow/jobs';
 import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { loadQueueConfig } from '@renderflow/queue';
@@ -74,7 +79,7 @@ function loadReaperConfig(queueOutboxMaxAttempts: number): ReaperConfig {
 
 async function main(): Promise<void> {
   const queueConfig = loadQueueConfig();
-  const { db, pool } = getDbHandle();
+  const { db } = getDbHandle();
   const config = loadReaperConfig(queueConfig.relayMaxAttempts);
 
   const worker = startWorkerProcess({
@@ -153,7 +158,7 @@ async function main(): Promise<void> {
   // next tryAcquireAdvisoryLock call here wins the lock without needing an
   // orchestrator restart. SIGTERM (via AbortController) still exits cleanly.
   while (!controller.signal.aborted) {
-    const leader = await tryAcquireAdvisoryLock(pool, LEADER_LOCK_ID);
+    const leader = await tryAcquireAdvisoryLock(getDirectDbHandle().pool, LEADER_LOCK_ID);
 
     if (!leader.acquired) {
       worker.logger.info(

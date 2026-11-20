@@ -1,5 +1,10 @@
 import { assertNoMockProviderInProduction, QUEUE_NAMES } from '@renderflow/common';
-import { disconnectDb, getDbHandle, tryAcquireAdvisoryLock } from '@renderflow/db';
+import {
+  disconnectDb,
+  getDbHandle,
+  getDirectDbHandle,
+  tryAcquireAdvisoryLock,
+} from '@renderflow/db';
 import { abortOnFatal, readMetricsPort, startWorkerProcess } from '@renderflow/observability';
 import { createWorker, loadQueueConfig } from '@renderflow/queue';
 import {
@@ -77,7 +82,7 @@ async function main(): Promise<void> {
   const cipher = createTokenCipher(key);
 
   const queueConfig = loadQueueConfig();
-  const { db, pool } = getDbHandle();
+  const { db } = getDbHandle();
 
   const worker = startWorkerProcess({
     appName: APP_NAME,
@@ -112,7 +117,7 @@ async function main(): Promise<void> {
   const controller = new AbortController();
   worker.shutdown.registerDrain('analytics-loop', () => controller.abort());
 
-  const leader = await tryAcquireAdvisoryLock(pool, LEADER_LOCK_ID);
+  const leader = await tryAcquireAdvisoryLock(getDirectDbHandle().pool, LEADER_LOCK_ID);
 
   if (!leader.acquired) {
     worker.logger.info(
