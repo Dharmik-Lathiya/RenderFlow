@@ -17,9 +17,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@bull-board/api": "9.10.4",
-    "@bull-board/express": "9.10.4",
-    "@bull-board/ui": "9.10.4",
+    "@bull-board/api": "9.13.2",
+    "@bull-board/express": "9.13.2",
+    "@bull-board/ui": "9.13.2",
     "@neon/env": "^2.1.7",
     "@neon/realtime": "^0.2.1",
     "@neon/realtime-drizzle": "^0.2.0",
@@ -39,10 +39,10 @@
     "@renderflow/queue": "workspace:*",
     "@renderflow/social": "workspace:*",
     "@renderflow/storage": "workspace:*",
-    "argon2": "^0.45.1",
-    "bullmq": "^6.3.11",
+    "argon2": "^0.45.2",
+    "bullmq": "^6.7.7",
     "cookie-parser": "^1.4.7",
-    "drizzle-orm": "^0.45.3",
+    "drizzle-orm": "^0.45.4",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "jose": "^6.2.18",
@@ -55,8 +55,8 @@
     "@testcontainers/postgresql": "^11.10.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
-    "@types/supertest": "^6.0.3",
-    "supertest": "^7.1.4"
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.2"
   },
   "engines": {
     "node": ">=22.18.0"
