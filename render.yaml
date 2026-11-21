@@ -18,8 +18,6 @@ envVarGroups:
       # intentionally refuse these modes when NODE_ENV=production.
       - key: NODE_ENV
         value: development
-      - key: NODE_VERSION
-        value: '24.21.0'
       - key: LOG_LEVEL
         value: info
       - key: TRUST_PROXY
@@ -98,7 +96,11 @@ services:
     buildCommand: pnpm install --frozen-lockfile && pnpm build
     # Runs once after the first successful deploy, before users arrive.
     initialDeployHook: pnpm db:migrate:deploy && pnpm db:seed
-    startCommand: pnpm --filter @renderflow/api start
+    # Start Node directly. `pnpm --filter ... start` is a recursive run: when
+    # Render stops the old instance, pnpm 12 reports the signal as
+    # ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL and exits 1, which marks a healthy
+    # deploy as failed. Node receives SIGTERM itself and drains cleanly.
+    startCommand: node apps/api/dist/main.js
     healthCheckPath: /health/live
     envVars:
       - fromGroup: renderflow-app
@@ -111,18 +113,18 @@ services:
           type: keyvalue
           name: renderflow-redis
           property: connectionString
-      # Render routes to the port named by PORT; keep the app default in sync.
-      - key: PORT
-        value: '4000'
-      - key: API_PORT
-        value: '4000'
+      # Render sets PORT to the port its router expects. The API uses PORT
+      # unless API_PORT is set explicitly; Compose/local use the API_PORT
+      # default (4000).
 
+  # Workers use the same direct-node start command for the same reason: the
+  # process must own SIGTERM and report its real exit status to Render.
   - type: worker
     name: renderflow-content-worker
     runtime: node
     branch: main
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @renderflow/content-worker start
+    startCommand: node apps/content-worker/dist/main.js
     envVars:
       - fromGroup: renderflow-app
       - key: DATABASE_URL
@@ -140,7 +142,7 @@ services:
     runtime: node
     branch: main
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @renderflow/media-worker start
+    startCommand: node apps/media-worker/dist/main.js
     envVars:
       - fromGroup: renderflow-app
       - key: DATABASE_URL
@@ -158,7 +160,7 @@ services:
     runtime: node
     branch: main
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @renderflow/publisher-worker start
+    startCommand: node apps/publisher-worker/dist/main.js
     envVars:
       - fromGroup: renderflow-app
       - key: DATABASE_URL
@@ -176,7 +178,7 @@ services:
     runtime: node
     branch: main
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @renderflow/analytics-worker start
+    startCommand: node apps/analytics-worker/dist/main.js
     envVars:
       - fromGroup: renderflow-app
       - key: DATABASE_URL
@@ -194,7 +196,7 @@ services:
     runtime: node
     branch: main
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @renderflow/outbox-relay start
+    startCommand: node apps/outbox-relay/dist/main.js
     envVars:
       - fromGroup: renderflow-app
       - key: DATABASE_URL
@@ -212,7 +214,7 @@ services:
     runtime: node
     branch: main
     buildCommand: pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @renderflow/reaper start
+    startCommand: node apps/reaper/dist/main.js
     envVars:
       - fromGroup: renderflow-app
       - key: DATABASE_URL

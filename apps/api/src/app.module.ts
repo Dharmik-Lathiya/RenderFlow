@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 
-import { envSchema } from './config/env';
+import { parseEnv } from './config/env';
 import { PreAuthRateLimitGuard, UserRateLimitGuard } from './ratelimit/rate-limit.guard';
 import { RateLimitModule } from './ratelimit/rate-limit.module';
 import { AuthGuard, RolesGuard } from './auth/auth.guard';
@@ -40,7 +40,7 @@ import { UsersModule } from './users/users.module';
       isGlobal: true,
       cache: true,
       // Fail at boot on a bad config rather than at first request.
-      validate: (config: Record<string, unknown>) => envSchema.parse(config),
+      validate: (config: Record<string, unknown>) => parseEnv(config),
     }),
     RateLimitModule,
     EmailModule,

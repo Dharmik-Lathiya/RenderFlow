@@ -123,6 +123,13 @@ build command and output directory. The project's **Root Directory** must be
 `scripts/vercel-setup.sh` applies the project settings idempotently after
 `vercel link`.
 
+For Render, the Blueprint in `render.yaml` builds with pnpm but starts each Node
+service directly with `node apps/<app>/dist/main.js`. Do not replace those start
+commands with `pnpm --filter ... start`: pnpm's recursive wrapper can terminate
+with `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL` on Render even when the underlying
+process exits cleanly. The Node version is pinned in `.node-version`, and the
+API uses Render's injected `PORT` unless `API_PORT` is set explicitly.
+
 ## 4. Configuration
 
 Use environment variables or a secrets manager. Never bake secrets into an image

@@ -43,6 +43,19 @@ describe('loadEnv', () => {
     expect(loadEnv({ ...BASE, API_PORT: '8080' }).API_PORT).toBe(8080);
   });
 
+  it('uses the host PORT when API_PORT is absent', () => {
+    expect(loadEnv({ ...BASE, PORT: '10000' }).API_PORT).toBe(10_000);
+    expect(loadEnv({ ...BASE, PORT: '10000', API_PORT: '' }).API_PORT).toBe(10_000);
+  });
+
+  it('prefers an explicit API_PORT over the host PORT', () => {
+    expect(loadEnv({ ...BASE, PORT: '10000', API_PORT: '8080' }).API_PORT).toBe(8080);
+  });
+
+  it('rejects an invalid host PORT', () => {
+    expect(() => loadEnv({ ...BASE, PORT: 'not-a-port' })).toThrow(/API_PORT/);
+  });
+
   it('rejects a negative signup bonus', () => {
     expect(() => loadEnv({ ...BASE, SIGNUP_BONUS_CREDITS: '-1' })).toThrow();
     expect(() => loadEnv({ ...BASE, SIGNUP_BONUS_CREDITS: '1.5' })).toThrow();

@@ -15,7 +15,13 @@ import { rateLimitSpecSchema } from '../ratelimit/rate-limit.config';
 
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /** Explicit port for local/Compose use. An explicit value beats `PORT`. */
   API_PORT: z.coerce.number().int().positive().default(4000),
+  /**
+   * Port assigned by the host (Render passes its router port here). `parseEnv`
+   * uses it as the fallback for API_PORT so one variable is enough in production.
+   */
+  PORT: z.coerce.number().int().positive().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -179,14 +185,32 @@ export class EnvValidationError extends Error {
   }
 }
 
-export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const result = envSchema.safeParse(source);
+/**
+ * Parses a process environment with the host port folded into API_PORT.
+ *
+ * Render sets `PORT` to the port its router forwards to; Compose and local
+ * development rely on the API_PORT default (4000). Parsing both here (rather
+ * than reading `process.env` in main.ts) keeps ConfigService and the pre-boot
+ * checks in main.ts on the same port.
+ */
+export function parseEnv(source: Record<string, unknown>): Env {
+  const explicit = source.API_PORT;
+  const hostPort = source.PORT;
+  const apiPort = typeof explicit === 'string' && explicit.trim() === '' ? undefined : explicit;
+  const result = envSchema.safeParse({
+    ...source,
+    API_PORT: apiPort ?? hostPort,
+  });
   if (!result.success) {
     throw new EnvValidationError(
       result.error.issues.map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`),
     );
   }
   return result.data;
+}
+
+export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  return parseEnv(source);
 }
 
 export function corsOrigins(env: Env): string[] {

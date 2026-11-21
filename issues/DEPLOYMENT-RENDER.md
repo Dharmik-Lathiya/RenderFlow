@@ -82,3 +82,41 @@ there are no real provider credentials or publish adapters yet. Consequences:
 
 See `docs/engineering-audit/FINAL_PRODUCTION_REPORT.md` for the full
 `NOT PRODUCTION READY` decision and the ordered remediation list.
+
+## 6. Runtime configuration (do not re-add corepack)
+
+The Blueprint owns every build and start command. Do not add `corepack enable`
+to a Render service: pnpm is pinned by `packageManager` in the root
+`package.json`, and Render's native Node runtime provisions it. Corepack is
+not bundled with Node 25+, and a broken shim fails before any app code runs.
+The same rule applies to the Vercel project, whose `installCommand` is
+`pnpm install --frozen-lockfile` in `vercel.json`.
+
+| Setting         | Value                                                       |
+| --------------- | ----------------------------------------------------------- |
+| Node            | `24.21.0`, pinned in the root `.node-version`               |
+| Root directory  | repository root (not `apps/api`)                            |
+| Build command   | `pnpm install --frozen-lockfile && pnpm build`              |
+| API start       | `node apps/api/dist/main.js`                                |
+| Worker start    | `node apps/<worker>/dist/main.js`                           |
+| Migrations/seed | `initialDeployHook: pnpm db:migrate:deploy && pnpm db:seed` |
+
+The start commands call `node` directly on purpose. `pnpm --filter <pkg> start`
+is a recursive run; pnpm 12 reports a termination signal as
+`ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL` and exits 1, so Render can mark a healthy
+deploy as failed while the API is mapping its routes. Running Node directly
+lets the app's own SIGTERM handler drain and return the real exit status.
+
+`PORT` is supplied by Render and must not be overridden in the service.
+`apps/api/src/config/env.ts` uses it as the fallback for `API_PORT`; an
+explicit `API_PORT` still wins. `/health/live` is the liveness check, and
+`/health/ready` is the dependency gate used before traffic is routed.
+
+If the deploy log ends with `"pnpm recursive run" failed in .../apps/api`,
+check that the start command in the Render dashboard has not been overridden
+with `pnpm --filter ... start`. Re-syncing the Blueprint restores the direct
+`node` command. Verify with:
+
+```bash
+curl -fsS https://renderflow-api.onrender.com/health/live
+```
