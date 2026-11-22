@@ -35,7 +35,7 @@
     "@playwright/test": "^1.56.1",
     "@testcontainers/postgresql": "^11.10.0",
     "@types/cookie-parser": "^1.4.10",
-    "@types/jest": "^29.5.14",
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.19.1",
     "@types/pg": "^8.15.6",
     "@types/supertest": "^6.0.3"
