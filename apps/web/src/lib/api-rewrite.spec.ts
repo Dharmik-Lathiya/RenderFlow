@@ -6,7 +6,7 @@ import {
 } from './api-rewrite';
 
 const LOCAL = 'http://localhost:4000/api/v1';
-const RENDER = 'https://renderflow-api.onrender.com/api/v1';
+const RENDER = 'https://renderflow-nvgh.onrender.com/api/v1';
 
 describe('apiUpstreamUrl', () => {
   it('uses localhost outside production when nothing is configured', () => {
@@ -54,7 +54,7 @@ describe('apiRewriteDestination', () => {
 describe('apiUpstreamOrigin', () => {
   it('returns the connection origin without the /api/v1 path', () => {
     expect(apiUpstreamOrigin({ NODE_ENV: 'production' })).toBe(
-      'https://renderflow-api.onrender.com',
+      'https://renderflow-nvgh.onrender.com',
     );
   });
 });

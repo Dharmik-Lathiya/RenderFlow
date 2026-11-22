@@ -13,17 +13,17 @@ development environment, not a production deployment.
 
 ## 1. Current deployment state
 
-| Surface                       | Status                                                          |
-| ----------------------------- | --------------------------------------------------------------- |
-| Web on Vercel                 | Ready at `https://renderflowapp.vercel.app`.                    |
-| `NEXT_PUBLIC_API_URL`         | `/api/v1` (same-origin) on Vercel.                              |
-| API host                      | `https://renderflow-api.onrender.com` on Render (demo/staging). |
-| AI / social / email / billing | Mock or disabled. No real provider has been connected.          |
-| Production database           | Not provisioned by this repository.                             |
+| Surface                       | Status                                                           |
+| ----------------------------- | ---------------------------------------------------------------- |
+| Web on Vercel                 | Ready at `https://renderflowapp.vercel.app`.                     |
+| `NEXT_PUBLIC_API_URL`         | `/api/v1` (same-origin) on Vercel.                               |
+| API host                      | `https://renderflow-nvgh.onrender.com` on Render (demo/staging). |
+| AI / social / email / billing | Mock or disabled. No real provider has been connected.           |
+| Production database           | Not provisioned by this repository.                              |
 
 The browser calls the same-origin relative path `/api/v1`, which `next.config.ts`
 rewrites to an **absolute** upstream. `API_INTERNAL_URL` wins; production falls
-back to `https://renderflow-api.onrender.com/api/v1`, and local development uses
+back to `https://renderflow-nvgh.onrender.com/api/v1`, and local development uses
 `http://localhost:4000/api/v1`. A relative `NEXT_PUBLIC_API_URL` is browser-only
 and is ignored by the rewrite - using it as a destination would loop
 `/api/v1/*` back to itself and Next would render `/_not-found`. Next bakes

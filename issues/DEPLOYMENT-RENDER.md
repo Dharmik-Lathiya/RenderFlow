@@ -18,7 +18,7 @@ workspace. The Blueprint builds from the **repository root** with the root
 3. Render reads `render.yaml` at the repo root and creates:
    - `renderflow-db` (Postgres)
    - `renderflow-redis` (Key Value)
-   - `renderflow-api` (web, `https://renderflow-api.onrender.com`)
+   - `renderflow-api` (web, `https://renderflow-nvgh.onrender.com`)
    - content, media, publisher, analytics, outbox-relay and reaper workers
 4. The API service's `initialDeployHook` runs `pnpm db:migrate:deploy && pnpm
 db:seed` once after its first successful deploy. If that hook is unavailable
@@ -31,7 +31,7 @@ Set on the Vercel project `renderflow`:
 
 ```bash
 NEXT_PUBLIC_API_URL=/api/v1
-API_INTERNAL_URL=https://renderflow-api.onrender.com/api/v1
+API_INTERNAL_URL=https://renderflow-nvgh.onrender.com/api/v1
 NEXT_PUBLIC_SITE_URL=https://renderflowapp.vercel.app
 ```
 
@@ -46,7 +46,7 @@ A new push to `main` redeploys Vercel with these values. Verify:
 
 ```bash
 curl -fsS https://renderflowapp.vercel.app/api/v1/health/live
-curl -fsS https://renderflow-api.onrender.com/health/live
+curl -fsS https://renderflow-nvgh.onrender.com/health/live
 ```
 
 ## 4. Required runtime secrets
@@ -68,7 +68,7 @@ node -e "const c=require('crypto'); for (const k of ['JWT_ACCESS_SECRET','JWT_RE
 ```
 
 Do not commit the generated values. After changing them, trigger a manual
-deploy and verify with `curl -fsS https://renderflow-api.onrender.com/health/live`.
+deploy and verify with `curl -fsS https://renderflow-nvgh.onrender.com/health/live`.
 
 ## 5. Demo-only limitations
 
@@ -125,11 +125,16 @@ tolerant URL parser remains for other hosts whose connection string contains raw
 `/`, `+`, `=` or `@` in the password. Do not hand-write a placeholder in the
 Render dashboard.
 
+If Render logs `IMPORTANT! Eviction policy is allkeys-lru. It should be
+"noeviction"`, open `renderflow-redis` → **Settings** → **Maxmemory Policy** and
+select `noeviction`. Queue jobs must never be evicted while waiting; `allkeys-lru`
+can silently drop them.
+
 If the deploy log ends with `"pnpm recursive run" failed in .../apps/api`,
 check that the start command in the Render dashboard has not been overridden
 with `pnpm --filter ... start`. Re-syncing the Blueprint restores the direct
 `node` command. Verify with:
 
 ```bash
-curl -fsS https://renderflow-api.onrender.com/health/live
+curl -fsS https://renderflow-nvgh.onrender.com/health/live
 ```

@@ -209,7 +209,7 @@ Or add a one-time deploy command that runs migrations before starting.
 
 ```bash
 NEXT_PUBLIC_API_URL=/api/v1
-API_INTERNAL_URL=https://renderflow-api.onrender.com/api/v1
+API_INTERNAL_URL=https://renderflow-nvgh.onrender.com/api/v1
 NEXT_PUBLIC_SITE_URL=https://renderflowapp.vercel.app
 ```
 
@@ -226,7 +226,7 @@ The demo seeder talks to the public API, so it exercises the same signup,
 workspace, brand, campaign and credit paths a user does:
 
 ```bash
-BASE_URL=https://renderflow-api.onrender.com \
+BASE_URL=https://renderflow-nvgh.onrender.com \
 DEMO_ACCOUNT_EMAIL=demo@renderflow.dev \
 DEMO_ACCOUNT_PASSWORD='Demo1234!' \
 DEMO_ACCOUNT_CREDITS=100 \

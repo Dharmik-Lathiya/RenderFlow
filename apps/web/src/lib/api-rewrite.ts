@@ -12,7 +12,7 @@
 export type ApiRewriteEnv = Record<string, string | undefined>;
 
 const LOCAL_API_URL = 'http://localhost:4000/api/v1';
-const RENDER_API_URL = 'https://renderflow-api.onrender.com/api/v1';
+const RENDER_API_URL = 'https://renderflow-nvgh.onrender.com/api/v1';
 
 function absoluteHttpUrl(value: string | undefined): string | undefined {
   if (value === undefined) {

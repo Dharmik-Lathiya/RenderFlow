@@ -8,7 +8,7 @@
 # a placeholder and publishing is unavailable. See FINAL_PRODUCTION_REPORT.md.
 #
 # Services are created with these hostnames (Render derives them from `name`):
-#   API  https://renderflow-api.onrender.com
+#   API  https://renderflow-nvgh.onrender.com
 # The Vercel web project proxies /api/v1/* there via API_INTERNAL_URL.
 
 envVarGroups:
