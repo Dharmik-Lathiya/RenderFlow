@@ -43,50 +43,85 @@ function readEnvString(source: Record<string, unknown>, key: string): string | u
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
 }
 
-function isUsableRedisUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'redis:' || parsed.protocol === 'rediss:';
-  } catch {
-    return false;
-  }
+const REDIS_SCHEME_RE = /^(redis|rediss):\/\//i;
+// Preserve valid %XX escapes; encode everything else that URL rejects in userinfo.
+const UNSAFE_USER_INFO_RE = /%[0-9a-f]{2}|[^A-Za-z0-9\-._~]/gi;
+
+function encodeRedisUserInfo(value: string): string {
+  return value.replace(UNSAFE_USER_INFO_RE, (token) =>
+    /^%[0-9a-f]{2}$/i.test(token) ? token : encodeURIComponent(token),
+  );
 }
 
 /**
- * Resolve the Redis URL from either a complete `REDIS_URL` or discrete
- * `REDIS_HOST`/`REDIS_PORT` values.
- *
- * Render's Key Value service exposes host and port properties directly. Some
- * providers return a `connectionString` whose userinfo is not safely URL encoded,
- * which fails `new URL()` at boot. When the discrete properties are present they
- * win over an unusable `REDIS_URL`, so a bad dashboard override cannot take the
- * API down. An explicit, valid `REDIS_URL` still wins over host/port.
+ * Some providers (including Render Key Value) return a `connectionString` whose
+ * password contains raw `/`, `+`, `=` or `@`. `new URL()` rejects that, even
+ * though ioredis is happy with the literal password. Re-encode only the userinfo
+ * before handing the string to the URL parser; the last `@` is the real host
+ * separator, so raw `@` in a password is handled too.
+ */
+function parseWithEncodedUserInfo(url: string): URL | undefined {
+  const match = REDIS_SCHEME_RE.exec(url);
+  if (!match) {
+    return undefined;
+  }
+  const scheme = (match[1] ?? 'redis').toLowerCase();
+  const rest = url.slice(match[0].length);
+
+  for (let at = rest.lastIndexOf('@'); at >= 0; at = rest.lastIndexOf('@', at - 1)) {
+    const userinfo = rest.slice(0, at);
+    const remainder = rest.slice(at + 1);
+    const colon = userinfo.indexOf(':');
+    const username = colon === -1 ? userinfo : userinfo.slice(0, colon);
+    const password = colon === -1 ? '' : userinfo.slice(colon + 1);
+    const encoded =
+      colon === -1
+        ? encodeRedisUserInfo(username)
+        : `${encodeRedisUserInfo(username)}:${encodeRedisUserInfo(password)}`;
+
+    try {
+      const parsed = new URL(`${scheme}://${encoded}@${remainder}`);
+      if (parsed.protocol === `${scheme}:`) {
+        return parsed;
+      }
+    } catch {
+      // An earlier '@' may be the real separator; keep looking.
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolve the Redis URL from `REDIS_URL`, with optional discrete host/port
+ * values for providers that do not expose a complete URL.
  */
 export function resolveRedisUrl(source: Record<string, unknown> = process.env): string {
-  const host = readEnvString(source, 'REDIS_HOST');
-  const port = readEnvString(source, 'REDIS_PORT') ?? '6379';
-  const fromParts = host ? `redis://${host}:${port}` : undefined;
-
   const explicit = readEnvString(source, 'REDIS_URL');
-  if (explicit === undefined) {
-    return fromParts ?? DEFAULT_REDIS_URL;
-  }
-  if (isUsableRedisUrl(explicit) || fromParts === undefined) {
+  if (explicit !== undefined) {
     return explicit;
   }
-  return fromParts;
+
+  const host = readEnvString(source, 'REDIS_HOST');
+  const port = readEnvString(source, 'REDIS_PORT') ?? '6379';
+  return host ? `redis://${host}:${port}` : DEFAULT_REDIS_URL;
 }
 
 export function parseRedisUrl(url: string): RedisConnectionOptions {
-  let parsed: URL;
+  let parsed: URL | undefined;
   try {
     parsed = new URL(url);
   } catch {
-    throw new RedisUrlError(`REDIS_URL is not a valid URL: "${url}"`);
+    parsed = undefined;
   }
 
-  if (parsed.protocol !== 'redis:' && parsed.protocol !== 'rediss:') {
+  if (parsed && parsed.protocol !== 'redis:' && parsed.protocol !== 'rediss:') {
     throw new RedisUrlError(`REDIS_URL must use redis:// or rediss://, received "${url}"`);
+  }
+
+  parsed ??= parseWithEncodedUserInfo(url);
+  if (!parsed) {
+    throw new RedisUrlError(`REDIS_URL is not a valid URL: "${url}"`);
   }
 
   const dbSegment = parsed.pathname.replace(/^\//, '');

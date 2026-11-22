@@ -2,7 +2,7 @@ import { ALL_QUEUE_NAMES, type QueueName } from '@renderflow/common';
 
 import { redactConnectionUrl } from '@renderflow/common';
 
-import { resolveRedisUrl } from './redis-connection';
+import { parseRedisUrl, RedisUrlError, resolveRedisUrl } from './redis-connection';
 import {
   RETRY_PRESETS,
   resolveRetryPresets,
@@ -114,19 +114,15 @@ function readBackoffType(raw: string | undefined, name: string): BackoffType | u
 export function loadQueueConfig(env: NodeJS.ProcessEnv = process.env): QueueConfig {
   const redisUrl = resolveRedisUrl(env);
 
+  // Use the same tolerant parser as the connection factories, so a provider
+  // URL with raw (unencoded) credentials cannot fail boot here.
   try {
-    // Validate before we trust it: a typo here fails at boot, not mid-job.
-    const parsed = new URL(redisUrl);
-    if (parsed.protocol !== 'redis:' && parsed.protocol !== 'rediss:') {
-      throw new QueueConfigError(
-        `REDIS_URL must use redis:// or rediss://, received "${redisUrl}"`,
-      );
-    }
+    parseRedisUrl(redisUrl);
   } catch (error) {
-    if (error instanceof QueueConfigError) {
-      throw error;
+    if (error instanceof RedisUrlError) {
+      throw new QueueConfigError(error.message);
     }
-    throw new QueueConfigError(`REDIS_URL is not a valid URL: "${redisUrl}"`);
+    throw error;
   }
 
   const overrides: Partial<Record<QueueName, Partial<RetryPreset>>> = {};

@@ -112,13 +112,12 @@ lets the app's own SIGTERM handler drain and return the real exit status.
 explicit `API_PORT` still wins. `/health/live` is the liveness check, and
 `/health/ready` is the dependency gate used before traffic is routed.
 
-Redis is injected as `REDIS_HOST` and `REDIS_PORT` from the Key Value service,
-not as `REDIS_URL`. Render's `connectionString` property can contain userinfo
-that is not safely URL encoded, which fails the strict parser at boot with
-`RedisUrlError: REDIS_URL is not a valid URL`. `libs/queue` builds
-`redis://<host>:<port>` from the discrete properties. Remove any `REDIS_URL`
-override from the Render dashboard; a valid one still wins, but a stale broken
-one is ignored only when the host/port pair is present.
+Redis is injected as `REDIS_URL` from the Key Value service's `connectionString`
+property. That value can contain raw `/`, `+`, `=` or `@` in its password, which
+`new URL()` rejects even though ioredis accepts the literal password. The
+parser in `libs/queue` re-encodes only the userinfo before parsing, so the
+Render connection string can be used as-is. Do not replace it with a hand-written
+placeholder in the Render dashboard.
 
 If the deploy log ends with `"pnpm recursive run" failed in .../apps/api`,
 check that the start command in the Render dashboard has not been overridden

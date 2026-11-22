@@ -108,19 +108,11 @@ services:
         fromDatabase:
           name: renderflow-db
           property: connectionString
-      # Use the discrete properties instead of `connectionString`: some
-      # providers return a URL whose userinfo is not safely encoded, and the
-      # strict parser would reject it at boot. Internal connections need no auth.
-      - key: REDIS_HOST
+      - key: REDIS_URL
         fromService:
           type: keyvalue
           name: renderflow-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: renderflow-redis
-          property: port
+          property: connectionString
       # Render sets PORT to the port its router expects. The API uses PORT
       # unless API_PORT is set explicitly; Compose/local use the API_PORT
       # default (4000).
@@ -139,19 +131,11 @@ services:
         fromDatabase:
           name: renderflow-db
           property: connectionString
-      # Use the discrete properties instead of `connectionString`: some
-      # providers return a URL whose userinfo is not safely encoded, and the
-      # strict parser would reject it at boot. Internal connections need no auth.
-      - key: REDIS_HOST
+      - key: REDIS_URL
         fromService:
           type: keyvalue
           name: renderflow-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: renderflow-redis
-          property: port
+          property: connectionString
 
   - type: worker
     name: renderflow-media-worker
@@ -165,19 +149,11 @@ services:
         fromDatabase:
           name: renderflow-db
           property: connectionString
-      # Use the discrete properties instead of `connectionString`: some
-      # providers return a URL whose userinfo is not safely encoded, and the
-      # strict parser would reject it at boot. Internal connections need no auth.
-      - key: REDIS_HOST
+      - key: REDIS_URL
         fromService:
           type: keyvalue
           name: renderflow-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: renderflow-redis
-          property: port
+          property: connectionString
 
   - type: worker
     name: renderflow-publisher-worker
@@ -191,19 +167,11 @@ services:
         fromDatabase:
           name: renderflow-db
           property: connectionString
-      # Use the discrete properties instead of `connectionString`: some
-      # providers return a URL whose userinfo is not safely encoded, and the
-      # strict parser would reject it at boot. Internal connections need no auth.
-      - key: REDIS_HOST
+      - key: REDIS_URL
         fromService:
           type: keyvalue
           name: renderflow-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: renderflow-redis
-          property: port
+          property: connectionString
 
   - type: worker
     name: renderflow-analytics-worker
@@ -217,19 +185,11 @@ services:
         fromDatabase:
           name: renderflow-db
           property: connectionString
-      # Use the discrete properties instead of `connectionString`: some
-      # providers return a URL whose userinfo is not safely encoded, and the
-      # strict parser would reject it at boot. Internal connections need no auth.
-      - key: REDIS_HOST
+      - key: REDIS_URL
         fromService:
           type: keyvalue
           name: renderflow-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: renderflow-redis
-          property: port
+          property: connectionString
 
   - type: worker
     name: renderflow-outbox-relay
@@ -243,19 +203,11 @@ services:
         fromDatabase:
           name: renderflow-db
           property: connectionString
-      # Use the discrete properties instead of `connectionString`: some
-      # providers return a URL whose userinfo is not safely encoded, and the
-      # strict parser would reject it at boot. Internal connections need no auth.
-      - key: REDIS_HOST
+      - key: REDIS_URL
         fromService:
           type: keyvalue
           name: renderflow-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: renderflow-redis
-          property: port
+          property: connectionString
 
   - type: worker
     name: renderflow-reaper
@@ -269,16 +221,8 @@ services:
         fromDatabase:
           name: renderflow-db
           property: connectionString
-      # Use the discrete properties instead of `connectionString`: some
-      # providers return a URL whose userinfo is not safely encoded, and the
-      # strict parser would reject it at boot. Internal connections need no auth.
-      - key: REDIS_HOST
+      - key: REDIS_URL
         fromService:
           type: keyvalue
           name: renderflow-redis
-          property: host
-      - key: REDIS_PORT
-        fromService:
-          type: keyvalue
-          name: renderflow-redis
-          property: port
+          property: connectionString

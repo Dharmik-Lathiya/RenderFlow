@@ -36,6 +36,21 @@ describe('parseRedisUrl', () => {
     expect(parseRedisUrl('rediss://localhost:6380').tls).toBe(true);
   });
 
+  it('accepts provider URLs with raw, unencoded credentials', () => {
+    expect(parseRedisUrl('redis://default:ab/cd@red-abc123:6379')).toMatchObject({
+      username: 'default',
+      password: 'ab/cd',
+      host: 'red-abc123',
+      port: 6379,
+    });
+    expect(parseRedisUrl('redis://user:pa@ss@cache:6379/2')).toMatchObject({
+      username: 'user',
+      password: 'pa@ss',
+      host: 'cache',
+      db: 2,
+    });
+  });
+
   it('rejects malformed urls and wrong schemes', () => {
     expect(() => parseRedisUrl('localhost:6379')).toThrow(RedisUrlError);
     expect(() => parseRedisUrl('http://localhost:6379')).toThrow(/redis:\/\/ or rediss:\/\//);
@@ -84,27 +99,19 @@ describe('resolveRedisUrl', () => {
     expect(resolveRedisUrl({ REDIS_HOST: 'red-abc123' })).toBe('redis://red-abc123:6379');
   });
 
-  it('prefers a valid explicit URL over host and port', () => {
-    expect(
-      resolveRedisUrl({
-        REDIS_URL: 'rediss://user:pass@cache:6380/2',
-        REDIS_HOST: 'red-abc123',
-        REDIS_PORT: '6379',
-      }),
-    ).toBe('rediss://user:pass@cache:6380/2');
+  it('returns an explicit URL unchanged, even when it needs tolerant parsing', () => {
+    const url = 'redis://default:ab/cd@red-abc123:6379';
+    expect(resolveRedisUrl({ REDIS_URL: url, REDIS_HOST: 'red-abc123' })).toBe(url);
+    expect(resolveRedisUrl({ REDIS_URL: 'not a url' })).toBe('not a url');
   });
 
-  it('falls back to host and port when the explicit URL is unusable', () => {
+  it('uses host and port when REDIS_URL is blank', () => {
     expect(
       resolveRedisUrl({
-        REDIS_URL: 'not a url',
+        REDIS_URL: '   ',
         REDIS_HOST: 'red-abc123',
         REDIS_PORT: '6379',
       }),
     ).toBe('redis://red-abc123:6379');
-  });
-
-  it('keeps an unusable URL when no host fallback exists', () => {
-    expect(resolveRedisUrl({ REDIS_URL: 'not a url' })).toBe('not a url');
   });
 });

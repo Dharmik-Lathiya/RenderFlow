@@ -24,14 +24,9 @@ describe('loadEnv', () => {
     expect(env.REDIS_URL).toBe('redis://red-abc123:6380');
   });
 
-  it('ignores an unusable REDIS_URL when host and port are present', () => {
-    const env = loadEnv({
-      ...BASE,
-      REDIS_URL: 'broken connection string',
-      REDIS_HOST: 'red-abc123',
-      REDIS_PORT: '6379',
-    });
-    expect(env.REDIS_URL).toBe('redis://red-abc123:6379');
+  it('keeps a provider REDIS_URL with raw credentials', () => {
+    const url = 'redis://default:ab/cd@red-abc123:6379';
+    expect(loadEnv({ ...BASE, REDIS_URL: url }).REDIS_URL).toBe(url);
   });
 
   it('requires DATABASE_URL', () => {
