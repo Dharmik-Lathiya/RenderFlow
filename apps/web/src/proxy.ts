@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { apiUpstreamOrigin } from './lib/api-rewrite';
 import { buildContentSecurityPolicy } from './lib/csp';
 
 /**
@@ -14,22 +15,12 @@ import { buildContentSecurityPolicy } from './lib/csp';
  * authenticated pages dynamically, so the blast radius is limited.
  */
 
-function apiOrigin(): string {
-  const configured =
-    process.env.NEXT_PUBLIC_API_URL ?? process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
-  try {
-    return new URL(configured).origin;
-  } catch {
-    return 'http://localhost:4000';
-  }
-}
-
 export function proxy(request: NextRequest): NextResponse {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const policy = buildContentSecurityPolicy({
     nonce,
     isDev: process.env.NODE_ENV === 'development',
-    apiOrigin: apiOrigin(),
+    apiOrigin: apiUpstreamOrigin(),
   });
 
   const requestHeaders = new Headers(request.headers);

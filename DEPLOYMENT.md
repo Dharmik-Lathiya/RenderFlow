@@ -13,23 +13,21 @@ development environment, not a production deployment.
 
 ## 1. Current deployment state
 
-| Surface                       | Status                                                             |
-| ----------------------------- | ------------------------------------------------------------------ |
-| Web on Vercel                 | Ready at `https://renderflowapp.vercel.app`. Marketing pages only. |
-| `NEXT_PUBLIC_API_URL`         | Not set. The deployed site has no API host.                        |
-| API host                      | None. No public API is currently deployed.                         |
-| AI / social / email / billing | Mock or disabled. No real provider has been connected.             |
-| Production database           | Not provisioned by this repository.                                |
+| Surface                       | Status                                                          |
+| ----------------------------- | --------------------------------------------------------------- |
+| Web on Vercel                 | Ready at `https://renderflowapp.vercel.app`.                    |
+| `NEXT_PUBLIC_API_URL`         | `/api/v1` (same-origin) on Vercel.                              |
+| API host                      | `https://renderflow-api.onrender.com` on Render (demo/staging). |
+| AI / social / email / billing | Mock or disabled. No real provider has been connected.          |
+| Production database           | Not provisioned by this repository.                             |
 
 The browser calls the same-origin relative path `/api/v1`, which `next.config.ts`
-rewrites to `API_INTERNAL_URL` (or `NEXT_PUBLIC_API_URL` when set). The browser
-client itself never falls back to `localhost`; the **rewrite** falls back to
-`http://localhost:4000/api/v1` for local development. On Vercel that fallback
-points at the function's own localhost and cannot reach the API, so setting
-`API_INTERNAL_URL` repoints the deployed app at the backend - no rebuild required.
-The public marketing pages render either way, but sign-in and the product screens
-cannot work until the API host and rewrite target are ready. Do not publish an API
-URL until the API host, CORS origin, cookie policy and secrets are ready.
+rewrites to an **absolute** upstream. `API_INTERNAL_URL` wins; production falls
+back to `https://renderflow-api.onrender.com/api/v1`, and local development uses
+`http://localhost:4000/api/v1`. A relative `NEXT_PUBLIC_API_URL` is browser-only
+and is ignored by the rewrite - using it as a destination would loop
+`/api/v1/*` back to itself and Next would render `/_not-found`. Next bakes
+rewrites into the build, so changing `API_INTERNAL_URL` requires a redeploy.
 
 ## 2. Topology
 
@@ -193,12 +191,12 @@ Workers and the reaper validate these at boot.
 
 ### Web/Vercel variables
 
-| Variable                    | Where         | Notes                                                                   |
-| --------------------------- | ------------- | ----------------------------------------------------------------------- |
-| `NEXT_PUBLIC_API_URL`       | Build time    | Browser base URL including `/api/v1`; rebuild after changing it.        |
-| `API_INTERNAL_URL`          | Runtime       | Server-side reads such as the pricing page; defaults to the public URL. |
-| `NEXT_PUBLIC_SITE_URL`      | Build/runtime | Canonical origin for metadata, sitemap and robots.                      |
-| `NEXT_PUBLIC_SUPPORT_EMAIL` | Build time    | Public support address. Do not use a placeholder in production.         |
+| Variable                    | Where         | Notes                                                                                          |
+| --------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`       | Build time    | Browser base URL including `/api/v1`; rebuild after changing it.                               |
+| `API_INTERNAL_URL`          | Build time    | Absolute `/api/v1` upstream for the rewrite and server-side reads. Redeploy after changing it. |
+| `NEXT_PUBLIC_SITE_URL`      | Build/runtime | Canonical origin for metadata, sitemap and robots.                                             |
+| `NEXT_PUBLIC_SUPPORT_EMAIL` | Build time    | Public support address. Do not use a placeholder in production.                                |
 
 Only `NEXT_PUBLIC_*` values reach the browser. Never put a secret behind that
 prefix.

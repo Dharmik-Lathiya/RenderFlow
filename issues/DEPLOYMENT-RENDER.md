@@ -9,7 +9,7 @@ origin. Deploy the backend with the checked-in `render.yaml` Blueprint.
 RenderFlow is a pnpm monorepo. `apps/api` imports `libs/common`, `libs/db`,
 `libs/credits`, etc., so a deploy rooted at `apps/api` cannot install or build the
 workspace. The Blueprint builds from the **repository root** with the root
-`pnpm` scripts and starts each workspace with `pnpm --filter <package> start`.
+`pnpm` scripts and starts each workspace with `node apps/<package>/dist/main.js`.
 
 ## 2. Create the stack
 
@@ -36,8 +36,11 @@ NEXT_PUBLIC_SITE_URL=https://renderflowapp.vercel.app
 ```
 
 `NEXT_PUBLIC_API_URL` stays relative so the browser calls the same origin and
-cookies remain first-party. `API_INTERNAL_URL` is read at runtime by
-`apps/web/next.config.ts` and is where the `/api/v1/*` rewrite forwards.
+cookies remain first-party. `API_INTERNAL_URL` must be an absolute URL; it is
+read by `apps/web/next.config.ts` at build time and is where the `/api/v1/*`
+rewrite forwards. Next bakes rewrites into the build, so changing it requires a
+new Vercel deployment. A relative value here previously caused a self-rewrite to
+`/_not-found` and a 404 on signup.
 
 A new push to `main` redeploys Vercel with these values. Verify:
 
