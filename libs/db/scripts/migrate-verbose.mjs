@@ -23,13 +23,24 @@ function formatError(error, seen = new Set()) {
   return `${base}\nCaused by: ${formatError(error.cause, seen)}`;
 }
 
-function normalizeConnectionString(url) {
+function connectionOptions(url) {
   const parsed = new URL(url);
-  if (parsed.searchParams.get('sslmode') === 'require') {
-    // pg-connection-string warns on `require`; verify-full is the same TLS check.
+  const sslMode = parsed.searchParams.get('sslmode');
+  const localHost =
+    parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+
+  // pg-connection-string warns on `require`; verify-full is its strict alias.
+  if (sslMode === 'require') {
     parsed.searchParams.set('sslmode', 'verify-full');
   }
-  return parsed.toString();
+
+  // Hosted Postgres (Render included) may require TLS even when the pasted URL
+  // has no sslmode. Local Compose must stay plaintext.
+  const useSsl = localHost ? false : sslMode !== 'disable';
+  return {
+    connectionString: parsed.toString(),
+    ssl: useSsl ? { rejectUnauthorized: true } : undefined,
+  };
 }
 
 const url = process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL;
@@ -40,7 +51,7 @@ if (!url) {
 
 const migrationsFolder = fileURLToPath(new URL('../drizzle/', import.meta.url));
 const pool = new Pool({
-  connectionString: normalizeConnectionString(url),
+  ...connectionOptions(url),
   max: 1,
   connectionTimeoutMillis: 10_000,
 });
