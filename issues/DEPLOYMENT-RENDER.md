@@ -84,6 +84,15 @@ again. `db:seed` inserts the `pricing_rules` rows required by generation. If the
 connection is refused from your home network, temporarily allow your public IP
 on the Render Postgres instance.
 
+Drizzle Kit hides the underlying error behind its spinner. If `db:migrate:deploy`
+fails, rerun it through the verbose runner to see the real cause:
+
+```bash
+DATABASE_URL='copied-postgres-connection-string' pnpm db:migrate:verbose
+```
+
+Do not run `db:seed` until the migration succeeds.
+
 ## 4. Required runtime secrets
 
 The API validates JWT secrets at boot. If either value is shorter than 32

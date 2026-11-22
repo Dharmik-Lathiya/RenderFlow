@@ -15,6 +15,7 @@
     "db:generate": "pnpm --filter @renderflow/db db:generate",
     "db:migrate": "pnpm --filter @renderflow/db db:migrate",
     "db:migrate:deploy": "pnpm --filter @renderflow/db db:migrate",
+    "db:migrate:verbose": "pnpm --filter @renderflow/db db:migrate:verbose",
     "db:push": "pnpm --filter @renderflow/db db:push",
     "db:seed": "pnpm --filter @renderflow/credits db:seed",
     "db:studio": "pnpm --filter @renderflow/db db:studio",
