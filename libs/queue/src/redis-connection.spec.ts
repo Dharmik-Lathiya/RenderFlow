@@ -1,4 +1,9 @@
-import { parseRedisUrl, toConnectionOptions, RedisUrlError } from './redis-connection';
+import {
+  parseRedisUrl,
+  resolveRedisUrl,
+  toConnectionOptions,
+  RedisUrlError,
+} from './redis-connection';
 
 describe('parseRedisUrl', () => {
   it('parses a plain redis url', () => {
@@ -64,5 +69,42 @@ describe('toConnectionOptions', () => {
   it('preserves the rest of the parsed options', () => {
     const options = toConnectionOptions({ url: 'rediss://cache:6380/2', maxRetriesPerRequest: 0 });
     expect(options).toMatchObject({ host: 'cache', port: 6380, db: 2, tls: true });
+  });
+});
+
+describe('resolveRedisUrl', () => {
+  it('defaults to localhost when nothing is configured', () => {
+    expect(resolveRedisUrl({})).toBe('redis://localhost:6379');
+  });
+
+  it('builds a URL from discrete host and port properties', () => {
+    expect(resolveRedisUrl({ REDIS_HOST: 'red-abc123', REDIS_PORT: '6380' })).toBe(
+      'redis://red-abc123:6380',
+    );
+    expect(resolveRedisUrl({ REDIS_HOST: 'red-abc123' })).toBe('redis://red-abc123:6379');
+  });
+
+  it('prefers a valid explicit URL over host and port', () => {
+    expect(
+      resolveRedisUrl({
+        REDIS_URL: 'rediss://user:pass@cache:6380/2',
+        REDIS_HOST: 'red-abc123',
+        REDIS_PORT: '6379',
+      }),
+    ).toBe('rediss://user:pass@cache:6380/2');
+  });
+
+  it('falls back to host and port when the explicit URL is unusable', () => {
+    expect(
+      resolveRedisUrl({
+        REDIS_URL: 'not a url',
+        REDIS_HOST: 'red-abc123',
+        REDIS_PORT: '6379',
+      }),
+    ).toBe('redis://red-abc123:6379');
+  });
+
+  it('keeps an unusable URL when no host fallback exists', () => {
+    expect(resolveRedisUrl({ REDIS_URL: 'not a url' })).toBe('not a url');
   });
 });

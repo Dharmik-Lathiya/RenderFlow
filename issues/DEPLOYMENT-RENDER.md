@@ -112,6 +112,14 @@ lets the app's own SIGTERM handler drain and return the real exit status.
 explicit `API_PORT` still wins. `/health/live` is the liveness check, and
 `/health/ready` is the dependency gate used before traffic is routed.
 
+Redis is injected as `REDIS_HOST` and `REDIS_PORT` from the Key Value service,
+not as `REDIS_URL`. Render's `connectionString` property can contain userinfo
+that is not safely URL encoded, which fails the strict parser at boot with
+`RedisUrlError: REDIS_URL is not a valid URL`. `libs/queue` builds
+`redis://<host>:<port>` from the discrete properties. Remove any `REDIS_URL`
+override from the Render dashboard; a valid one still wins, but a stale broken
+one is ignored only when the host/port pair is present.
+
 If the deploy log ends with `"pnpm recursive run" failed in .../apps/api`,
 check that the start command in the Render dashboard has not been overridden
 with `pnpm --filter ... start`. Re-syncing the Blueprint restores the direct

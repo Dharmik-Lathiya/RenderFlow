@@ -18,6 +18,22 @@ describe('loadQueueConfig', () => {
     expect(loadQueueConfig({ REDIS_URL: '   ' }).redisUrl).toBe('redis://localhost:6379');
   });
 
+  it('builds the URL from REDIS_HOST and REDIS_PORT when provided', () => {
+    expect(loadQueueConfig({ REDIS_HOST: 'red-abc123', REDIS_PORT: '6380' }).redisUrl).toBe(
+      'redis://red-abc123:6380',
+    );
+  });
+
+  it('ignores an unusable REDIS_URL when host and port are present', () => {
+    expect(
+      loadQueueConfig({
+        REDIS_URL: 'broken connection string',
+        REDIS_HOST: 'red-abc123',
+        REDIS_PORT: '6379',
+      }).redisUrl,
+    ).toBe('redis://red-abc123:6379');
+  });
+
   it('exposes a credential-free url for logging', () => {
     const config = loadQueueConfig({ REDIS_URL: 'redis://user:hunter2@cache:6379/2' });
     expect(config.redisUrl).toBe('redis://user:hunter2@cache:6379/2');

@@ -1,3 +1,4 @@
+import { resolveRedisUrl } from '@renderflow/queue';
 import { z } from 'zod';
 
 import { rateLimitSpecSchema } from '../ratelimit/rate-limit.config';
@@ -28,6 +29,9 @@ export const envSchema = z.object({
   /** Direct Neon connection for migrations and advisory locks; optional locally. */
   DATABASE_URL_UNPOOLED: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
+  /** Discrete Redis connection parts, used when a provider's URL is unusable. */
+  REDIS_HOST: z.string().min(1).optional(),
+  REDIS_PORT: z.coerce.number().int().positive().optional(),
 
   // --- Neon platform services (pulled by `neon deploy`) ---
   NEON_BRANCH: z.string().min(1).optional(),
@@ -200,6 +204,7 @@ export function parseEnv(source: Record<string, unknown>): Env {
   const result = envSchema.safeParse({
     ...source,
     API_PORT: apiPort ?? hostPort,
+    REDIS_URL: resolveRedisUrl(source),
   });
   if (!result.success) {
     throw new EnvValidationError(

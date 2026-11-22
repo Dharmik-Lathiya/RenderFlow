@@ -2,6 +2,7 @@ import { ALL_QUEUE_NAMES, type QueueName } from '@renderflow/common';
 
 import { redactConnectionUrl } from '@renderflow/common';
 
+import { resolveRedisUrl } from './redis-connection';
 import {
   RETRY_PRESETS,
   resolveRetryPresets,
@@ -50,7 +51,6 @@ export class QueueConfigError extends Error {
   }
 }
 
-const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 const DEFAULT_PREFIX = 'renderflow';
 
 /**
@@ -112,7 +112,7 @@ function readBackoffType(raw: string | undefined, name: string): BackoffType | u
 }
 
 export function loadQueueConfig(env: NodeJS.ProcessEnv = process.env): QueueConfig {
-  const redisUrl = env.REDIS_URL?.trim() || DEFAULT_REDIS_URL;
+  const redisUrl = resolveRedisUrl(env);
 
   try {
     // Validate before we trust it: a typo here fails at boot, not mid-job.

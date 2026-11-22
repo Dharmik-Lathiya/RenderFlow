@@ -19,6 +19,21 @@ describe('loadEnv', () => {
     expect(env.SIGNUP_BONUS_CREDITS).toBe(50);
   });
 
+  it('builds REDIS_URL from REDIS_HOST and REDIS_PORT', () => {
+    const env = loadEnv({ ...BASE, REDIS_HOST: 'red-abc123', REDIS_PORT: '6380' });
+    expect(env.REDIS_URL).toBe('redis://red-abc123:6380');
+  });
+
+  it('ignores an unusable REDIS_URL when host and port are present', () => {
+    const env = loadEnv({
+      ...BASE,
+      REDIS_URL: 'broken connection string',
+      REDIS_HOST: 'red-abc123',
+      REDIS_PORT: '6379',
+    });
+    expect(env.REDIS_URL).toBe('redis://red-abc123:6379');
+  });
+
   it('requires DATABASE_URL', () => {
     const { DATABASE_URL: _omitted, ...withoutDb } = BASE;
     expect(() => loadEnv(withoutDb)).toThrow(EnvValidationError);
