@@ -42,12 +42,32 @@ rewrite forwards. Next bakes rewrites into the build, so changing it requires a
 new Vercel deployment. A relative value here previously caused a self-rewrite to
 `/_not-found` and a 404 on signup.
 
-A new push to `main` redeploys Vercel with these values. Verify:
+A new push to `main` redeploys Vercel with these values. The proxy only handles
+`/api/v1/*`, while health is mapped at `/health/live`; verify them separately:
 
 ```bash
-curl -fsS https://renderflowapp.vercel.app/api/v1/health/live
 curl -fsS https://renderflow-nvgh.onrender.com/health/live
+curl -sS -X POST https://renderflowapp.vercel.app/api/v1/auth/register \
+  -H 'content-type: application/json' -d '{}'
 ```
+
+The second command should return Nest validation JSON (`400`) with `email`,
+`password` and `name` errors. A `Cannot GET /api/v1/health/live` JSON response
+means the Vercel rewrite is working and the path is simply not mapped.
+
+### Signup returns 500 with `relation "users" does not exist`
+
+The API is connected to Postgres, but migrations did not run. This happens when
+the service was created manually instead of from the Blueprint, because there is
+no `initialDeployHook`. Open the API service in Render → **Shell** and run:
+
+```bash
+pnpm db:migrate:deploy
+pnpm db:seed
+```
+
+Both commands must succeed before testing signup again. `db:seed` inserts the
+`pricing_rules` rows required by generation.
 
 ## 4. Required runtime secrets
 
