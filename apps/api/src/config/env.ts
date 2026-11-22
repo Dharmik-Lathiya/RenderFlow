@@ -29,7 +29,7 @@ export const envSchema = z.object({
   /** Direct Neon connection for migrations and advisory locks; optional locally. */
   DATABASE_URL_UNPOOLED: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
-  /** Discrete Redis connection parts, used when no REDIS_URL is provided. */
+  /** Provider-managed Redis host; wins over REDIS_URL (e.g. Render Blueprint). */
   REDIS_HOST: z.string().min(1).optional(),
   REDIS_PORT: z.coerce.number().int().positive().optional(),
 

@@ -93,18 +93,23 @@ function parseWithEncodedUserInfo(url: string): URL | undefined {
 }
 
 /**
- * Resolve the Redis URL from `REDIS_URL`, with optional discrete host/port
- * values for providers that do not expose a complete URL.
+ * Resolve the Redis URL from `REDIS_URL`.
+ *
+ * Discrete `REDIS_HOST`/`REDIS_PORT` values win whenever present. Render injects
+ * them from the Key Value service, and Render preserves old environment
+ * variables when a Blueprint sync removes them - so a stale `REDIS_URL` from an
+ * earlier deploy must not be allowed to shadow the provider-managed host/port.
+ * `REDIS_URL` remains the normal configuration for local/Compose and providers
+ * that only expose a full connection string.
  */
 export function resolveRedisUrl(source: Record<string, unknown> = process.env): string {
-  const explicit = readEnvString(source, 'REDIS_URL');
-  if (explicit !== undefined) {
-    return explicit;
+  const host = readEnvString(source, 'REDIS_HOST');
+  if (host !== undefined) {
+    const port = readEnvString(source, 'REDIS_PORT') ?? '6379';
+    return `redis://${host}:${port}`;
   }
 
-  const host = readEnvString(source, 'REDIS_HOST');
-  const port = readEnvString(source, 'REDIS_PORT') ?? '6379';
-  return host ? `redis://${host}:${port}` : DEFAULT_REDIS_URL;
+  return readEnvString(source, 'REDIS_URL') ?? DEFAULT_REDIS_URL;
 }
 
 export function parseRedisUrl(url: string): RedisConnectionOptions {

@@ -24,7 +24,18 @@ describe('loadEnv', () => {
     expect(env.REDIS_URL).toBe('redis://red-abc123:6380');
   });
 
-  it('keeps a provider REDIS_URL with raw credentials', () => {
+  it('lets provider-managed host/port override a stale REDIS_URL', () => {
+    expect(
+      loadEnv({
+        ...BASE,
+        REDIS_URL: 'not a url',
+        REDIS_HOST: 'red-abc123',
+        REDIS_PORT: '6379',
+      }).REDIS_URL,
+    ).toBe('redis://red-abc123:6379');
+  });
+
+  it('keeps a provider REDIS_URL with raw credentials when no host is configured', () => {
     const url = 'redis://default:ab/cd@red-abc123:6379';
     expect(loadEnv({ ...BASE, REDIS_URL: url }).REDIS_URL).toBe(url);
   });

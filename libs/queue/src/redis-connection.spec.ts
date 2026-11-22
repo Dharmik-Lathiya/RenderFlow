@@ -99,19 +99,21 @@ describe('resolveRedisUrl', () => {
     expect(resolveRedisUrl({ REDIS_HOST: 'red-abc123' })).toBe('redis://red-abc123:6379');
   });
 
-  it('returns an explicit URL unchanged, even when it needs tolerant parsing', () => {
-    const url = 'redis://default:ab/cd@red-abc123:6379';
-    expect(resolveRedisUrl({ REDIS_URL: url, REDIS_HOST: 'red-abc123' })).toBe(url);
-    expect(resolveRedisUrl({ REDIS_URL: 'not a url' })).toBe('not a url');
-  });
-
-  it('uses host and port when REDIS_URL is blank', () => {
+  it('prefers provider-managed host/port over a stale REDIS_URL', () => {
+    // Render preserves env vars removed from a Blueprint on later syncs, so the
+    // old connectionString can still be present after switching to host/port.
     expect(
       resolveRedisUrl({
-        REDIS_URL: '   ',
+        REDIS_URL: 'not a url',
         REDIS_HOST: 'red-abc123',
         REDIS_PORT: '6379',
       }),
     ).toBe('redis://red-abc123:6379');
+  });
+
+  it('uses an explicit URL unchanged when no host is configured', () => {
+    const url = 'redis://default:ab/cd@red-abc123:6379';
+    expect(resolveRedisUrl({ REDIS_URL: url })).toBe(url);
+    expect(resolveRedisUrl({ REDIS_URL: 'not a url' })).toBe('not a url');
   });
 });

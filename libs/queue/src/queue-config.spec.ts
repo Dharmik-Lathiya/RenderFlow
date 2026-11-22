@@ -18,10 +18,17 @@ describe('loadQueueConfig', () => {
     expect(loadQueueConfig({ REDIS_URL: '   ' }).redisUrl).toBe('redis://localhost:6379');
   });
 
-  it('builds the URL from REDIS_HOST and REDIS_PORT when no URL is provided', () => {
+  it('builds the URL from REDIS_HOST and REDIS_PORT, overriding a stale URL', () => {
     expect(loadQueueConfig({ REDIS_HOST: 'red-abc123', REDIS_PORT: '6380' }).redisUrl).toBe(
       'redis://red-abc123:6380',
     );
+    expect(
+      loadQueueConfig({
+        REDIS_URL: 'not a url',
+        REDIS_HOST: 'red-abc123',
+        REDIS_PORT: '6380',
+      }).redisUrl,
+    ).toBe('redis://red-abc123:6380');
   });
 
   it('accepts a provider URL with raw unencoded credentials', () => {

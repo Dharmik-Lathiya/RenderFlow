@@ -135,24 +135,24 @@ or commit them. At minimum:
 
 ### Required in every environment
 
-| Variable               | Notes                                                                 |
-| ---------------------- | --------------------------------------------------------------------- |
-| `NODE_ENV`             | `production` for deployed services.                                   |
-| `DATABASE_URL`         | PostgreSQL connection string with TLS as required by the provider.    |
-| `REDIS_URL`            | `rediss://` when the provider requires TLS.                           |
-| `JWT_ACCESS_SECRET`    | At least 32 characters. No fallback; boot fails if weak.              |
-| `JWT_REFRESH_SECRET`   | At least 32 characters.                                               |
-| `TOKEN_ENCRYPTION_KEY` | Base64 of exactly 32 bytes. Stable; rotating it breaks stored tokens. |
-| `CORS_ORIGINS`         | Explicit HTTPS origin(s) of the web app. Never `*`.                   |
-| `WEB_BASE_URL`         | Public web origin, used in email links.                               |
-| `S3_ENDPOINT`          | S3-compatible endpoint.                                               |
-| `S3_REGION`            | Bucket region.                                                        |
-| `S3_BUCKET`            | Private asset bucket.                                                 |
-| `S3_ACCESS_KEY`        | Least-privilege access key.                                           |
-| `S3_SECRET_KEY`        | Secret key.                                                           |
-| `S3_FORCE_PATH_STYLE`  | `true` for MinIO; usually `false` for AWS S3.                         |
-| `API_PORT`             | Default `4000`.                                                       |
-| `METRICS_PORT`         | Per-process scrape port: API `4000`; workers `4001`-`4006`.           |
+| Variable               | Notes                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`             | `production` for deployed services.                                                                      |
+| `DATABASE_URL`         | PostgreSQL connection string with TLS as required by the provider.                                       |
+| `REDIS_URL`            | `rediss://` when the provider requires TLS. `REDIS_HOST` (with optional `REDIS_PORT`) wins when present. |
+| `JWT_ACCESS_SECRET`    | At least 32 characters. No fallback; boot fails if weak.                                                 |
+| `JWT_REFRESH_SECRET`   | At least 32 characters.                                                                                  |
+| `TOKEN_ENCRYPTION_KEY` | Base64 of exactly 32 bytes. Stable; rotating it breaks stored tokens.                                    |
+| `CORS_ORIGINS`         | Explicit HTTPS origin(s) of the web app. Never `*`.                                                      |
+| `WEB_BASE_URL`         | Public web origin, used in email links.                                                                  |
+| `S3_ENDPOINT`          | S3-compatible endpoint.                                                                                  |
+| `S3_REGION`            | Bucket region.                                                                                           |
+| `S3_BUCKET`            | Private asset bucket.                                                                                    |
+| `S3_ACCESS_KEY`        | Least-privilege access key.                                                                              |
+| `S3_SECRET_KEY`        | Secret key.                                                                                              |
+| `S3_FORCE_PATH_STYLE`  | `true` for MinIO; usually `false` for AWS S3.                                                            |
+| `API_PORT`             | Default `4000`.                                                                                          |
+| `METRICS_PORT`         | Per-process scrape port: API `4000`; workers `4001`-`4006`.                                              |
 
 Generate secrets with `openssl rand -base64 48` for JWT secrets and
 `openssl rand -base64 32` for `TOKEN_ENCRYPTION_KEY`.
