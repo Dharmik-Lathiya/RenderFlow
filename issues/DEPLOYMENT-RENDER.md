@@ -59,15 +59,30 @@ means the Vercel rewrite is working and the path is simply not mapped.
 
 The API is connected to Postgres, but migrations did not run. This happens when
 the service was created manually instead of from the Blueprint, because there is
-no `initialDeployHook`. Open the API service in Render → **Shell** and run:
+no `initialDeployHook`.
+
+Render Shell requires a paid compute plan. On the free plan, copy the API's
+`DATABASE_URL` from Render → API service → **Environment** (or use the Postgres
+service's **External Connection String**), then run the migration locally from
+the repository root:
 
 ```bash
+DATABASE_URL='copied-postgres-connection-string' pnpm db:migrate:deploy
+DATABASE_URL='copied-postgres-connection-string' pnpm db:seed
+```
+
+On PowerShell:
+
+```powershell
+$env:DATABASE_URL='copied-postgres-connection-string'
 pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
-Both commands must succeed before testing signup again. `db:seed` inserts the
-`pricing_rules` rows required by generation.
+Never commit the copied URL. Both commands must succeed before testing signup
+again. `db:seed` inserts the `pricing_rules` rows required by generation. If the
+connection is refused from your home network, temporarily allow your public IP
+on the Render Postgres instance.
 
 ## 4. Required runtime secrets
 
