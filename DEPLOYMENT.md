@@ -238,7 +238,8 @@ DATABASE_URL=... pnpm db:seed
 
 The seeder is idempotent and updates existing active prices from
 `DEFAULT_PRICES`. A missing `pricing_rules` row makes generation fail rather than
-charging a guessed price.
+charging a guessed price. Use the same `DATABASE_URL` as the migration; hosted
+Postgres URLs get TLS automatically unless `sslmode=disable` is explicit.
 
 There are no down migrations. Migrations are forward-only. Use expand/contract
 changes when a rollback must remain possible.

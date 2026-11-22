@@ -49,6 +49,32 @@ describe('createDb', () => {
     expect(handle.pool.options.idleTimeoutMillis).toBe(30_000);
     expect(handle.pool.options.statement_timeout).toBe(15_000);
   });
+
+  it('enables TLS for hosted Postgres URLs without sslmode', () => {
+    // Render's external connection string can omit sslmode while still requiring
+    // TLS. The standalone migration runner already does this; the app client must
+    // agree or `db:seed` fails with "SSL/TLS required" after a good migration.
+    const handle = createDb({
+      ...CONFIG,
+      logLevels: ['error'],
+      url: 'postgresql://renderflow:secret@db.render.com:5432/renderflow',
+    });
+    expect(handle.pool.options.ssl).toEqual({ rejectUnauthorized: true });
+  });
+
+  it('keeps local Postgres plaintext', () => {
+    const handle = createDb({ ...CONFIG, logLevels: ['error'] });
+    expect(handle.pool.options.ssl).toBeUndefined();
+  });
+
+  it('respects an explicit sslmode=disable on a hosted URL', () => {
+    const handle = createDb({
+      ...CONFIG,
+      logLevels: ['error'],
+      url: 'postgresql://renderflow:secret@db.render.com:5432/renderflow?sslmode=disable',
+    });
+    expect(handle.pool.options.ssl).toBeUndefined();
+  });
 });
 
 describe('getDb / getDbHandle', () => {

@@ -34,6 +34,21 @@ import { FESTIVAL_OCCASIONS, FESTIVAL_TEMPLATE_SEEDS } from '@renderflow/common'
 import { DEFAULT_PRICES } from '../dist/pricing.js';
 import { disconnectDb, getDb } from '@renderflow/db';
 
+/** Drizzle wraps the useful database error as `cause`; print the whole chain. */
+function formatError(error, seen = new Set()) {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  const base = error.stack ?? error.message;
+  if (!('cause' in error) || error.cause === undefined || seen.has(error.cause)) {
+    return base;
+  }
+
+  seen.add(error.cause);
+  return `${base}\nCaused by: ${formatError(error.cause, seen)}`;
+}
+
 const db = getDb();
 
 try {
@@ -98,7 +113,7 @@ try {
       `${FESTIVAL_TEMPLATE_SEEDS.length} templates`,
   );
 } catch (error) {
-  console.error('seed failed:', error instanceof Error ? error.message : error);
+  console.error('seed failed:', formatError(error));
   process.exitCode = 1;
 } finally {
   await disconnectDb();

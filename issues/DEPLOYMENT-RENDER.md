@@ -91,7 +91,11 @@ fails, rerun it through the verbose runner to see the real cause:
 DATABASE_URL='copied-postgres-connection-string' pnpm db:migrate:verbose
 ```
 
-Do not run `db:seed` until the migration succeeds.
+Do not run `db:seed` until the migration succeeds. Use the **same** connection
+string for both commands. The app database client and the verbose migration
+runner both enable TLS automatically for hosted hosts, so an `sslmode=require`
+parameter is not required on Render. `db:seed` now prints the full nested error
+(`Caused by: ...`) when a query fails.
 
 ## 4. Required runtime secrets
 

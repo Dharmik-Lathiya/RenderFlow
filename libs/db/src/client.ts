@@ -28,24 +28,40 @@ let instance: DbHandle | null = null;
 let directInstance: DbHandle | null = null;
 
 /** `pg-connection-string` warns on `sslmode=require`; verify-full is the same TLS check. */
-function normalizeConnectionString(url: string): string {
-  const parsed = new URL(url);
-  if (parsed.searchParams.get('sslmode') === 'require') {
-    parsed.searchParams.set('sslmode', 'verify-full');
-  }
-  return parsed.toString();
+function isLocalHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 }
 
-export function createDb(config: DbConfig): DbHandle {
-  const pool = new Pool({
-    connectionString: normalizeConnectionString(config.url),
+/**
+ * Hosted Postgres (Render included) can require TLS even when the pasted URL has
+ * no `sslmode`. Keep this in step with `libs/db/scripts/migrate-verbose.mjs`,
+ * which applies the same rule to the standalone migration runner. Local Compose
+ * stays plaintext unless a URL explicitly asks for TLS.
+ */
+function poolOptions(config: DbConfig) {
+  const parsed = new URL(config.url);
+  const sslMode = parsed.searchParams.get('sslmode');
+
+  if (sslMode === 'require') {
+    parsed.searchParams.set('sslmode', 'verify-full');
+  }
+
+  const useSsl = !isLocalHost(parsed.hostname) && sslMode !== 'disable';
+
+  return {
+    connectionString: parsed.toString(),
+    ssl: useSsl ? { rejectUnauthorized: true } : undefined,
     max: config.poolMax,
     // Never hold a connection open forever behind an idle client; the reaper and
     // the health probe both care.
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
     statement_timeout: config.statementTimeoutMs,
-  });
+  };
+}
+
+export function createDb(config: DbConfig): DbHandle {
+  const pool = new Pool(poolOptions(config));
 
   return { db: drizzle(pool, { schema }), pool };
 }
